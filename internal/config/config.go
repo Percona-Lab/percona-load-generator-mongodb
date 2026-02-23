@@ -8,12 +8,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// AppConfig holds the application's runtime configuration.
 type AppConfig struct {
-	URI string `yaml:"uri"`
-	// DefaultWorkload controls both file loading and generator logic.
-	DefaultWorkload bool `yaml:"default_workload"`
-
+	URI             string `yaml:"uri"`
+	DefaultWorkload bool   `yaml:"default_workload"`
+	PprofEnabled    bool   `yaml:"pprof_enabled"`
 	CollectionsPath string `yaml:"collections_path"`
 	QueriesPath     string `yaml:"queries_path"`
 	DropCollections bool   `yaml:"drop_collections"`
@@ -47,6 +45,19 @@ type AppConfig struct {
 	ConnectionParams ConnectionParams       `yaml:"connection_params"`
 	CustomParamsMap  map[string]interface{} `yaml:"custom_params"`
 	Debug            bool                   `yaml:"debug"`
+
+	RawInjector RawInjectorConfig `yaml:"raw_injector"`
+}
+
+type RawInjectorConfig struct {
+	Enabled        bool   `yaml:"enabled"`
+	Type           string `yaml:"type"`
+	DocumentSize   int    `yaml:"document_size"` // bytes
+	DBName         string `yaml:"db_name"`
+	CollectionName string `yaml:"collection_name"`
+	MaxDocs        int64  `yaml:"max_docs"`
+	BatchSize      int    `yaml:"batch_size"`
+	DropCollection bool   `yaml:"drop_collection"`
 }
 
 type ConnectionParams struct {
@@ -74,10 +85,8 @@ func LoadAppConfig(path string) (*AppConfig, error) {
 		return nil, fmt.Errorf("invalid YAML format for config: %w", err)
 	}
 
-	// Apply overrides and capture which percentage fields were set
 	overriddenStats := applyEnvOverrides(cfg)
 
-	// Normalize based on what was overridden
 	normalizePercentages(cfg, overriddenStats)
 
 	applyDefaults(cfg)
@@ -92,7 +101,6 @@ func applyDefaults(cfg *AppConfig) {
 	if cfg.InsertBatchSize <= 0 {
 		cfg.InsertBatchSize = 10
 	}
-	// Default to 1000 for fast seeding
 	if cfg.SeedBatchSize <= 0 {
 		cfg.SeedBatchSize = 1000
 	}
@@ -117,15 +125,32 @@ func applyDefaults(cfg *AppConfig) {
 	if cfg.MaxTransactionOps <= 0 {
 		cfg.MaxTransactionOps = 3
 	}
+
+	// RawInjector Defaults
+	if cfg.RawInjector.Type == "" {
+		cfg.RawInjector.Type = "insert"
+	}
+	if cfg.RawInjector.DocumentSize <= 0 {
+		cfg.RawInjector.DocumentSize = 1024
+	}
+	if cfg.RawInjector.DBName == "" {
+		cfg.RawInjector.DBName = "plgm_injector"
+	}
+	if cfg.RawInjector.CollectionName == "" {
+		cfg.RawInjector.CollectionName = "injector_data"
+	}
+	if cfg.RawInjector.MaxDocs <= 0 {
+		cfg.RawInjector.MaxDocs = 10000000
+	}
+	if cfg.RawInjector.BatchSize <= 0 {
+		cfg.RawInjector.BatchSize = 1000
+	}
 }
 
-// applyEnvOverrides updates the config from ENV vars and returns a map
-// of percentage fields that were explicitly set.
 func applyEnvOverrides(cfg *AppConfig) map[string]bool {
-	// Track which percentages are overridden
 	overrides := make(map[string]bool)
 
-	// 1. Credentials
+	// Credentials & Basics
 	if v := os.Getenv("PLGM_USERNAME"); v != "" {
 		cfg.ConnectionParams.Username = v
 	}
@@ -134,18 +159,26 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	}
 
 	// 2. Default Workload (Explicit Override)
+	explicitDefault := false
 	if v := os.Getenv("PLGM_DEFAULT_WORKLOAD"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			cfg.DefaultWorkload = b
+			explicitDefault = true
 		}
 	}
 
-	// 3. Other Settings
 	if envDebug := os.Getenv("PLGM_DEBUG_MODE"); envDebug != "" {
 		if b, err := strconv.ParseBool(envDebug); err == nil {
 			cfg.DebugMode = b
 		}
 	}
+
+	if envPprof := os.Getenv("PLGM_PPROF_ENABLED"); envPprof != "" {
+		if b, err := strconv.ParseBool(envPprof); err == nil {
+			cfg.PprofEnabled = b
+		}
+	}
+
 	if envURI := os.Getenv("PLGM_URI"); envURI != "" {
 		cfg.URI = envURI
 	}
@@ -154,23 +187,33 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 			cfg.ConnectionParams.DirectConnection = b
 		}
 	}
-
 	if v, exists := os.LookupEnv("PLGM_REPLICASET_NAME"); exists {
 		cfg.ConnectionParams.ReplicaSetName = v
 	}
-
 	if v, exists := os.LookupEnv("PLGM_READ_PREFERENCE"); exists {
 		cfg.ConnectionParams.ReadPreference = v
 	}
 
-	// 4. Custom Paths
+	// Paths
+	hasCustomColl := false
 	if envCollectionsPath := os.Getenv("PLGM_COLLECTIONS_PATH"); envCollectionsPath != "" {
 		cfg.CollectionsPath = envCollectionsPath
-	}
-	if envQueriesPath := os.Getenv("PLGM_QUERIES_PATH"); envQueriesPath != "" {
-		cfg.QueriesPath = envQueriesPath
+		hasCustomColl = true
 	}
 
+	hasCustomQuery := false
+	if envQueriesPath := os.Getenv("PLGM_QUERIES_PATH"); envQueriesPath != "" {
+		cfg.QueriesPath = envQueriesPath
+		hasCustomQuery = true
+	}
+
+	// If the user provides BOTH a custom collection and custom query path via ENV,
+	// and has NOT explicitly set PLGM_DEFAULT_WORKLOAD, assume they want the custom workload.
+	if !explicitDefault && hasCustomColl && hasCustomQuery {
+		cfg.DefaultWorkload = false
+	}
+
+	// Booleans
 	if envDrop := os.Getenv("PLGM_DROP_COLLECTIONS"); envDrop != "" {
 		if b, err := strconv.ParseBool(envDrop); err == nil {
 			cfg.DropCollections = b
@@ -186,6 +229,8 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 			cfg.UseTransactions = b
 		}
 	}
+
+	// Integers
 	if v := os.Getenv("PLGM_MAX_TRANSACTION_OPS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.MaxTransactionOps = n
@@ -205,7 +250,7 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		cfg.Duration = envDuration
 	}
 
-	// Percentages - we track these to prioritize them in normalization
+	// Percentages
 	if p := os.Getenv("PLGM_FIND_PERCENT"); p != "" {
 		if n, err := strconv.Atoi(p); err == nil && n >= 0 {
 			cfg.FindPercent = n
@@ -249,6 +294,7 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		}
 	}
 
+	// Advanced Tuning
 	if v := os.Getenv("PLGM_FIND_BATCH_SIZE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.FindBatchSize = n
@@ -295,17 +341,51 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		}
 	}
 
+	// --- RawInjector Overrides ---
+	if v := os.Getenv("PLGM_INJECTOR"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.RawInjector.Enabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_INJECTOR_TYPE"); v != "" {
+		cfg.RawInjector.Type = v
+	}
+	if v := os.Getenv("PLGM_INJECTOR_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.RawInjector.DocumentSize = n
+		}
+	}
+	if v := os.Getenv("PLGM_INJECTOR_DB"); v != "" {
+		cfg.RawInjector.DBName = v
+	}
+	if v := os.Getenv("PLGM_INJECTOR_COLLECTION"); v != "" {
+		cfg.RawInjector.CollectionName = v
+	}
+	if v := os.Getenv("PLGM_INJECTOR_MAX_DOCS"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			cfg.RawInjector.MaxDocs = n
+		}
+	}
+	if v := os.Getenv("PLGM_INJECTOR_BATCH_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.RawInjector.BatchSize = n
+		}
+	}
+	if v := os.Getenv("PLGM_INJECTOR_DROP"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.RawInjector.DropCollection = b
+		}
+	}
+
 	return overrides
 }
 
 func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
-	// 1. Enforce Transaction flag constraint immediately
 	if !cfg.UseTransactions {
 		cfg.TransactionPercent = 0
 		delete(pinned, "TransactionPercent")
 	}
 
-	// 2. Calculate the total of "pinned" (Environment overridden) stats
 	pinnedTotal := 0
 	if pinned["FindPercent"] {
 		pinnedTotal += cfg.FindPercent
@@ -329,12 +409,7 @@ func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
 		pinnedTotal += cfg.BulkInsertPercent
 	}
 
-	// 3. Logic:
-	//    If Pinned Total >= 100: Zero out non-pinned, scale pinned if > 100.
-	//    If Pinned Total < 100:  Distribute remainder among unpinned.
-
 	if pinnedTotal >= 100 {
-		// Zero out all non-pinned fields
 		if !pinned["FindPercent"] {
 			cfg.FindPercent = 0
 		}
@@ -357,7 +432,6 @@ func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
 			cfg.BulkInsertPercent = 0
 		}
 
-		// Normalize if pinned values sum > 100
 		if pinnedTotal > 100 {
 			factor := 100.0 / float64(pinnedTotal)
 			if pinned["FindPercent"] {
@@ -384,10 +458,7 @@ func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
 		}
 
 	} else {
-		// pinnedTotal < 100. We have space left.
 		remaining := 100 - pinnedTotal
-
-		// Sum of unpinned (default) values
 		unpinnedTotal := 0
 		if !pinned["FindPercent"] {
 			unpinnedTotal += cfg.FindPercent
@@ -411,7 +482,6 @@ func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
 			unpinnedTotal += cfg.BulkInsertPercent
 		}
 
-		// Scale unpinned values to fill the remaining space
 		if unpinnedTotal > 0 {
 			factor := float64(remaining) / float64(unpinnedTotal)
 
@@ -437,17 +507,12 @@ func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {
 				cfg.BulkInsertPercent = int(float64(cfg.BulkInsertPercent) * factor)
 			}
 		} else {
-			// Edge case: Pinned values sum to < 100 (e.g. 80%), but all unpinned defaults are 0.
-			// We cannot distribute the remaining 20% proportionally among 0s.
-			// Strategy: Assign the remainder to FindPercent (Selects) to ensure the workload sums to 100%.
 			cfg.FindPercent += remaining
 		}
 	}
 
-	// 4. Final check: Ensure total is exactly 100 (fixing integer rounding errors)
 	finalTotal := cfg.FindPercent + cfg.UpdatePercent + cfg.DeletePercent + cfg.InsertPercent + cfg.AggregatePercent + cfg.TransactionPercent + cfg.BulkInsertPercent
 	if finalTotal != 100 {
-		// Add/Subtract difference to FindPercent (simplest safety net)
 		cfg.FindPercent += (100 - finalTotal)
 	}
 }

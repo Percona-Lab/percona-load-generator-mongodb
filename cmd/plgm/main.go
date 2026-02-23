@@ -5,9 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"strings"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/benchmark"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/logger"
@@ -16,15 +20,19 @@ import (
 	"golang.org/x/term"
 )
 
-// This variable is populated at build time via -ldflags
-var version = "1"
+var version = "dev"
 
 func main() {
-	// 1. Setup Flags
 	configFlag := flag.String("config", "config.yaml", "Path to the configuration file")
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
 
-	// Custom Help Output
+	injectorFlag := flag.Bool("raw-injector", false, "Enable Raw BSON Injector (High Performance Mode)")
+	injectorType := flag.String("raw-injector-type", "insert", "Operation: insert, upsert, update, delete, find, mixed")
+	injectorSize := flag.Int("raw-injector-size", 1024, "Document size in bytes")
+	injectorBatch := flag.Int("raw-injector-batch", 1000, "Bulk batch size (ops per network round trip)")
+	injectorMaxDocs := flag.Int64("raw-injector-max-docs", 10000000, "Maximum number of documents to operate on")
+	injectorDrop := flag.Bool("raw-injector-drop", false, "Drop the collection before starting")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\nplgm: Percona Load Generator for MongoDB Clusters\n")
 		fmt.Fprintf(os.Stderr, "Usage: %s [flags] [config_file]\n\n", os.Args[0])
@@ -37,7 +45,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flag.PrintDefaults()
 
-		// Environment Variables Section
 		fmt.Fprintf(os.Stderr, "\nEnvironment Variables (Overrides):\n")
 
 		fmt.Fprintf(os.Stderr, " [Connection]\n")
@@ -59,8 +66,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_SKIP_SEED", "Do not seed initial data on start (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_SEED_BATCH_SIZE", "Number of documents to insert per batch during SEED phase")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DEBUG_MODE", "Enable verbose logic logs (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_PPROF_ENABLED", "Enable pprof server on localhost:6060 (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_USE_TRANSACTIONS", "Enable transactional workloads (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_MAX_TRANSACTION_OPS", "Maximum number of operations to group into a single transaction block")
+
+		fmt.Fprintf(os.Stderr, "\n [Raw Injector Mode] (High Performance Hardware Test)\n")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR", "Enable Raw Injector mode (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_TYPE", "Operation: insert, upsert, update, delete, find, mixed")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_SIZE", "Document size in bytes")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_BATCH_SIZE", "Operations per network batch (default: 1000)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_MAX_DOCS", "Total documents to operate on (default: 10M)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_DROP", "Drop collection on start (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_DB", "Database name")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR_COLLECTION", "Collection name")
 
 		fmt.Fprintf(os.Stderr, "\n [Operation Ratios] (Must sum to ~100)\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_FIND_PERCENT", "% of ops that are FIND")
@@ -86,146 +104,161 @@ func main() {
 
 	flag.Parse()
 
-	// 2. Handle Version Flag
 	if *versionFlag {
 		fmt.Printf("plgm v%s\n", version)
 		os.Exit(0)
 	}
 
-	// 3. Determine Config Path
 	configPath := *configFlag
 	if len(flag.Args()) > 0 {
 		configPath = flag.Args()[0]
 	}
 
-	// 4. Validate Config Exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Printf("Error: Configuration file '%s' not found.\n", configPath)
-		fmt.Println("Use --help to see usage.")
 		os.Exit(1)
 	}
 
 	ctx := context.Background()
-
-	// Load app-level YAML
 	appCfg, err := config.LoadAppConfig(configPath)
 	if err != nil {
 		log.Fatal("Failed to load application config:", err)
 	}
 
-	// --- Secure Credentials Logic ---
-	u, err := url.Parse(appCfg.URI)
-	if err != nil {
-		log.Fatalf("Invalid PLGM_URI: %v", err)
+	if appCfg.PprofEnabled {
+		go func() {
+			log.Println("PPROF server running on localhost:6060")
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
 	}
-	uriHasUser := u.User != nil && u.User.Username() != ""
 
-	if !uriHasUser && appCfg.ConnectionParams.Username == "" {
+	if !strings.Contains(appCfg.URI, "compressors=") {
+		if strings.Contains(appCfg.URI, "?") {
+			appCfg.URI += "&compressors=none"
+		} else {
+			appCfg.URI += "?compressors=none"
+		}
+		logger.Info("Performance: Automatically disabled driver compression (compressors=none)")
+	}
+
+	u, _ := url.Parse(appCfg.URI)
+	if u.User == nil && appCfg.ConnectionParams.Username == "" {
 		fmt.Print("Enter MongoDB Username: ")
 		var inputUser string
-		if _, err := fmt.Scanln(&inputUser); err != nil {
-			if err.Error() != "unexpected newline" {
-				log.Fatal(err)
-			}
-		}
+		fmt.Scanln(&inputUser)
 		appCfg.ConnectionParams.Username = inputUser
 	}
-
 	if appCfg.ConnectionParams.Username != "" && appCfg.ConnectionParams.Password == "" {
 		fmt.Printf("Enter Password for user '%s': ", appCfg.ConnectionParams.Username)
-		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			log.Fatal("\nError reading password:", err)
-		}
+		bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
 		appCfg.ConnectionParams.Password = string(bytePassword)
 		fmt.Println()
 	}
 
-	// --- Load Collections ---
+	// -----------------------------------------------------------------------
+	// EXECUTION BRANCH 1: RAW INJECTOR MODE
+	// -----------------------------------------------------------------------
+	if *injectorFlag || appCfg.RawInjector.Enabled {
+		appCfg.RawInjector.Enabled = true
+
+		if *injectorType != "insert" {
+			appCfg.RawInjector.Type = *injectorType
+		}
+		if *injectorSize != 1024 {
+			appCfg.RawInjector.DocumentSize = *injectorSize
+		}
+		if *injectorBatch != 1000 {
+			appCfg.RawInjector.BatchSize = *injectorBatch
+		}
+		if *injectorMaxDocs != 10000000 {
+			appCfg.RawInjector.MaxDocs = *injectorMaxDocs
+		}
+		if *injectorDrop {
+			appCfg.RawInjector.DropCollection = true
+		}
+
+		if appCfg.RawInjector.Type == "" {
+			appCfg.RawInjector.Type = "insert"
+		}
+		if appCfg.RawInjector.DocumentSize == 0 {
+			appCfg.RawInjector.DocumentSize = 200
+		}
+		if appCfg.RawInjector.BatchSize == 0 {
+			appCfg.RawInjector.BatchSize = 1000
+		}
+		if appCfg.RawInjector.MaxDocs == 0 {
+			appCfg.RawInjector.MaxDocs = 10000000
+		}
+
+		injectorDBName := appCfg.RawInjector.DBName
+		if injectorDBName == "" {
+			injectorDBName = "plgm_injector"
+		}
+
+		benchConn, err := db.Connect(ctx, appCfg, injectorDBName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer benchConn.Disconnect(ctx)
+
+		if err := benchmark.RunRawInjector(ctx, benchConn.Database, appCfg); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// -----------------------------------------------------------------------
+	// EXECUTION BRANCH 2: STANDARD WORKLOAD
+	// -----------------------------------------------------------------------
 	collectionsCfg, err := config.LoadCollections(appCfg.CollectionsPath, appCfg.DefaultWorkload)
 	if err != nil {
-		log.Fatal("Failed to load collections:", err)
+		log.Fatal(err)
 	}
 
 	if len(collectionsCfg.Collections) == 0 {
-		mode := "custom"
-		if appCfg.DefaultWorkload {
-			mode = "default"
-		}
-		log.Fatalf("No collections found in %s with default_workload=%t (mode=%s)",
-			appCfg.CollectionsPath, appCfg.DefaultWorkload, mode)
+		log.Fatal("No collections found")
 	}
 
-	// --- Load Queries ---
 	queriesCfg, err := config.LoadQueries(appCfg.QueriesPath, appCfg.DefaultWorkload)
 	if err != nil {
-		log.Fatal("Failed to load query templates:", err)
+		log.Fatal(err)
 	}
 
-	// --- SMART QUERY FILTERING ---
 	validCollections := make(map[string]bool)
 	for _, col := range collectionsCfg.Collections {
 		validCollections[col.Name] = true
 	}
 
 	var filteredQueries []config.QueryDefinition
-	skippedCount := 0
 	for _, q := range queriesCfg.Queries {
 		if validCollections[q.Collection] {
 			filteredQueries = append(filteredQueries, q)
-		} else {
-			skippedCount++
 		}
 	}
 	queriesCfg.Queries = filteredQueries
 
 	dbName := collectionsCfg.Collections[0].DatabaseName
-
-	// -----------------------------------------------------------------------------------
-	// PRINT BANNER / CONFIGURATION
-	// -----------------------------------------------------------------------------------
 	stats.PrintConfiguration(appCfg, collectionsCfg.Collections, version)
 
-	// --- Connect to DB ---
 	conn, err := db.Connect(ctx, appCfg, dbName)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Disconnect(ctx)
 
-	// --- Log Setup Details (Execution Phase) ---
-	logger.Info("Loaded %d collection definition(s)", len(collectionsCfg.Collections))
-	logger.Info("Loaded %d query templates(s)", len(queriesCfg.Queries))
-
-	if skippedCount > 0 {
-		logger.Info("Filtered out %d queries because their target collections were not found.", skippedCount)
-	}
-
-	// --- Collection & Index creation ---
 	if err := mongo.CreateCollectionsFromConfig(ctx, conn.Database, collectionsCfg, appCfg.DropCollections); err != nil {
 		log.Fatal(err)
 	}
-
 	if err := mongo.CreateIndexesFromConfig(ctx, conn.Database, collectionsCfg); err != nil {
 		log.Fatal(err)
 	}
 
-	// --- Seed documents ---
-	if !appCfg.SkipSeed {
-		if appCfg.DocumentsCount > 0 {
-			for _, col := range collectionsCfg.Collections {
-				if err := mongo.InsertRandomDocuments(ctx, conn.Database, col, appCfg.DocumentsCount, appCfg); err != nil {
-					log.Fatal(err)
-				}
+	if !appCfg.SkipSeed && appCfg.DocumentsCount > 0 {
+		for _, col := range collectionsCfg.Collections {
+			if err := mongo.InsertRandomDocuments(ctx, conn.Database, col, appCfg.DocumentsCount, appCfg); err != nil {
+				log.Fatal(err)
 			}
 		}
-	} else {
-		logger.Info("Skipping data seeding (configured)")
-	}
-
-	// --- Workload execution ---
-	if appCfg.DebugMode {
-		logger.Info("Debug mode enabled: verbose output active")
 	}
 
 	if err := mongo.RunWorkload(ctx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {

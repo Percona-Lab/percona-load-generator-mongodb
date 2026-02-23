@@ -51,6 +51,28 @@ func (h *LatencyHistogram) Record(ms float64) {
 	}
 }
 
+func (h *LatencyHistogram) RecordBatch(ms float64, count int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.Count += count
+	h.Sum += ms * float64(count)
+	if ms < h.Min {
+		h.Min = ms
+	}
+	if ms > h.Max {
+		h.Max = ms
+	}
+	bucket := int(math.Round(ms))
+	if bucket < 0 {
+		bucket = 0
+	}
+	if bucket >= MaxLatencyBin {
+		h.Overflow += count
+	} else {
+		h.Buckets[bucket] += count
+	}
+}
+
 func (h *LatencyHistogram) GetPercentile(p float64) float64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -71,6 +93,7 @@ func (h *LatencyHistogram) GetPercentile(p float64) float64 {
 type Collector struct {
 	FindOps   uint64
 	InsertOps uint64
+	UpsertOps uint64
 	UpdateOps uint64
 	DeleteOps uint64
 	AggOps    uint64
@@ -78,6 +101,7 @@ type Collector struct {
 
 	FindHist   *LatencyHistogram
 	InsertHist *LatencyHistogram
+	UpsertHist *LatencyHistogram
 	UpdateHist *LatencyHistogram
 	DeleteHist *LatencyHistogram
 	AggHist    *LatencyHistogram
@@ -86,6 +110,7 @@ type Collector struct {
 	startTime  time.Time
 	prevFind   uint64
 	prevInsert uint64
+	prevUpsert uint64
 	prevUpdate uint64
 	prevDelete uint64
 	prevAgg    uint64
@@ -96,6 +121,7 @@ func NewCollector() *Collector {
 	return &Collector{
 		FindHist:   &LatencyHistogram{Min: math.MaxFloat64},
 		InsertHist: &LatencyHistogram{Min: math.MaxFloat64},
+		UpsertHist: &LatencyHistogram{Min: math.MaxFloat64},
 		UpdateHist: &LatencyHistogram{Min: math.MaxFloat64},
 		DeleteHist: &LatencyHistogram{Min: math.MaxFloat64},
 		AggHist:    &LatencyHistogram{Min: math.MaxFloat64},
@@ -113,10 +139,13 @@ func (c *Collector) Track(opType string, duration time.Duration) {
 	case "insert":
 		atomic.AddUint64(&c.InsertOps, 1)
 		c.InsertHist.Record(ms)
-	case "updateOne", "updateMany":
+	case "upsert":
+		atomic.AddUint64(&c.UpsertOps, 1)
+		c.UpsertHist.Record(ms)
+	case "update", "updateOne", "updateMany":
 		atomic.AddUint64(&c.UpdateOps, 1)
 		c.UpdateHist.Record(ms)
-	case "deleteOne", "deleteMany":
+	case "delete", "deleteOne", "deleteMany":
 		atomic.AddUint64(&c.DeleteOps, 1)
 		c.DeleteHist.Record(ms)
 	case "aggregate":
@@ -128,7 +157,34 @@ func (c *Collector) Track(opType string, duration time.Duration) {
 	}
 }
 
-const monitorLayout = " %-7s | %10s | %8s | %8s | %8s | %8s | %6s | %6s\n"
+func (c *Collector) Add(opType string, count int64, duration time.Duration) {
+	ms := float64(duration.Nanoseconds()) / 1e6
+	switch opType {
+	case "find":
+		atomic.AddUint64(&c.FindOps, uint64(count))
+		c.FindHist.RecordBatch(ms, count)
+	case "insert":
+		atomic.AddUint64(&c.InsertOps, uint64(count))
+		c.InsertHist.RecordBatch(ms, count)
+	case "upsert":
+		atomic.AddUint64(&c.UpsertOps, uint64(count))
+		c.UpsertHist.RecordBatch(ms, count)
+	case "update", "updateOne", "updateMany":
+		atomic.AddUint64(&c.UpdateOps, uint64(count))
+		c.UpdateHist.RecordBatch(ms, count)
+	case "delete", "deleteOne", "deleteMany":
+		atomic.AddUint64(&c.DeleteOps, uint64(count))
+		c.DeleteHist.RecordBatch(ms, count)
+	case "aggregate":
+		atomic.AddUint64(&c.AggOps, uint64(count))
+		c.AggHist.RecordBatch(ms, count)
+	case "transaction":
+		atomic.AddUint64(&c.TransOps, uint64(count))
+		c.TransHist.RecordBatch(ms, count)
+	}
+}
+
+const monitorLayout = " %-7s | %9s | %7s | %7s | %7s | %7s | %7s | %6s | %5s\n"
 
 func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrency int) {
 	ticker := time.NewTicker(time.Duration(refreshRateSec) * time.Second)
@@ -138,11 +194,11 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 	fmt.Println(logger.GreenString("> Starting Workload..."))
 	fmt.Println()
 
-	header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPDATE", "DELETE", "AGG", "TRANS")
+	header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPSERT", "UPDATE", "DELETE", "AGG", "TRANS")
 	fmt.Print(logger.BoldString(header))
 
 	fmt.Println(logger.CyanString(
-		" -------------------------------------------------------------------------------",
+		" -----------------------------------------------------------------------------------------",
 	))
 
 	for {
@@ -158,6 +214,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 func (c *Collector) printInterval() {
 	cF := atomic.LoadUint64(&c.FindOps)
 	cI := atomic.LoadUint64(&c.InsertOps)
+	cUP := atomic.LoadUint64(&c.UpsertOps)
 	cU := atomic.LoadUint64(&c.UpdateOps)
 	cD := atomic.LoadUint64(&c.DeleteOps)
 	cA := atomic.LoadUint64(&c.AggOps)
@@ -165,26 +222,28 @@ func (c *Collector) printInterval() {
 
 	dF := cF - c.prevFind
 	dI := cI - c.prevInsert
+	dUP := cUP - c.prevUpsert
 	dU := cU - c.prevUpdate
 	dD := cD - c.prevDelete
 	dA := cA - c.prevAgg
 	dT := cT - c.prevTrans
 
-	c.prevFind, c.prevInsert, c.prevUpdate = cF, cI, cU
+	c.prevFind, c.prevInsert, c.prevUpsert, c.prevUpdate = cF, cI, cUP, cU
 	c.prevDelete, c.prevAgg, c.prevTrans = cD, cA, cT
 
-	totalDelta := dF + dI + dU + dD + dA + dT
+	totalDelta := dF + dI + dUP + dU + dD + dA + dT
 
 	elapsed := time.Since(c.startTime).Truncate(time.Second)
 	elapsedStr := fmt.Sprintf("%02d:%02d", int(elapsed.Minutes()), int(elapsed.Seconds())%60)
 
-	totalOpsFormatted := logger.BoldString(fmt.Sprintf("%10s", formatInt(int64(totalDelta))))
+	totalOpsFormatted := logger.BoldString(fmt.Sprintf("%9s", formatInt(int64(totalDelta))))
 
 	fmt.Printf(monitorLayout,
 		elapsedStr,
 		totalOpsFormatted,
 		formatInt(int64(dF)),
 		formatInt(int64(dI)),
+		formatInt(int64(dUP)),
 		formatInt(int64(dU)),
 		formatInt(int64(dD)),
 		formatInt(int64(dA)),
@@ -193,8 +252,8 @@ func (c *Collector) printInterval() {
 }
 
 func (c *Collector) PrintFinalSummary(duration time.Duration) {
-	fO, iO, uO, dO, aO, tO := atomic.LoadUint64(&c.FindOps), atomic.LoadUint64(&c.InsertOps), atomic.LoadUint64(&c.UpdateOps), atomic.LoadUint64(&c.DeleteOps), atomic.LoadUint64(&c.AggOps), atomic.LoadUint64(&c.TransOps)
-	totalOps := fO + iO + uO + dO + aO + tO
+	fO, iO, upO, uO, dO, aO, tO := atomic.LoadUint64(&c.FindOps), atomic.LoadUint64(&c.InsertOps), atomic.LoadUint64(&c.UpsertOps), atomic.LoadUint64(&c.UpdateOps), atomic.LoadUint64(&c.DeleteOps), atomic.LoadUint64(&c.AggOps), atomic.LoadUint64(&c.TransOps)
+	totalOps := fO + iO + upO + uO + dO + aO + tO
 	seconds := duration.Seconds()
 
 	fmt.Println()
@@ -219,6 +278,7 @@ func (c *Collector) PrintFinalSummary(duration time.Duration) {
 	fmt.Println(logger.BoldString(fmt.Sprintf(layout, "TYPE", "AVG", "MIN", "MAX", "P95", "P99")))
 	printLatencyRow(layout, "SELECT", c.FindHist)
 	printLatencyRow(layout, "INSERT", c.InsertHist)
+	printLatencyRow(layout, "UPSERT", c.UpsertHist)
 	printLatencyRow(layout, "UPDATE", c.UpdateHist)
 	printLatencyRow(layout, "DELETE", c.DeleteHist)
 	printLatencyRow(layout, "AGG", c.AggHist)
@@ -312,8 +372,6 @@ func PrintConfiguration(appCfg *config.AppConfig, collections []config.Collectio
 	fmt.Fprintf(w, "  Workers:\t%d active\n", appCfg.Concurrency)
 	fmt.Fprintf(w, "  Duration:\t%s\n", appCfg.Duration)
 
-	// Feedback: Active Workload Mode
-	// Check if the provided path is a single file or a directory
 	isSingleFile := false
 	if appCfg.CollectionsPath != "" {
 		info, err := os.Stat(appCfg.CollectionsPath)
@@ -345,7 +403,6 @@ func PrintConfiguration(appCfg *config.AppConfig, collections []config.Collectio
 
 	w.Flush()
 
-	// Feedback: Active Environment Overrides
 	overrides := getOverriddenEnvVars()
 	if len(overrides) > 0 {
 		fmt.Println()

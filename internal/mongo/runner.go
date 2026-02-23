@@ -1,10 +1,16 @@
 package mongo
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +20,13 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+)
+
+// Define BSON Types locally
+const (
+	TypeEmbeddedDocument = 0x03
+	TypeArray            = 0x04
+	TypeInt64            = 0x12
 )
 
 type queryTask struct {
@@ -42,8 +55,142 @@ type workloadConfig struct {
 
 var InsertDocumentCache chan map[string]interface{}
 
-// base operation types for selection logic
 var operationTypes = []string{"find", "update", "delete", "insert", "insertMany", "aggregate", "transaction"}
+
+func buildRawInt64Array(ids []int64) []byte {
+	var buf bytes.Buffer
+	buf.Write(make([]byte, 4))
+
+	for i, val := range ids {
+		key := strconv.Itoa(i)
+		buf.WriteByte(TypeInt64)
+		buf.Write([]byte(key))
+		buf.WriteByte(0x00)
+
+		b := make([]byte, 8)
+		binary.LittleEndian.PutUint64(b, uint64(val))
+		buf.Write(b)
+	}
+	buf.WriteByte(0x00)
+
+	totalLen := int32(buf.Len())
+	binary.LittleEndian.PutUint32(buf.Bytes()[0:4], uint32(totalLen))
+
+	return buf.Bytes()
+}
+
+func buildRawBatch(template []byte, count int, magic []byte) ([]byte, []int, error) {
+	var buf bytes.Buffer
+	buf.Write(make([]byte, 4))
+
+	offsets := make([]int, count)
+
+	for i := 0; i < count; i++ {
+		key := strconv.Itoa(i)
+		buf.WriteByte(TypeEmbeddedDocument)
+		buf.Write([]byte(key))
+		buf.WriteByte(0x00)
+
+		magicOffset := bytes.Index(template, magic)
+		if magicOffset < 0 {
+			return nil, nil, errors.New("magic marker not found in template")
+		}
+
+		offsets[i] = buf.Len() + magicOffset
+		buf.Write(template)
+	}
+	buf.WriteByte(0x00)
+
+	totalLen := int32(buf.Len())
+	binary.LittleEndian.PutUint32(buf.Bytes()[0:4], uint32(totalLen))
+
+	return buf.Bytes(), offsets, nil
+}
+
+type PreBuiltBatch struct {
+	CmdRaw  []byte
+	Offsets []int
+}
+
+// identifyPatchKey determines which field is the primary integer key for sharding/patching.
+func identifyPatchKey(col config.CollectionDefinition) string {
+	if col.ShardConfig != nil && len(col.ShardConfig.Key) > 0 {
+		for k := range col.ShardConfig.Key {
+			if f, ok := col.Fields[k]; ok && (f.Type == "int" || f.Type == "long") {
+				return k
+			}
+			// Use the first key found if no int type match (Go map order is random, but this is a heuristic)
+			return k
+		}
+	}
+	if f, ok := col.Fields["_id"]; ok && (f.Type == "int" || f.Type == "long") {
+		return "_id"
+	}
+	for k, f := range col.Fields {
+		if (f.Type == "int" || f.Type == "long") && (strings.Contains(strings.ToLower(k), "id")) {
+			return k
+		}
+	}
+	return ""
+}
+
+func prepareGenericBatchPool(col config.CollectionDefinition, cfg *config.AppConfig, batchSize int, poolSize int) ([]PreBuiltBatch, string, error) {
+	patchKey := identifyPatchKey(col)
+	if patchKey == "" {
+		return nil, "", fmt.Errorf("collection '%s' has no suitable integer key for optimization", col.Name)
+	}
+
+	pool := make([]PreBuiltBatch, poolSize)
+	magic := int64(0x1122334455667788)
+	magicBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(magicBytes, uint64(magic))
+
+	for p := 0; p < poolSize; p++ {
+		var buf bytes.Buffer
+		buf.Write(make([]byte, 4))
+		offsets := make([]int, batchSize)
+
+		for i := 0; i < batchSize; i++ {
+			docMap := workloads.GenerateDocument(col, cfg)
+			docMap[patchKey] = magic
+			rawDoc, err := bson.Marshal(docMap)
+			if err != nil {
+				return nil, "", err
+			}
+
+			key := strconv.Itoa(i)
+			buf.WriteByte(TypeEmbeddedDocument)
+			buf.Write([]byte(key))
+			buf.WriteByte(0x00)
+
+			magicOffset := bytes.Index(rawDoc, magicBytes)
+			if magicOffset < 0 {
+				return nil, "", fmt.Errorf("magic marker not found in doc %d", i)
+			}
+			offsets[i] = buf.Len() + magicOffset
+			buf.Write(rawDoc)
+		}
+		buf.WriteByte(0x00)
+		totalLen := int32(buf.Len())
+		binary.LittleEndian.PutUint32(buf.Bytes()[0:4], uint32(totalLen))
+		arrayBytes := buf.Bytes()
+
+		cmd := bson.D{
+			{Key: "insert", Value: col.Name},
+			{Key: "documents", Value: bson.RawValue{Type: TypeArray, Value: arrayBytes}},
+			{Key: "ordered", Value: false},
+		}
+		cmdRaw, _ := bson.Marshal(cmd)
+		arrStart := bytes.Index(cmdRaw, arrayBytes)
+		finalOffsets := make([]int, batchSize)
+		for i, off := range offsets {
+			finalOffsets[i] = arrStart + off
+		}
+
+		pool[p] = PreBuiltBatch{CmdRaw: cmdRaw, Offsets: finalOffsets}
+	}
+	return pool, patchKey, nil
+}
 
 func selectOperation(percentages map[string]int, rng *rand.Rand) string {
 	if percentages == nil {
@@ -78,7 +225,6 @@ func getPrimaryFilterField(ctx context.Context, db *mongo.Database, col config.C
 	dbName := db.Name()
 	namespace := fmt.Sprintf("%s.%s", dbName, col.Name)
 	configColl := client.Database("config").Collection("collections")
-
 	var result struct {
 		Key bson.M `bson:"key"`
 	}
@@ -103,22 +249,12 @@ func generateFallbackQuery(ctx context.Context, db *mongo.Database, opType strin
 		fieldType = def.Type
 	}
 	filter := map[string]interface{}{filterField: fmt.Sprintf("<%s>", fieldType)}
-
 	if opType == "updateOne" || opType == "updateMany" {
 		updatePayload := workloads.GenerateFallbackUpdate(col, cfg, rng)
-		return config.QueryDefinition{
-			Collection: collectionName,
-			Operation:  opType,
-			Filter:     filter,
-			Update:     updatePayload,
-		}, true
+		return config.QueryDefinition{Collection: collectionName, Operation: opType, Filter: filter, Update: updatePayload}, true
 	}
 	if opType == "deleteOne" || opType == "deleteMany" {
-		return config.QueryDefinition{
-			Collection: collectionName,
-			Operation:  opType,
-			Filter:     filter,
-		}, true
+		return config.QueryDefinition{Collection: collectionName, Operation: opType, Filter: filter}, true
 	}
 	return config.QueryDefinition{}, false
 }
@@ -141,11 +277,7 @@ func generateInsertQuery(col config.CollectionDefinition, rng *rand.Rand, cfg *c
 	default:
 		doc = workloads.GenerateDocument(col, cfg)
 	}
-	return config.QueryDefinition{
-		Collection: col.Name,
-		Operation:  "insert",
-		Filter:     doc,
-	}
+	return config.QueryDefinition{Collection: col.Name, Operation: "insert", Filter: doc}
 }
 
 func generateInsertManyQuery(col config.CollectionDefinition, rng *rand.Rand, cfg *config.AppConfig) []interface{} {
@@ -177,7 +309,6 @@ func insertDocumentProducer(ctx context.Context, col config.CollectionDefinition
 	}
 }
 
-// Helper to get collection handle
 func getCollectionHandle(db *mongo.Database, col config.CollectionDefinition) *mongo.Collection {
 	return db.Client().Database(col.DatabaseName).Collection(col.Name)
 }
@@ -185,13 +316,10 @@ func getCollectionHandle(db *mongo.Database, col config.CollectionDefinition) *m
 func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.Rand) {
 	session, err := wCfg.database.Client().StartSession()
 	if err != nil {
-		log.Printf("[Worker %d] Failed to start session: %v", id, err)
 		return
 	}
 	defer session.EndSession(ctx)
-
 	start := time.Now()
-
 	_, err = session.WithTransaction(ctx, func(sessCtx context.Context) (interface{}, error) {
 		numOps := rng.Intn(wCfg.appConfig.MaxTransactionOps) + 1
 		for i := 0; i < numOps; i++ {
@@ -200,11 +328,9 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 			if innerOp == "aggregate" || innerOp == "transaction" {
 				innerOp = "find"
 			}
-
 			var q config.QueryDefinition
 			var insertManyDocs []interface{}
 			var run bool
-
 			switch innerOp {
 			case "insert":
 				q = generateInsertQuery(currentCol, rng, wCfg.appConfig)
@@ -215,16 +341,12 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 			default:
 				q, run = selectRandomQueryByType(sessCtx, wCfg.database, innerOp, wCfg.queryMap, currentCol, wCfg.debug, rng, wCfg.primaryFilterField, wCfg.appConfig)
 			}
-
 			if !run {
 				continue
 			}
-
 			coll := getCollectionHandle(wCfg.database, currentCol)
-
 			filter := cloneMap(q.Filter)
 			processRecursive(filter, rng)
-
 			switch innerOp {
 			case "find":
 				cursor, err := coll.Find(sessCtx, filter, options.Find().SetLimit(1))
@@ -235,40 +357,50 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 				}
 			case "updateOne":
 				opts := options.UpdateOne().SetUpsert(q.Upsert)
-				_, err = coll.UpdateOne(sessCtx, filter, q.Update, opts)
+				coll.UpdateOne(sessCtx, filter, q.Update, opts)
 			case "updateMany":
 				opts := options.UpdateMany().SetUpsert(q.Upsert)
-				_, err = coll.UpdateMany(sessCtx, filter, q.Update, opts)
+				coll.UpdateMany(sessCtx, filter, q.Update, opts)
 			case "deleteOne":
-				_, err = coll.DeleteOne(sessCtx, filter)
+				coll.DeleteOne(sessCtx, filter)
 			case "deleteMany":
-				_, err = coll.DeleteMany(sessCtx, filter)
+				coll.DeleteMany(sessCtx, filter)
 			case "insert":
-				_, err = coll.InsertOne(sessCtx, q.Filter)
+				coll.InsertOne(sessCtx, q.Filter)
 			case "insertMany":
-				_, err = coll.InsertMany(sessCtx, insertManyDocs)
-			}
-
-			if err != nil {
-				return nil, err
+				coll.InsertMany(sessCtx, insertManyDocs)
 			}
 		}
 		return nil, nil
 	})
-
-	if err != nil {
-		if wCfg.debug {
-			log.Printf("[Worker %d] Transaction aborted: %v", id, err)
-		}
-		return
+	if err == nil {
+		wCfg.collector.Track("transaction", time.Since(start))
 	}
-
-	wCfg.collector.Track("transaction", time.Since(start))
 }
 
 func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg workloadConfig, rng *rand.Rand) {
 	defer wg.Done()
 	dbOpCtx := context.Background()
+
+	var fastBatchPool []PreBuiltBatch
+	var patchKey string
+	isOptimized := false
+
+	if len(wCfg.collections) > 0 {
+		col := wCfg.collections[0]
+		batches, key, err := prepareGenericBatchPool(col, wCfg.appConfig, wCfg.appConfig.InsertBatchSize, 20)
+		if err != nil {
+			if id == 1 && wCfg.debug {
+				log.Printf("Optimization unavailable for '%s': %v (Standard path)", col.Name, err)
+			}
+		} else {
+			fastBatchPool = batches
+			patchKey = key
+			isOptimized = true
+		}
+	}
+
+	seq := int64(id) * 100000000
 
 	for {
 		select {
@@ -286,6 +418,65 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				continue
 			}
 			opType = "find"
+		}
+
+		start := time.Now()
+
+		if isOptimized && currentCol.Name == wCfg.collections[0].Name && (opType == "insert" || opType == "insertMany") {
+			batch := fastBatchPool[rng.Intn(len(fastBatchPool))]
+			for _, offset := range batch.Offsets {
+				binary.LittleEndian.PutUint64(batch.CmdRaw[offset:], uint64(seq))
+				seq++
+			}
+
+			fastCtx, cancel := context.WithTimeout(dbOpCtx, 30*time.Second)
+			err := wCfg.database.RunCommand(fastCtx, bson.Raw(batch.CmdRaw)).Err()
+			cancel()
+
+			if err != nil {
+				if wCfg.debug {
+					log.Printf("[Worker %d] FastInsert error: %v", id, err)
+				}
+				wCfg.collector.Add("insert", 1, time.Since(start))
+			} else {
+				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), time.Since(start)/time.Duration(wCfg.appConfig.InsertBatchSize))
+			}
+			continue
+		}
+
+		if isOptimized && currentCol.Name == wCfg.collections[0].Name && opType == "find" {
+			batchSize := wCfg.appConfig.FindBatchSize
+			if batchSize <= 1 {
+				batchSize = 10
+			}
+
+			ids := make([]int64, batchSize)
+			for i := 0; i < batchSize; i++ {
+				targetW := rng.Intn(wCfg.concurrency)
+				targetSeq := rng.Int63n(10000000)
+				ids[i] = int64(targetW)*100000000 + targetSeq
+			}
+
+			rawIDs := buildRawInt64Array(ids)
+			cmd := bson.D{
+				{Key: "find", Value: currentCol.Name},
+				{Key: "filter", Value: bson.D{{Key: patchKey, Value: bson.D{{Key: "$in", Value: bson.RawValue{Type: TypeArray, Value: rawIDs}}}}}},
+				{Key: "limit", Value: batchSize},
+			}
+
+			fastCtx, cancel := context.WithTimeout(dbOpCtx, 30*time.Second)
+			err := wCfg.database.RunCommand(fastCtx, cmd).Err()
+			cancel()
+
+			if err != nil {
+				if wCfg.debug {
+					log.Printf("[Worker %d] FastFind error: %v", id, err)
+				}
+				wCfg.collector.Add("find", 1, time.Since(start))
+			} else {
+				wCfg.collector.Add("find", 1, time.Since(start))
+			}
+			continue
 		}
 
 		var q config.QueryDefinition
@@ -325,8 +516,6 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			processRecursive(filter, rng)
 		}
 
-		start := time.Now()
-
 		switch opType {
 		case "find":
 			limit := q.Limit
@@ -356,16 +545,10 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			}
 		case "updateOne":
 			opts := options.UpdateOne().SetUpsert(q.Upsert)
-			_, err := coll.UpdateOne(dbOpCtx, filter, q.Update, opts)
-			if err != nil && wCfg.debug {
-				log.Printf("[Worker %d] UpdateOne error: %v", id, err)
-			}
+			coll.UpdateOne(dbOpCtx, filter, q.Update, opts)
 		case "updateMany":
 			opts := options.UpdateMany().SetUpsert(q.Upsert)
-			_, err := coll.UpdateMany(dbOpCtx, filter, q.Update, opts)
-			if err != nil && wCfg.debug {
-				log.Printf("[Worker %d] UpdateMany error: %v", id, err)
-			}
+			coll.UpdateMany(dbOpCtx, filter, q.Update, opts)
 		case "deleteOne":
 			coll.DeleteOne(dbOpCtx, filter)
 		case "deleteMany":
@@ -433,6 +616,12 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		return err
 	}
 
+	for _, col := range collections {
+		if err := ensureGenericSharding(ctx, db, col, cfg); err != nil {
+			log.Printf("Sharding setup warning for %s: %v", col.Name, err)
+		}
+	}
+
 	collector := stats.NewCollector()
 	if duration <= 0 {
 		return runAllQueriesOnce(ctx, db, queries, cfg.DebugMode)
@@ -491,9 +680,7 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	}
 
 	monitorDone := make(chan struct{})
-	go func() {
-		wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency)
-	}()
+	go func() { wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency) }()
 
 	var wg sync.WaitGroup
 	for i := 1; i <= wCfg.concurrency; i++ {
@@ -521,13 +708,7 @@ func runAllQueriesOnce(ctx context.Context, db *mongo.Database, queries []config
 		if q.Operation == "insert" || q.Operation == "insertMany" {
 			continue
 		}
-		tasks <- &queryTask{
-			definition: q,
-			database:   db,
-			runID:      int64(i + 1),
-			debug:      debug,
-			rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
-		}
+		tasks <- &queryTask{definition: q, database: db, runID: int64(i + 1), debug: debug, rng: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	}
 	close(tasks)
 	wg.Wait()
@@ -541,10 +722,8 @@ func queryWorkerOnce(ctx context.Context, id int, tasks <-chan *queryTask, wg *s
 		q := task.definition
 		coll := task.database.Client().Database(q.Database).Collection(q.Collection)
 		if q.Database == "" {
-			// Fallback if not specified in query
 			coll = task.database.Collection(q.Collection)
 		}
-
 		filter := cloneMap(q.Filter)
 		processRecursive(filter, task.rng)
 		switch q.Operation {
@@ -557,4 +736,192 @@ func queryWorkerOnce(ctx context.Context, id int, tasks <-chan *queryTask, wg *s
 			coll.UpdateOne(dbOpCtx, filter, q.Update)
 		}
 	}
+}
+
+func buildOrderedShardKey(col config.CollectionDefinition, shardKeyMap map[string]interface{}, isHashed bool) bson.D {
+	keys := make([]string, 0, len(shardKeyMap))
+	for k := range shardKeyMap {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var cmd bson.D
+	for _, k := range keys {
+		if isHashed {
+			cmd = append(cmd, bson.E{Key: k, Value: "hashed"})
+		} else {
+			cmd = append(cmd, bson.E{Key: k, Value: 1})
+		}
+	}
+	return cmd
+}
+
+// Check if a collection is already sharded and return its chunk count.
+func checkShardingStatus(ctx context.Context, db *mongo.Database, collectionName string) (bool, int64, error) {
+	res := db.RunCommand(ctx, bson.D{{Key: "collStats", Value: collectionName}})
+	if res.Err() != nil {
+		// If collection doesn't exist, collStats fails -> not sharded
+		return false, 0, nil
+	}
+
+	var stats struct {
+		Sharded bool  `bson:"sharded"`
+		NChunks int64 `bson:"nchunks"`
+	}
+	if err := res.Decode(&stats); err != nil {
+		return false, 0, err
+	}
+
+	if !stats.Sharded {
+		return false, 0, nil
+	}
+
+	// If collStats returned nchunks use it
+	if stats.NChunks > 0 {
+		return true, stats.NChunks, nil
+	}
+
+	// Fallback: If collStats is silent on chunks (rare in sharded=true), assume at least 1
+	return true, 1, nil
+}
+
+func ensureGenericSharding(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+	admin := db.Client().Database("admin")
+
+	// 1. Check if Cluster
+	var hello bson.M
+	if err := admin.RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+		return nil
+	}
+	if hello["msg"] != "isdbgrid" {
+		return nil
+	}
+
+	dbName := db.Name()
+	ns := fmt.Sprintf("%s.%s", dbName, col.Name)
+
+	// 2. Is it sharded? Do chunks exist?
+	isSharded, chunkCount, _ := checkShardingStatus(ctx, db, col.Name)
+
+	// If it is already sharded AND has more than 1 chunk, assume setup is done.
+	if !cfg.DropCollections && isSharded && chunkCount > 1 {
+		return nil
+	}
+
+	patchKey := identifyPatchKey(col)
+	if patchKey == "" {
+		return nil
+	}
+
+	isHashed := false
+	if col.ShardConfig != nil {
+		for _, v := range col.ShardConfig.Key {
+			if vStr, ok := v.(string); ok && vStr == "hashed" {
+				isHashed = true
+			}
+			break
+		}
+	}
+
+	shardKeyDoc := buildOrderedShardKey(col, col.ShardConfig.Key, isHashed)
+
+	// 4. Enable Sharding on DB
+	_ = admin.RunCommand(ctx, bson.D{{Key: "enableSharding", Value: dbName}}).Err()
+
+	// 5. Shard Collection (if not already)
+	if !isSharded {
+		cmd := bson.D{
+			{Key: "shardCollection", Value: ns},
+			{Key: "key", Value: shardKeyDoc},
+		}
+		if err := admin.RunCommand(ctx, cmd).Err(); err != nil {
+			// If it failed because "already sharded" (race condition), just log and continue to splits
+			if !strings.Contains(err.Error(), "already sharded") &&
+				!strings.Contains(err.Error(), "AlreadyInitialized") &&
+				!strings.Contains(err.Error(), "already exists") {
+				log.Printf("[Sharding] Warning: Failed to shard %s: %v", ns, err)
+			}
+		}
+	}
+
+	// 6. Pre-Split (ONLY for Range Sharding)
+	if isHashed {
+		return nil
+	}
+
+	shards, err := listShards(ctx, admin)
+	if err != nil || len(shards) == 0 {
+		return fmt.Errorf("failed to list shards: %v", err)
+	}
+
+	log.Printf("[Sharding] Initializing splits for '%s' (Range) on key '%s' for %d workers...", col.Name, patchKey, cfg.Concurrency)
+
+	// Helper to build the compound key for split/move.
+	buildCompoundKey := func(boundary int64) bson.D {
+		var doc bson.D
+		for _, elem := range shardKeyDoc {
+			if elem.Key == patchKey {
+				doc = append(doc, bson.E{Key: elem.Key, Value: boundary})
+			} else {
+				doc = append(doc, bson.E{Key: elem.Key, Value: 0})
+			}
+		}
+		return doc
+	}
+
+	// Step 6a: Create all split points.
+	// Ensure MinKey -> 0 split exists
+	splitStart := bson.D{{Key: "split", Value: ns}, {Key: "middle", Value: buildCompoundKey(0)}}
+	_ = admin.RunCommand(ctx, splitStart).Err()
+
+	// Create splits for every worker boundary
+	for w := 1; w <= cfg.Concurrency; w++ {
+		boundary := int64(w) * 100000000
+		splitCmd := bson.D{{Key: "split", Value: ns}, {Key: "middle", Value: buildCompoundKey(boundary)}}
+		if err := admin.RunCommand(ctx, splitCmd).Err(); err != nil {
+			// Tolerate "chunks already exist" or similar errors during this phase
+			if !strings.Contains(err.Error(), "already exists") {
+				log.Printf("[Sharding] Split attempt at %d: %v", boundary, err)
+			}
+		}
+	}
+
+	// Allow metadata to propagate briefly
+	time.Sleep(1 * time.Second)
+
+	// Step 6b: Move the specific chunks that workers will actually use.
+	for w := 1; w <= cfg.Concurrency; w++ {
+		chunkStartProbe := int64(w) * 100000000
+		targetShard := shards[(w-1)%len(shards)]
+
+		moveCmd := bson.D{
+			{Key: "moveChunk", Value: ns},
+			{Key: "find", Value: buildCompoundKey(chunkStartProbe)},
+			{Key: "to", Value: targetShard},
+		}
+
+		if err := admin.RunCommand(ctx, moveCmd).Err(); err != nil {
+			if !strings.Contains(err.Error(), "already on shard") {
+				log.Printf("[Sharding] MoveChunk error for %d -> %s: %v", chunkStartProbe, targetShard, err)
+			}
+		}
+	}
+	return nil
+}
+
+func listShards(ctx context.Context, admin *mongo.Database) ([]string, error) {
+	var result struct {
+		Shards []struct {
+			ID string `bson:"_id"`
+		} `bson:"shards"`
+	}
+	if err := admin.RunCommand(ctx, bson.D{{Key: "listShards", Value: 1}}).Decode(&result); err != nil {
+		return nil, err
+	}
+	names := make([]string, len(result.Shards))
+	for i, s := range result.Shards {
+		names[i] = s.ID
+	}
+	return names, nil
 }

@@ -94,24 +94,36 @@ make build
 # bin/plgm-darwin-arm64.tar.gz
 ```
 
-
-### Usage
+#### Usage
 
 To view the full usage guide, including available flags and environment variables, run the help command:
 
 ```bash
-bin/plgm --help
+./plgm --help
+
 plgm: Percona Load Generator for MongoDB Clusters
-Usage: ./bin/plgm [flags] [config_file]
+Usage: ./plgm [flags] [config_file]
 
 Examples:
-  ./bin/plgm                    # Run with default 'config.yaml'
-  ./bin/plgm my_test.yaml       # Run with specific config file
-  ./bin/plgm --help             # Show this help message
+  ./plgm                    # Run with default 'config.yaml'
+  ./plgm my_test.yaml       # Run with specific config file
+  ./plgm --help             # Show this help message
 
 Flags:
   -config string
     	Path to the configuration file (default "config.yaml")
+  -raw-injector
+    	Enable Raw BSON Injector (High Performance Mode)
+  -raw-injector-batch int
+    	Bulk batch size (ops per network round trip) (default 1000)
+  -raw-injector-drop
+    	Drop the collection before starting
+  -raw-injector-max-docs int
+    	Maximum number of documents to operate on (default 10000000)
+  -raw-injector-size int
+    	Document size in bytes (default 1024)
+  -raw-injector-type string
+    	Operation: insert, upsert, update, delete, find, mixed (default "insert")
   -version
     	Print version information and exit
 
@@ -135,8 +147,19 @@ Environment Variables (Overrides):
   PLGM_SKIP_SEED                      Do not seed initial data on start (true/false)
   PLGM_SEED_BATCH_SIZE                Number of documents to insert per batch during SEED phase
   PLGM_DEBUG_MODE                     Enable verbose logic logs (true/false)
+  PLGM_PPROF_ENABLED                  Enable pprof server on localhost:6060 (true/false)
   PLGM_USE_TRANSACTIONS               Enable transactional workloads (true/false)
   PLGM_MAX_TRANSACTION_OPS            Maximum number of operations to group into a single transaction block
+
+ [Raw Injector Mode] (High Performance Hardware Test)
+  PLGM_INJECTOR                       Enable Raw Injector mode (true/false)
+  PLGM_INJECTOR_TYPE                  Operation: insert, upsert, update, delete, find, mixed
+  PLGM_INJECTOR_SIZE                  Document size in bytes
+  PLGM_INJECTOR_BATCH_SIZE            Operations per network batch (default: 1000)
+  PLGM_INJECTOR_MAX_DOCS              Total documents to operate on (default: 10M)
+  PLGM_INJECTOR_DROP                  Drop collection on start (true/false)
+  PLGM_INJECTOR_DB                    Database name
+  PLGM_INJECTOR_COLLECTION            Collection name
 
  [Operation Ratios] (Must sum to ~100)
   PLGM_FIND_PERCENT                   % of ops that are FIND
@@ -159,7 +182,7 @@ Environment Variables (Overrides):
   GOMAXPROCS                          Go Runtime CPU limit
 ```
 
-### 2. Run Default Workload
+### 2. Default Workload
 plgm comes with a built-in default workload useful for immediate testing and get you started right away.
 ```bash
 # Edit config.yaml to set your URI, then run:
@@ -176,7 +199,189 @@ If you wish to use a different default workload, you can replace these two files
 ./bin/plgm /path/to/some/custom_config.yaml
 ```
 
-### 3. Additional Workloads
+### 3. Raw Injector Mode (High Performance Hardware Test) Workload
+
+The **Raw Injector** is a specialized, ultra-high-performance engine built directly into `PLGM`. Instead of using the standard MongoDB driver structs (which consume CPU and memory for BSON marshaling), the Raw Injector pre-compiles raw BSON byte arrays and performs zero-allocation bitwise mutations in a tight loop.
+
+This mode is designed exclusively to **stress-test network throughput, disk I/O, and extreme CPU limits** of the MongoDB cluster. It can saturate high-end infrastructure significantly faster than standard workloads. This functionality was developed to mimic other benchmarking tools, enabling an apples-to-apples comparison between PLGM and alternative solutions.
+
+Unlike the other workloads PLGM supports, this mode is not configurable. It was intentionally built solely for stress testing purposes and is not intended to function as a workload simulator, but instead, a simple benchmark stress test.
+
+***Important Note on Ops/Sec: In Raw Injector mode, the printed Ops/Sec refers to the number of documents processed, not the number of network commands. For example, if your batch size is 1,000, and plgm reports 50,000 Ops/Sec, it is executing 50 bulk network commands per second.***
+
+#### Configuration
+
+You can configure the Raw Injector via `config.yaml` or directly via CLI flags/environment variables. These are the available options:
+
+```yaml
+# config.yaml snippet
+raw_injector:
+  enabled: true
+  drop_collection: true
+  type: "mixed"            # Options: insert, upsert, find, update, delete, mixed
+  document_size: 1024      # Size of the random binary payload in bytes
+  max_docs: 10000000       # Total documents to generate/query
+  batch_size: 1000         # Number of operations packed into a single network round-trip
+  db_name: "plgm_injector"
+  collection_name: "injector_data"
+```
+
+Environment variables:
+
+```bash
+  PLGM_INJECTOR                       Enable Raw Injector mode (true/false)
+  PLGM_INJECTOR_TYPE                  Operation: insert, upsert, update, delete, find, mixed
+  PLGM_INJECTOR_SIZE                  Document size in bytes
+  PLGM_INJECTOR_BATCH_SIZE            Operations per network batch (default: 1000)
+  PLGM_INJECTOR_MAX_DOCS              Total documents to operate on (default: 10M)
+  PLGM_INJECTOR_DROP                  Drop collection on start (true/false)
+  PLGM_INJECTOR_DB                    Database name
+  PLGM_INJECTOR_COLLECTION            Collection name
+```
+
+#### Modes of Operation (type)
+
+ * insert: Floods the database with new documents. Automatically pre-splits chunks if sharding is enabled.
+ * find / update / delete: Operates on the existing data seeded by an insert run.
+ * upsert: Fires upsert commands, creating documents if they don't exist.
+ * mixed: Runs a randomized distribution of reads, inserts, updates, and deletes simultaneously.
+
+
+#### Running via CLI
+You can bypass the YAML config entirely and trigger a raw injection test purely through flags:
+
+##### Run a pure insert flood, dropping existing data, with 4KB documents
+
+```bash
+./plgm -raw-injector -raw-injector-type=insert -raw-injector-drop -raw-injector-size=4096 -raw-injector-batch=2000
+```
+
+##### Run a mixed workload against the generated data
+
+```bash
+./plgm -raw-injector -raw-injector-type=mixed
+```
+
+<details>
+<summary>Sample output:</summary>
+
+```bash
+./plgm -raw-injector -raw-injector-type=insert -raw-injector-drop -raw-injector-size=4096 -raw-injector-batch=2000
+  [INFO] Performance: Automatically disabled driver compression (compressors=none)
+Enter Password for user 'root':
+2026/02/23 11:26:45 [RawInjector] Dropping collection 'injector_data'...
+2026/02/23 11:26:47 [RawInjector] Range sharding enabled on { _id: 1 }
+2026/02/23 11:26:47 [RawInjector] Pre-splitting: 4 workers -> 2 shards
+2026/02/23 11:26:48 >>> RAW INJECTOR START [mixed] workers=4 batch=2000 maxDocs=10000000 docSize=4096 <<<
+
+> Starting Workload...
+
+ TIME    | TOTAL OPS |  SELECT |  INSERT |  UPSERT |  UPDATE |  DELETE |    AGG | TRANS
+ -----------------------------------------------------------------------------------------
+ 00:01   |    76,000 |  48,000 |  10,000 |       0 |  18,000 |       0 |      0 |     0
+ 00:02   |   160,000 | 108,000 |  10,000 |       0 |  30,000 |  12,000 |      0 |     0
+ 00:03   |   140,000 |  90,000 |  18,000 |       0 |  20,000 |  12,000 |      0 |     0
+ 00:04   |   142,000 |  78,000 |   8,000 |       0 |  38,000 |  18,000 |      0 |     0
+ 00:05   |   160,000 | 112,000 |  12,000 |       0 |  28,000 |   8,000 |      0 |     0
+ 00:06   |   140,000 |  78,000 |  12,000 |       0 |  34,000 |  16,000 |      0 |     0
+ 00:07   |   138,000 |  72,000 |   4,000 |       0 |  40,000 |  22,000 |      0 |     0
+ 00:08   |   156,000 |  98,000 |   4,000 |       0 |  44,000 |  10,000 |      0 |     0
+ 00:09   |   144,000 |  84,000 |   6,000 |       0 |  38,000 |  16,000 |      0 |     0
+ 00:10   |   180,000 | 126,000 |   4,000 |       0 |  34,000 |  16,000 |      0 |     0
+
+> Workload Finished.
+
+  SUMMARY
+  --------------------------------------------------
+  Runtime:    10.00s
+  Total Ops:  1,444,000
+  Avg Rate:   144,400 ops/sec
+
+  LATENCY DISTRIBUTION (ms)
+  --------------------------------------------------
+  TYPE             AVG          MIN          MAX          P95          P99
+  SELECT       0.01 ms      0.01 ms      0.03 ms      0.00 ms      0.00 ms
+  INSERT       0.07 ms      0.04 ms      0.15 ms      0.00 ms      0.00 ms
+  UPSERT             -            -            -            -            -
+  UPDATE       0.04 ms      0.04 ms      0.07 ms      0.00 ms      0.00 ms
+  DELETE       0.04 ms      0.03 ms      0.06 ms      0.00 ms      0.00 ms
+  AGG                -            -            -            -            -
+  TRANS              -            -            -            -            -
+```
+</details>
+
+##### Run the workload configuring it via any of the available environment variables
+
+<details>
+<summary>Sample output:</summary>
+
+```bash
+export PLGM_PASSWORD=super_duper_password_here
+PLGM_INJECTOR=true PLGM_INJECTOR_TYPE=mixed PLGM_DURATION=30s ./plgm
+  [INFO] Performance: Automatically disabled driver compression (compressors=none)
+2026/02/23 11:48:26 [RawInjector] Range sharding enabled on { _id: 1 }
+2026/02/23 11:48:26 [RawInjector] Pre-splitting: 4 workers -> 2 shards
+2026/02/23 11:48:27 [RawInjector] Checking for existing data to resume sequences...
+2026/02/23 11:48:27 >>> RAW INJECTOR START [mixed] workers=4 batch=1000 maxDocs=10000000 docSize=200 <<<
+
+> Starting Workload...
+
+ TIME    | TOTAL OPS |  SELECT |  INSERT |  UPSERT |  UPDATE |  DELETE |    AGG | TRANS
+ -----------------------------------------------------------------------------------------
+ 00:01   |    65,000 |  41,000 |   4,000 |       0 |  11,000 |   9,000 |      0 |     0
+ 00:02   |    79,000 |  53,000 |   3,000 |       0 |  14,000 |   9,000 |      0 |     0
+ 00:03   |    85,000 |  52,000 |   4,000 |       0 |  18,000 |  11,000 |      0 |     0
+ 00:04   |    77,000 |  44,000 |   3,000 |       0 |  21,000 |   9,000 |      0 |     0
+ 00:05   |    93,000 |  53,000 |   9,000 |       0 |  16,000 |  15,000 |      0 |     0
+ 00:06   |    98,000 |  63,000 |   4,000 |       0 |  24,000 |   7,000 |      0 |     0
+ 00:07   |    99,000 |  70,000 |   1,000 |       0 |  17,000 |  11,000 |      0 |     0
+ 00:08   |    93,000 |  54,000 |   4,000 |       0 |  26,000 |   9,000 |      0 |     0
+ 00:09   |   121,000 |  84,000 |   8,000 |       0 |  18,000 |  11,000 |      0 |     0
+ 00:10   |    96,000 |  55,000 |   6,000 |       0 |  29,000 |   6,000 |      0 |     0
+ 00:11   |   113,000 |  73,000 |   7,000 |       0 |  23,000 |  10,000 |      0 |     0
+ 00:12   |   102,000 |  67,000 |   4,000 |       0 |  18,000 |  13,000 |      0 |     0
+ 00:13   |   124,000 |  87,000 |   7,000 |       0 |  26,000 |   4,000 |      0 |     0
+ 00:14   |   114,000 |  73,000 |   6,000 |       0 |  27,000 |   8,000 |      0 |     0
+ 00:15   |   117,000 |  73,000 |  12,000 |       0 |  20,000 |  12,000 |      0 |     0
+ 00:16   |   109,000 |  67,000 |   5,000 |       0 |  31,000 |   6,000 |      0 |     0
+ 00:17   |   127,000 |  89,000 |   9,000 |       0 |  15,000 |  14,000 |      0 |     0
+ 00:18   |   121,000 |  86,000 |   2,000 |       0 |  19,000 |  14,000 |      0 |     0
+ 00:19   |   116,000 |  78,000 |   4,000 |       0 |  16,000 |  18,000 |      0 |     0
+ 00:20   |   105,000 |  71,000 |   5,000 |       0 |  18,000 |  11,000 |      0 |     0
+ 00:21   |   129,000 |  91,000 |   9,000 |       0 |  24,000 |   5,000 |      0 |     0
+ 00:22   |   121,000 |  83,000 |   3,000 |       0 |  27,000 |   8,000 |      0 |     0
+ 00:23   |   130,000 |  94,000 |   4,000 |       0 |  22,000 |  10,000 |      0 |     0
+ 00:24   |   118,000 |  82,000 |   6,000 |       0 |  18,000 |  12,000 |      0 |     0
+ 00:25   |   111,000 |  71,000 |   7,000 |       0 |  21,000 |  12,000 |      0 |     0
+ 00:26   |   109,000 |  74,000 |   5,000 |       0 |  20,000 |  10,000 |      0 |     0
+ 00:27   |   117,000 |  77,000 |   3,000 |       0 |  25,000 |  12,000 |      0 |     0
+ 00:28   |   111,000 |  72,000 |   5,000 |       0 |  28,000 |   6,000 |      0 |     0
+ 00:29   |   118,000 |  76,000 |   6,000 |       0 |  27,000 |   9,000 |      0 |     0
+ 00:30   |   111,000 |  67,000 |   6,000 |       0 |  25,000 |  13,000 |      0 |     0
+
+> Workload Finished.
+
+  SUMMARY
+  --------------------------------------------------
+  Runtime:    30.00s
+  Total Ops:  3,233,000
+  Avg Rate:   107,766 ops/sec
+
+  LATENCY DISTRIBUTION (ms)
+  --------------------------------------------------
+  TYPE             AVG          MIN          MAX          P95          P99
+  SELECT       0.02 ms      0.01 ms      0.06 ms      0.00 ms      0.00 ms
+  INSERT       0.02 ms      0.01 ms      0.05 ms      0.00 ms      0.00 ms
+  UPSERT             -            -            -            -            -
+  UPDATE       0.07 ms      0.04 ms      0.23 ms      0.00 ms      0.00 ms
+  DELETE       0.09 ms      0.05 ms      0.17 ms      0.00 ms      0.00 ms
+  AGG                -            -            -            -            -
+  TRANS              -            -            -            -            -
+```
+
+</details>
+
+### 4. Additional Workloads
 
 You will find additional workloads that you can use as references to benchmark your environment in cases where you prefer not to provide your own collection definitions and queries. However, if your goal is to test your application accurately, we strongly recommend creating collection definitions and queries that match those used by your application.
 
@@ -186,7 +391,7 @@ The additional collection and query definitions can be found here:
 * [queries](./resources/queries/)
 
 
-### 4. Workload Configuration & Loading
+### 5. Workload Configuration & Loading
 
 You can supply your own collections and queries using the `PLGM_COLLECTIONS_PATH` and `PLGM_QUERIES_PATH` environment variables (or the corresponding config file fields). 
 
@@ -215,7 +420,9 @@ When using **Directory Mode**, the behavior depends on the `PLGM_DEFAULT_WORKLOA
 * **`false` (Custom):** Loads all JSON files **except** `default.json`. 
   * *Use Case:* Set this to `false` to run your custom workload files while keeping `default.json` in the folder for reference (it will be ignored).
 
-### 5. Kubernetes & Docker
+---
+
+## Kubernetes & Docker
 Prefer running in a container? We have a dedicated guide for building Docker images and running performance jobs directly inside Kubernetes (recommended for accurate network latency testing).
 
 [View the Docker & Kubernetes Guide](k8s_and_docker.md)
@@ -249,6 +456,7 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `skip_seed` | `PLGM_SKIP_SEED` | Do not seed initial data on start (`true`/`false`) | `true` |
 | `seed_batch_size` | `PLGM_SEED_BATCH_SIZE` | Number of documents to insert per batch during SEED phase | `1000` |
 | `debug_mode` | `PLGM_DEBUG_MODE` | Enable verbose debug logging (`true`/`false`) | `false` |
+| `pprof_enabled` | `PLGM_PPROF_ENABLED` | Enable pprof server on localhost:6060 (`true`/`false`) | `false` |
 | `use_transactions` | `PLGM_USE_TRANSACTIONS` | Enable Transactional Workloads (`true`/`false`) | `false` |
 | `max_transaction_ops` | `PLGM_MAX_TRANSACTION_OPS` | Maximum number of operations to group into a single transaction block | `5` |
 | **Operation Ratios** | | (Must sum to ~100) | |

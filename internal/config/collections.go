@@ -27,7 +27,6 @@ type IndexDefinition struct {
 	Keys map[string]interface{} `json:"keys"`
 }
 
-// ShardConfig defines how a collection should be sharded.
 type ShardConfig struct {
 	Key    map[string]interface{} `json:"key"`
 	Unique bool                   `json:"unique,omitempty"`
@@ -45,8 +44,6 @@ type CollectionsFile struct {
 	Collections []CollectionDefinition `json:"collections"`
 }
 
-// LoadCollections attempts to load from disk. If the path is not found,
-// it falls back to the embedded default.json.
 // LoadCollections filters files based on the 'loadDefault' flag.
 // - If loadDefault is TRUE: Load ONLY 'default.json'.
 // - If loadDefault is FALSE: Load ALL files EXCEPT 'default.json'.
@@ -111,6 +108,14 @@ func LoadCollections(path string, loadDefault bool) (*CollectionsFile, error) {
 		allCollections = append(allCollections, loaded.Collections...)
 	}
 
+	// --- VALIDATION ---
+	// Ensure we didn't load an empty config due to JSON key mismatch
+	for i, col := range allCollections {
+		if col.DatabaseName == "" || col.Name == "" {
+			return nil, fmt.Errorf("loaded collection at index %d has empty 'database' or 'collection' name. Check your JSON keys: must be 'database' and 'collection' (lowercase)", i)
+		}
+	}
+
 	return &CollectionsFile{Collections: allCollections}, nil
 }
 
@@ -131,7 +136,6 @@ func loadCollectionsFromFile(path string) (*CollectionsFile, error) {
 	return parseCollectionsBytes(b)
 }
 
-// Common parsing logic for both Disk and Embed
 func parseCollectionsBytes(b []byte) (*CollectionsFile, error) {
 	var wrapped CollectionsFile
 	if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Collections) > 0 {

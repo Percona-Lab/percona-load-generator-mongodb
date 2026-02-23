@@ -159,7 +159,6 @@ plgm-benchmark-754zn   1/1     Running   0          26s
 ```bash
 kubectl logs -f plgm-benchmark-754zn -n lab -c plgm
   [INFO] Performance: Automatically disabled driver compression (compressors=none)
-2026/02/23 14:00:38 PPROF server running on localhost:6060
 
   plgm dev
   --------------------------------------------------

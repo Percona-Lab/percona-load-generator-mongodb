@@ -40,6 +40,9 @@ custom_params:
 # Enable debug logging (verbose).
 debug: false
 
+# Enable PPROF server on localhost:6060 for profiling (default: false)
+# Can be overridden via env: PLGM_PPROF_ENABLED=true
+pprof_enabled: false
 
 # ==============================================================================
 # Workload Definition

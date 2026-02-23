@@ -92,7 +92,15 @@ func CreateCollectionsFromConfig(ctx context.Context, db *mongo.Database, cfg *c
 	}
 
 	for _, col := range cfg.Collections {
-		// Derive database handle
+		// If we are NOT dropping, check if the collection is already populated (chunks > 1).
+		if !drop {
+			isSharded, chunks, _ := checkShardingStatus(ctx, db, col.Name)
+			if isSharded && chunks > 1 {
+				logger.Info("Collection '%s' already set up (Sharded, %d chunks). Skipping creation.", col.Name, chunks)
+				continue
+			}
+		}
+
 		targetDB := db.Client().Database(col.DatabaseName)
 
 		// 2. Drop if requested
@@ -116,9 +124,18 @@ func CreateCollectionsFromConfig(ctx context.Context, db *mongo.Database, cfg *c
 
 			_ = adminDB.RunCommand(ctx, bson.D{{Key: "enableSharding", Value: col.DatabaseName}})
 
+			shardKeyDoc := buildOrderedShardKey(col, col.ShardConfig.Key, false)
+			// Check for 'hashed' type in config to set flag correctly
+			for _, v := range col.ShardConfig.Key {
+				if s, ok := v.(string); ok && s == "hashed" {
+					shardKeyDoc = buildOrderedShardKey(col, col.ShardConfig.Key, true)
+					break
+				}
+			}
+
 			cmd := bson.D{
 				{Key: "shardCollection", Value: fmt.Sprintf("%s.%s", col.DatabaseName, col.Name)},
-				{Key: "key", Value: col.ShardConfig.Key},
+				{Key: "key", Value: shardKeyDoc},
 			}
 			if col.ShardConfig.Unique {
 				cmd = append(cmd, bson.E{Key: "unique", Value: true})
@@ -137,6 +154,12 @@ func CreateCollectionsFromConfig(ctx context.Context, db *mongo.Database, cfg *c
 func CreateIndexesFromConfig(ctx context.Context, db *mongo.Database, cfg *config.CollectionsFile) error {
 	for _, col := range cfg.Collections {
 		if len(col.Indexes) == 0 {
+			continue
+		}
+
+		isSharded, chunks, _ := checkShardingStatus(ctx, db, col.Name)
+		if isSharded && chunks > 1 {
+			logger.Info("Collection '%s' already set up. Skipping index creation.", col.Name)
 			continue
 		}
 

@@ -4,7 +4,7 @@
         "collection": "flights",
         "shardConfig": {
             "key": {
-                "flight_id": "hashed"
+                "flight_id": 1
             }
         },
         "fields": {
