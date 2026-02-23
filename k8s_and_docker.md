@@ -142,7 +142,7 @@ A custom example Job YAML for PLGM with this logic has been provided, please see
 **2. Deploy the job**
 
 ```bash
-kubectl apply -f plgm-job.yaml
+kubectl apply -f plgm-tls-job.yaml
 job.batch/plgm-benchmark created
 ```
 
