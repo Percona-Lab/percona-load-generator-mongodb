@@ -1,0 +1,68 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: plgm-benchmark
+  namespace: lab
+spec:
+  backoffLimit: 0 # Fails immediately if there is a connection issue, rather than retrying endlessly
+  template:
+    spec:
+      # 1. This init container combines cert-manager's tls.crt and tls.key into a single tls.pem file
+      initContainers:
+      - name: cert-builder
+        image: alpine:latest
+        command: ["sh", "-c", "cat /raw-certs/tls.crt /raw-certs/tls.key > /etc/ssl/tls.pem"]
+        volumeMounts:
+        - name: raw-certs
+          mountPath: /raw-certs
+          readOnly: true
+        - name: shared-ssl-dir
+          mountPath: /etc/ssl
+
+      containers:
+      - name: plgm
+        image: plgm:latest
+        imagePullPolicy: IfNotPresent # Uses the image you built
+        env:
+        # The URI points to the mongos router, references the mounted TLS cert, and authenticates against the admin DB
+        # 
+        - name: PLGM_URI
+          value: "mongodb://lab-mongos.lab.svc.cluster.local:27017/?tls=true&tlsInsecure=true&tlsCertificateKeyFile=/etc/ssl/tls.pem&authSource=admin"
+        
+        # Credentials (these will be injected into the URI by your application)
+        - name: PLGM_USERNAME
+          value: "plgmUser"
+        - name: PLGM_PASSWORD
+          value: "plgmPassword"
+
+        # Benchmark tuning parameters 
+        - name: PLGM_DURATION
+          value: "60s"  # Test duration (e.g., 60s, 5m)
+        - name: PLGM_DEFAULT_WORKLOAD
+          value: "true" # Uses the built-in 'flights' workload
+        - name: PLGM_CONCURRENCY
+          value: "40"   # Number of parallel worker threads
+
+        # Connection routing parameters
+        - name: PLGM_REPLICASET_NAME
+          value: ""
+        - name: PLGM_READ_PREFERENCE
+          value: "nearest"  
+        - name: PLGM_DIRECT_CONNECTION
+          value: "false"    
+        
+        volumeMounts:
+        # Mount the shared directory containing the combined tls.pem file
+        - name: shared-ssl-dir
+          mountPath: /etc/ssl
+          readOnly: true
+          
+      restartPolicy: Never
+      volumes:
+      # The raw secret directly from cert-manager
+      - name: raw-certs
+        secret:
+          secretName: lab-ssl
+      # A temporary empty directory to hold our combined tls.pem file
+      - name: shared-ssl-dir
+        emptyDir: {}

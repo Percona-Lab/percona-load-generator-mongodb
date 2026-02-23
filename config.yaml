@@ -2,7 +2,7 @@
 # Connection Settings
 # ==============================================================================
 
-# The primary connection string for the MongoDB target.
+# The primary connection string for the MongoDB target. 
 # Can be overridden via environment variable: PLGM_URI
 uri: "mongodb://localhost:31001"
 
@@ -12,11 +12,11 @@ connection_params:
   # Credentials (Optional)
   # You can set the username here or via env PLGM_USERNAME.
   # Password is NOT set here. Use PLGM_PASSWORD. If not set, the interactive prompt will ask for it
-  username: "root"
+  username: ""
   auth_source: admin             # Database to authenticate against
-  direct_connection: true        # Connect directly to the host (bypass topology discovery if single node)
-  replicaset_name: rs            # Required if connecting to a Replica Set, set to "" if connecting to a sharded cluster
-  read_preference: primary
+  direct_connection: false       # Connect directly to the host (bypass topology discovery if single node), use True if replicaset, False if connecting to a sharded cluster
+  replicaset_name: ""            # Required if connecting to a Replica Set, set to "" if connecting to a sharded cluster
+  read_preference: nearest
   connection_timeout: 30         # Time (seconds) to wait for an initial connection
   server_selection_timeout: 15   # Time (seconds) to wait to find a suitable server for an op
   
@@ -31,9 +31,11 @@ connection_params:
 # All mongodb connection parameters are supported, just add them below as shown in the examples
 custom_params:
   # Network compression. Use "zlib" for slow networks, "snappy" for speed, or remove for none.
+  # Disabling compressors could speed up the workload
   compressors: "zlib,snappy"
   # Disable SSL for local testing to save CPU cycles on handshake/encryption.
-  ssl: false
+  # Use true when connecting using tls(ssl). Make sure to add additional parameters as needed, e.g. tlsInsecure=true&tlsCertificateKeyFile=/path/to/tls.pem
+  tls: false
   
 # Enable debug logging (verbose).
 debug: false
@@ -124,3 +126,16 @@ retry_backoff_ms: 5
 # These override connection_params if set here, providing runtime flexibility.
 max_pool_size: 1000
 min_pool_size: 20
+
+# ==============================================================================
+# Raw Injector (High Performance Hardware Test)
+# ==============================================================================
+raw_injector:
+  enabled: false
+  drop_collection: false
+  type: "mixed"            # Options: insert, upsert, find, update, delete, mixed
+  document_size: 200
+  max_docs: 10000000
+  batch_size: 1000
+  db_name: "plgm_injector"
+  collection_name: "injector_data"

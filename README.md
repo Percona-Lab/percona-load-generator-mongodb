@@ -215,10 +215,10 @@ When using **Directory Mode**, the behavior depends on the `PLGM_DEFAULT_WORKLOA
 * **`false` (Custom):** Loads all JSON files **except** `default.json`. 
   * *Use Case:* Set this to `false` to run your custom workload files while keeping `default.json` in the folder for reference (it will be ignored).
 
-### 5. Docker & Kubernetes
+### 5. Kubernetes & Docker
 Prefer running in a container? We have a dedicated guide for building Docker images and running performance jobs directly inside Kubernetes (recommended for accurate network latency testing).
 
-[View the Docker & Kubernetes Guide](docker.md)
+[View the Docker & Kubernetes Guide](k8s_and_docker.md)
 
 ---
 
@@ -507,17 +507,40 @@ Control how plgm reacts to network lag or database pressure.
 
 ### 3. Custom Connection Parameters (`custom_params`)
 
-In the `config.yaml`, the `custom_params` section allows you to pass arbitrary options directly to the MongoDB driver's connection string. These are critical for tuning network throughput and security. Here are some examples you can use, all MongoDB connection parameters are supported.
+In the `config.yaml`, the `custom_params` section allows you to pass arbitrary options directly to the MongoDB driver's connection string. These parameters are appended as URI query options and are critical for tuning network throughput, security, and routing. All standard MongoDB connection parameters are supported.
 
 ```yaml
 custom_params:
   compressors: "zlib,snappy"
-  ssl: false
+  tls: false
 ```
 
 | Parameter | Example Value | Impact on Performance |
 | :--- | :--- | :--- |
 | **`compressors`** | `"snappy,zlib"` | **High Impact.** Enables network compression. <br>• **`snappy`**: Low CPU overhead, moderate compression. Good for high-throughput, low-latency. <br>• **`zlib`**: Higher CPU overhead, high compression. Good for limited bandwidth. <br>• **Empty**: No compression (saves CPU, uses max bandwidth). |
-| **`ssl`** | `false` | **Low/Medium Impact.** Disabling SSL (`false`) saves the CPU overhead of TLS handshakes and encryption, useful for local testing or secured private networks. |
+| **`tls`** | `false` | **Low/Medium Impact.** Disabling TLS (`false`) saves the CPU overhead of TLS handshakes and encryption, useful for local testing or secured private networks. |
 | **`readPreference`**| `"secondary"` | **Medium Impact.** (Optional) Can be added to offload read operations to replica set secondaries, keeping the primary free for writes. |
+
+***Note: From the perspective of the MongoDB Go driver, tls and ssl are 100% synonymous. They do the exact same thing. Historically, MongoDB used the term ssl, but has transitioned to tls to reflect modern security standards. The driver supports both for backwards compatibility.***
+
+#### Connecting to TLS/SSL-Enabled Clusters
+
+If your target MongoDB cluster enforces TLS/SSL, you must configure the load generator to use secure connections and present a valid client certificate.
+
+Because custom_params are directly injected into the MongoDB connection string, you can easily pass your TLS configuration directly through the config.yaml.
+
+Example config.yaml for TLS:
+
+```YAML
+custom_params:
+  compressors: "none"
+  tls: true
+  tlsInsecure: true # Bypasses strict Certificate Authority (CA) validation
+  tlsCertificateKeyFile: "/etc/ssl/tls.pem" # Path to the combined certificate/key PEM file
+```
+
+Further configuration and examples specific to [Kubernetes environments setup with TLS can be found here](k8s_and_docker.md#3-running-plgm-with-tls-on-kubernetes)
+
+***Note: Ensure you remove tls: false from your URI if you are using tls: true in custom_params, as the MongoDB Go driver will return a fatal error if conflicting security parameters are provided.***
+
 
