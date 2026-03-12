@@ -79,6 +79,9 @@ func BuildMongoURI(cfg *config.AppConfig) (string, error) {
 // ---------------------------------------------------------
 // Connect sets driver options + optional debug logging
 // ---------------------------------------------------------
+// ---------------------------------------------------------
+// Connect sets driver options + optional debug logging
+// ---------------------------------------------------------
 func Connect(ctx context.Context, cfg *config.AppConfig, dbName string) (*Connection, error) {
 
 	finalURI, err := BuildMongoURI(cfg)
@@ -103,18 +106,16 @@ func Connect(ctx context.Context, cfg *config.AppConfig, dbName string) (*Connec
 	}
 
 	// -----------------------------------------------------
-	// Ping server
+	// FAIL FAST: Quick Connection Validation
+	// Force a strict 3-second timeout for the initial ping.
+	// If the URI, credentials, or network are bad, it fails immediately.
 	// -----------------------------------------------------
-	pingTimeout := time.Duration(cfg.ConnectionParams.ServerSelectionTimeout) * time.Second
-	if pingTimeout <= 0 {
-		pingTimeout = 30 * time.Second
-	}
-	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	if err := client.Ping(pingCtx, nil); err != nil {
 		_ = client.Disconnect(context.Background())
-		return nil, fmt.Errorf("mongo ping error: %w", err)
+		return nil, fmt.Errorf("connection validation failed (check URI, credentials, or network): %w", err)
 	}
 
 	return &Connection{

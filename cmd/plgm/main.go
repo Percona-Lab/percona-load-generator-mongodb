@@ -17,6 +17,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/logger"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/webui"
 	"golang.org/x/term"
 )
 
@@ -25,7 +26,8 @@ var version = "dev"
 func main() {
 	configFlag := flag.String("config", "config.yaml", "Path to the configuration file")
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
-
+	webuiFlag := flag.Bool("webui", false, "Start the interactive Web UI")
+	webuiPort := flag.Int("webui-port", 8080, "Port for the Web UI")
 	injectorFlag := flag.Bool("raw-injector", false, "Enable Raw BSON Injector (High Performance Mode)")
 	injectorType := flag.String("raw-injector-type", "insert", "Operation: insert, upsert, update, delete, find, mixed")
 	injectorSize := flag.Int("raw-injector-size", 1024, "Document size in bytes")
@@ -54,6 +56,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DIRECT_CONNECTION", "Force direct connection (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_REPLICASET_NAME", "Replica Set name")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_READ_PREFERENCE", "nearest")
+
+		fmt.Fprintf(os.Stderr, "\n [Web UI]\n")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui", "Flag: Start the interactive Web UI")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-port", "Flag: Port for the Web UI (default: 8080)")
 
 		fmt.Fprintf(os.Stderr, "\n [Workload Core]\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DEFAULT_WORKLOAD", "Use built-in workload (true/false)")
@@ -114,13 +120,25 @@ func main() {
 		configPath = flag.Args()[0]
 	}
 
+	// Determine if the user is explicitly trying to start the Web UI
+	webUIRequested := *webuiFlag || strings.ToLower(os.Getenv("PLGM_WEBUI_ENABLED")) == "true"
+
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		fmt.Printf("Error: Configuration file '%s' not found.\n", configPath)
+		// If running in CLI mode, strictly require the config file
+		if !webUIRequested {
+			fmt.Printf("Error: Configuration file '%s' not found.\n", configPath)
+			fmt.Printf("To run the CLI workload, a config file is required. To run the interactive Web UI without a config, use the --webui flag.\n")
+			os.Exit(1)
+		}
+		// If Web UI IS requested, we just log a warning and proceed with an empty/default config
+		log.Printf("Warning: Configuration file '%s' not found. Starting Web UI with default settings.\n", configPath)
+	} else if err != nil {
+		fmt.Printf("Error checking config file '%s': %v\n", configPath, err)
 		os.Exit(1)
 	}
 
 	ctx := context.Background()
-	appCfg, err := config.LoadAppConfig(configPath)
+	appCfg, err := config.LoadAppConfig(configPath, webUIRequested)
 	if err != nil {
 		log.Fatal("Failed to load application config:", err)
 	}
@@ -130,6 +148,22 @@ func main() {
 			log.Println("PPROF server running on localhost:6060")
 			log.Println(http.ListenAndServe("localhost:6060", nil))
 		}()
+	}
+
+	if *webuiFlag || appCfg.WebUI.Enabled {
+		port := appCfg.WebUI.Port
+		// If the user explicitly passed the --webui-port flag, it overrides the config file
+		flag.Visit(func(f *flag.Flag) {
+			if f.Name == "webui-port" {
+				port = *webuiPort
+			}
+		})
+
+		server := webui.NewServer(appCfg)
+		if err := server.Start(port); err != nil {
+			log.Fatalf("Failed to start Web UI: %v", err)
+		}
+		return // Exit main so we don't accidentally run the CLI workload
 	}
 
 	if !strings.Contains(appCfg.URI, "compressors=") {

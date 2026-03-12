@@ -4,7 +4,7 @@
 
 # The primary connection string for the MongoDB target. 
 # Can be overridden via environment variable: PLGM_URI
-uri: "mongodb://localhost:31001"
+uri: "mongodb://dan-ps-lab-mongos00.tp.int.percona.com:27017"
 
 # --- Connection Tuning ---
 # Standard driver parameters to control behavior and resource usage.
@@ -43,6 +43,21 @@ debug: false
 # Enable PPROF server on localhost:6060 for profiling (default: false)
 # Can be overridden via env: PLGM_PPROF_ENABLED=true
 pprof_enabled: false
+
+# ==============================================================================
+# Web UI Configuration
+# ==============================================================================
+web_ui:
+  enabled: false
+  port: 9999
+
+# ==============================================================================
+# Metrics Export
+# ==============================================================================
+# Continuously stream workload throughput metrics to a CSV file for graphing
+csv_export_enabled: false
+csv_export_append: false # If true, appends to the file. If false, overwrites it.
+csv_export_path: "/tmp/plgm_metrics_export.csv"
 
 # ==============================================================================
 # Workload Definition

@@ -45,7 +45,7 @@ func GenerateRandomString(n int) string {
 	return string(b)
 }
 
-func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConfig) error {
+func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
 	collName := cfg.RawInjector.CollectionName
 	coll := db.Collection(collName)
 
@@ -90,13 +90,20 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 		cfg.RawInjector.DocumentSize,
 	)
 
-	// log.Printf("[INFO] Reporting: 'Total Ops' = Documents. (PMM 'Command Ops' will see ~1/%d of this rate)", cfg.RawInjector.BatchSize)
-
 	payload := GeneratePayload(cfg.RawInjector.DocumentSize)
 
-	collector := stats.NewCollector()
+	// 2. USE THE UI COLLECTOR IF PASSED, OTHERWISE CREATE A NEW ONE
+	var collector *stats.Collector
+	if len(uiCollector) > 0 && uiCollector[0] != nil {
+		collector = uiCollector[0]
+	} else {
+		collector = stats.NewCollector()
+	}
+
 	monitorDone := make(chan struct{})
-	go collector.Monitor(monitorDone, cfg.StatusRefreshRateSec, cfg.Concurrency)
+
+	// 3. PASS THE WEBUI FLAG TO THE MONITOR
+	go collector.Monitor(monitorDone, cfg.StatusRefreshRateSec, cfg.Concurrency, cfg.CSVExportEnabled, cfg.CSVExportAppend, cfg.CSVExportPath, cfg.WebUI.Enabled)
 
 	duration, err := time.ParseDuration(cfg.Duration)
 	if err != nil {
@@ -117,18 +124,9 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 		go func(workerID int) {
 			defer wg.Done()
 			runWorker(
-				workCtx,
-				workerID,
-				db,
-				collName,
-				cfg.RawInjector.Type,
-				payload,
-				collector,
-				docsPerWorker,
-				cfg.RawInjector.BatchSize,
-				cfg.Concurrency,
-				startSeqs[workerID],
-				cfg,
+				workCtx, workerID, db, collName, cfg.RawInjector.Type, payload,
+				collector, docsPerWorker, cfg.RawInjector.BatchSize,
+				cfg.Concurrency, startSeqs[workerID], cfg,
 			)
 		}(i)
 	}
@@ -137,8 +135,8 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 	wg.Wait()
 	close(monitorDone)
 
-	// fmt.Println("\n>>> Raw Injector Finished.")
-	collector.PrintFinalSummary(duration)
+	// 4. PASS THE WEBUI FLAG TO THE SUMMARY PRINTER
+	collector.PrintFinalSummary(duration, cfg.WebUI.Enabled)
 	return nil
 }
 

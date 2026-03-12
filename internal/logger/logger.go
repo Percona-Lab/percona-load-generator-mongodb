@@ -35,6 +35,10 @@ func GreenString(format string, args ...interface{}) string {
 	return Green + fmt.Sprintf(format, args...) + Reset
 }
 
+func RedString(format string, args ...interface{}) string {
+	return Red + fmt.Sprintf(format, args...) + Reset
+}
+
 func BoldString(format string, args ...interface{}) string {
 	return Bold + fmt.Sprintf(format, args...) + Reset
 }

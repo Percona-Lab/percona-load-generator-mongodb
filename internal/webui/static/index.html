@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Percona Load Generator for MongoDB (PLGM)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="chart.js"></script>
+
+    <style>
+        :root {
+            /* Percona Brand Colors */
+            --p-sunset: #ff7e1a;
+            --p-fire: #f24500;
+            --p-night: #0e1a53;
+            --p-sky: #1486ff;
+            --p-sunrise: #f0b336;
+            --p-aqua: #30d1b2;
+            --p-stone: #697793;
+
+            /* UI Variables */
+            --bg: #f4f6f8;
+            --surface: #ffffff;
+            --text: #2d3748;
+            --text-secondary: var(--p-stone);
+            --border: #e2e8f0;
+            --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+            --elevation-2: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+            --elevation-3: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            padding: 20px;
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: var(--surface);
+            border-radius: 6px;
+            box-shadow: var(--elevation-3);
+            overflow: hidden;
+        }
+
+        /* App Header */
+        .header {
+            background: var(--p-night);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid var(--p-sunset);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .timer-text {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: 500;
+            color: white;
+        }
+
+        .refresh-rate-control {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-rate-control input {
+            width: 65px;
+            padding: 4px 6px;
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            transition: 0.2s;
+        }
+
+        .refresh-rate-control input:focus {
+            outline: none;
+            border-color: var(--p-sky);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        /* Tabs & Forms */
+        .tabs {
+            display: flex;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            background: none;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            transition: 0.3s;
+            position: relative;
+        }
+
+        .tab-btn:hover {
+            background: rgba(0, 0, 0, 0.02);
+            color: var(--p-sky);
+        }
+
+        .tab-btn.active {
+            color: var(--p-sky);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--p-sky);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 32px 24px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        input[type="file"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border 0.2s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--p-sky);
+            box-shadow: 0 0 0 2px rgba(20, 134, 255, 0.2);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            color: var(--text);
+            font-weight: 400;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--p-sky);
+            cursor: pointer;
+        }
+
+        .file-upload-box {
+            border: 2px dashed var(--border);
+            padding: 24px;
+            text-align: center;
+            border-radius: 4px;
+            background: #f8fafc;
+        }
+
+        .footer {
+            padding: 16px 24px;
+            background: #f8fafc;
+            border-top: 1px solid var(--border);
+            text-align: right;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: var(--elevation-1);
+        }
+
+        .btn-primary {
+            background: var(--p-night);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--p-sky);
+            box-shadow: var(--elevation-2);
+        }
+
+        .btn-danger {
+            background: var(--p-fire);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d83d00;
+            box-shadow: var(--elevation-2);
+        }
+
+        .btn-flat {
+            background: transparent;
+            color: var(--p-night);
+            box-shadow: none;
+            border: 1px solid var(--border);
+        }
+
+        .btn-flat:hover {
+            background: rgba(14, 26, 83, 0.05);
+        }
+
+        /* Dashboard Layout */
+        .dashboard {
+            padding: 24px;
+            background: var(--bg);
+            display: none;
+        }
+
+        .progress-container {
+            width: 100%;
+            background: #e2e8f0;
+            height: 6px;
+            border-radius: 3px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--p-sunset);
+            transition: width 0.3s ease;
+        }
+
+        .mat-card {
+            background: var(--surface);
+            border-radius: 6px;
+            padding: 20px;
+            box-shadow: var(--elevation-1);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .mat-card-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stats-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 300;
+            color: var(--text);
+        }
+
+        .stat-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .sparkline-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 45px;
+            opacity: 0.4;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* TIME MACHINE SCRUBBER */
+        .time-machine-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 16px;
+            background: var(--surface);
+            padding: 12px 20px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            box-shadow: var(--elevation-1);
+        }
+
+        .time-machine-bar span {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .time-machine-bar input[type=range] {
+            flex-grow: 1;
+            accent-color: var(--p-sky);
+            cursor: pointer;
+        }
+
+        .btn-live {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-live.active {
+            background: var(--p-sky);
+            color: white;
+            border-color: var(--p-sky);
+            box-shadow: 0 0 8px rgba(20, 134, 255, 0.4);
+        }
+
+        /* Modals */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(14, 26, 83, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 24px;
+            border-radius: 6px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: var(--elevation-3);
+        }
+
+        .modal-box h3 {
+            margin-top: 0;
+            color: var(--p-night);
+            font-weight: 500;
+            font-size: 18px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+
+        .error-log-box {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text);
+            line-height: 1.5;
+            max-height: 150px;
+            overflow-y: auto;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <h1>Percona Load Generator for MongoDB (PLGM)</h1>
+                <div id="statusIndicator" class="status-badge">STOPPED</div>
+            </div>
+        
+            <div style="display: flex; align-items: center; gap: 24px;">
+                <div id="dashboardControls" class="header-controls" style="display: none;">
+                    <div class="refresh-rate-control">
+                        <label for="refreshRate" style="margin:0; cursor:pointer;">UI Refresh Rate (ms):</label>
+                        <input type="number" id="refreshRate" value="500" step="100" min="100" max="5000"
+                            onchange="updateRefreshRate()">
+                    </div>
+                    <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
+                </div>
+        
+                <button type="button" class="btn btn-flat"
+                    style="color: white; border-color: rgba(255,255,255,0.3); padding: 6px 12px; font-size: 12px;"
+                    onclick="shutdownApp()" title="Shut down the PLGM backend">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    EXIT
+                </button>
+            </div>
+        </div>
+
+        <div class="dashboard" id="dashboard">
+            <div class="progress-container">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+
+            <div class="time-machine-bar">
+                <span>Time Machine</span>
+                <input type="range" id="timeScrubber" min="0" max="0" value="0" step="1">
+                <button id="liveBtn" class="btn-live active" onclick="goToLive()">Back to Live</button>
+            </div>
+
+            <div class="stats-grid-4">
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title" style="color: var(--p-sky);">Find Ops</div>
+                    <div class="stat-value" id="stat-finds">0</div>
+                    <div class="stat-subtitle" id="rate-finds">0 ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-find"></canvas></div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title" style="color: var(--p-aqua);">Insert Ops</div>
+                    <div class="stat-value" id="stat-inserts">0</div>
+                    <div class="stat-subtitle" id="rate-inserts">0 ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-insert"></canvas></div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title" style="color: var(--p-sunrise);">Update Ops</div>
+                    <div class="stat-value" id="stat-updates">0</div>
+                    <div class="stat-subtitle" id="rate-updates">0 ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-update"></canvas></div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title" style="color: var(--p-fire);">Delete Ops</div>
+                    <div class="stat-value" id="stat-deletes">0</div>
+                    <div class="stat-subtitle" id="rate-deletes">0 ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-delete"></canvas></div>
+                </div>
+            </div>
+
+            <div class="chart-grid">
+                <div class="mat-card" style="height: 320px; margin-bottom: 0;">
+                    <div class="mat-card-title">Live Throughput (Ops/sec)</div>
+                    <div style="position: relative; height: 260px; width: 100%;">
+                        <canvas id="throughputChart"></canvas>
+                    </div>
+                </div>
+                <div class="mat-card" style="height: 320px; display: flex; flex-direction: column; margin-bottom: 0;">
+                    <div class="mat-card-title">Workload Anatomy</div>
+                    <div
+                        style="position: relative; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;">
+                        <canvas id="donutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mat-card" style="height: 280px;">
+                <div class="mat-card-title">Live Latency (ms)</div>
+                <div style="position: relative; height: 220px; width: 100%;">
+                    <canvas id="latencyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stats-grid-4">
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title">Avg Find Latency</div>
+                    <div class="stat-value" id="lat-find" style="color: var(--p-sky);">0 ms</div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title">Avg Insert Latency</div>
+                    <div class="stat-value" id="lat-insert" style="color: var(--p-aqua);">0 ms</div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title">Avg Update Latency</div>
+                    <div class="stat-value" id="lat-update" style="color: var(--p-sunrise);">0 ms</div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title">Avg Delete Latency</div>
+                    <div class="stat-value" id="lat-delete" style="color: var(--p-fire);">0 ms</div>
+                </div>
+            </div>
+
+            <div id="activeActions" style="text-align: right; margin-top: 8px;">
+                <button type="button" class="btn btn-danger" onclick="stopWorkload()">Stop Workload</button>
+            </div>
+
+            <div id="finishActions" style="display: none; text-align: right; margin-top: 8px;">
+                <button type="button" class="btn btn-flat" onclick="showConfigure()">Configure Settings</button>
+                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run
+                    Again</button>
+            </div>
+        </div>
+
+        <form id="configForm" enctype="multipart/form-data">
+            <div class="tabs">
+                <button type="button" class="tab-btn active" onclick="showTab('tab-conn')">Connection</button>
+                <button type="button" class="tab-btn" onclick="showTab('tab-workload')">Workload</button>
+                <button type="button" class="tab-btn" onclick="showTab('tab-mix')">Mix</button>
+                <button type="button" class="tab-btn" onclick="showTab('tab-adv')">Advanced</button>
+                <button type="button" class="tab-btn" onclick="showTab('tab-raw')">Raw Injector</button>
+            </div>
+
+            <div id="tab-conn" class="tab-content active">
+                <div class="form-group"><label>MongoDB URI</label><input type="text" name="uri"
+                        placeholder="mongodb://localhost:27017/" required></div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Username (Optional)</label><input type="text" name="username"></div>
+                    <div class="form-group"><label>Password (Optional)</label><input type="password" id="uiPassword"
+                            name="password" placeholder="Stored in session"></div>
+                    <div class="form-group"><label>Auth Source</label><input type="text" name="auth_source"
+                            value="admin"></div>
+                    <div class="form-group"><label>ReplicaSet Name (Optional)</label><input type="text"
+                            name="replicaset_name"></div>
+                    <div class="form-group">
+                        <label>Read Preference</label>
+                        <select name="read_preference">
+                            <option value="nearest">Nearest</option>
+                            <option value="primary">Primary</option>
+                            <option value="secondary">Secondary</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group"><label>Max Pool Size</label><input type="number" name="max_pool_size"
+                            value="200"></div>
+                    <div class="form-group"><label>Min Pool Size</label><input type="number" name="min_pool_size"
+                            value="10"></div>
+                    <div class="form-group"><label>Max Idle Time (m)</label><input type="number" name="max_idle_time"
+                            value="30"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="checkbox-group"><input type="checkbox" id="directConn" name="direct_connection"
+                            value="true"><label for="directConn">Direct Connection (Bypass Topology)</label></div>
+                    <div class="checkbox-group"><input type="checkbox" id="debugLogs" name="debug" value="true"><label
+                            for="debugLogs">Enable Driver Debug Logs</label></div>
+                </div>
+            </div>
+
+            <div id="tab-workload" class="tab-content">
+                <div class="grid-2">
+                    <div class="form-group"><label>Concurrency (Active Workers)</label><input type="number"
+                            name="concurrency" value="16" required></div>
+                    <div class="form-group"><label>Duration (e.g. 60s, 5m)</label><input type="text" name="duration"
+                            value="60s" required></div>
+                </div>
+                <div class="form-group checkbox-group" style="margin-bottom: 24px;">
+                    <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
+                        onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default
+                        Workload</label>
+                </div>
+                <div id="customFilesSection" class="grid-2" style="display: none; margin-bottom: 24px;">
+                    <div class="file-upload-box"><label>Custom Collections JSON</label><input type="file"
+                            name="collections_file" accept=".json"></div>
+                    <div class="file-upload-box"><label>Custom Queries JSON</label><input type="file"
+                            name="queries_file" accept=".json"></div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group"><label>Seed Document Count</label><input type="number"
+                            name="documents_count" value="100000"></div>
+                    <div class="form-group"><label>Max Transaction Ops</label><input type="number"
+                            name="max_transaction_ops" value="5"></div>
+                </div>
+                <div class="grid-3">
+                    <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
+                            value="true"><label for="dropColl">Drop Collections First</label></div>
+                    <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
+                            value="true"><label for="skipSeed">Skip Seed Phase</label></div>
+                    <div class="checkbox-group"><input type="checkbox" id="useTx" name="use_transactions"
+                            value="true"><label for="useTx">Use Transactions</label></div>
+                </div>
+            </div>
+
+            <div id="tab-mix" class="tab-content">
+                <div class="grid-3">
+                    <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="50">
+                    </div>
+                    <div class="form-group"><label>Update (%)</label><input type="number" name="update_percent"
+                            value="20"></div>
+                    <div class="form-group"><label>Delete (%)</label><input type="number" name="delete_percent"
+                            value="10"></div>
+                    <div class="form-group"><label>Insert (%)</label><input type="number" name="insert_percent"
+                            value="5"></div>
+                    <div class="form-group"><label>Bulk Insert (%)</label><input type="number"
+                            name="bulk_insert_percent" value="5"></div>
+                    <div class="form-group"><label>Aggregate (%)</label><input type="number" name="aggregate_percent"
+                            value="5"></div>
+                    <div class="form-group"><label>Transaction (%)</label><input type="number"
+                            name="transaction_percent" value="5"></div>
+                </div>
+            </div>
+
+            <div id="tab-adv" class="tab-content">
+                <div class="grid-3">
+                    <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size" value="10">
+                    </div>
+                    <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
+                    <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size"
+                            value="10"></div>
+                    <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000">
+                    </div>
+                    <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size"
+                            value="1000"></div>
+                    <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500">
+                    </div>
+                    <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts" value="2"></div>
+                    <div class="form-group"><label>Retry Backoff (ms)</label><input type="number" name="retry_backoff_ms" value="5">
+                    </div>
+                </div>
+                <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="useFindOne"
+                        name="use_findone_for_limit_one" value="true" checked><label for="useFindOne">Optimization: Use FindOne for
+                        limit 1</label></div>
+            
+                <div class="grid-2" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="csvExport" name="csv_export_enabled" value="true">
+                            <label for="csvExport">Enable Real-Time CSV Metrics Export</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="csvAppend" name="csv_export_append" value="true">
+                            <label for="csvAppend">Append to existing file (do not overwrite)</label>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>CSV Export Path & Filename</label>
+                        <input type="text" name="csv_export_path" placeholder="plgm_metrics_export.csv">
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-raw" class="tab-content">
+                <div class="checkbox-group" style="margin-bottom: 24px;">
+                    <input type="checkbox" id="rawEnable" name="raw_injector_enabled" value="true"><label
+                        for="rawEnable" style="color: var(--p-night); font-weight: 500;">Enable Raw Injector Mode
+                        (Overrides Standard Workload)</label>
+                </div>
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>Operation Type</label>
+                        <select name="raw_injector_type">
+                            <option value="insert">Insert</option>
+                            <option value="upsert">Upsert</option>
+                            <option value="update">Update</option>
+                            <option value="find">Find</option>
+                            <option value="delete">Delete</option>
+                            <option value="mixed">Mixed</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>Document Size (bytes)</label><input type="number"
+                            name="raw_injector_doc_size" value="1024"></div>
+                    <div class="form-group"><label>Batch Size</label><input type="number" name="raw_injector_batch_size"
+                            value="1000"></div>
+                    <div class="form-group"><label>Max Documents</label><input type="number"
+                            name="raw_injector_max_docs" value="10000000"></div>
+                    <div class="form-group"><label>Database Name</label><input type="text" name="raw_injector_db"
+                            value="plgm_injector"></div>
+                    <div class="form-group"><label>Collection Name</label><input type="text" name="raw_injector_coll"
+                            value="injector_data"></div>
+                </div>
+                <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="rawDrop"
+                        name="raw_injector_drop" value="true"><label for="rawDrop">Drop Collection on Start</label>
+                </div>
+            </div>
+
+            <div class="footer" id="formFooter">
+                <button type="submit" class="btn btn-primary" id="startBtn">Launch Workload</button>
+            </div>
+        </form>
+
+        <div class="modal-overlay" id="passwordModal">
+            <div class="modal-box">
+                <h3>Authentication Required</h3>
+                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">A username is set, but no
+                    password was provided. Please enter the password for the MongoDB connection:</p>
+                <div class="form-group"><input type="password" id="modalPasswordInput"
+                        placeholder="Enter MongoDB Password"></div>
+                <div class="modal-actions"><button type="button" class="btn btn-flat"
+                        onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary"
+                        onclick="submitWithPassword()">Confirm</button></div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="errorModal">
+            <div class="modal-box" style="border-top: 4px solid var(--p-fire);">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--p-fire)" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                        </path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    Percona Load Generator (PLGM)
+                </h3>
+                <div style="font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 8px;">Failed to start
+                    workload:</div>
+                <div id="errorMessage" class="error-log-box"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-primary" onclick="closeErrorModal()">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="shutdownModal">
+            <div class="modal-box" style="border-top: 4px solid var(--p-fire);">
+                <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--p-fire)" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                        <line x1="12" y1="2" x2="12" y2="12"></line>
+                    </svg>
+                    Confirm Shutdown
+                </h3>
+                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.5;">
+                    Are you sure you want to shut down the PLGM backend? This will immediately terminate the engine and you will
+                    no longer be able to run workloads from this UI.
+                </p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-flat" onclick="cancelShutdown()">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmShutdown()">Shut Down Backend</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const colors = { sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', fire: '#f24500' };
+        const WINDOW_SIZE = 30;
+
+        // UI Tabs
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+        function toggleCustomFiles() {
+            document.getElementById('customFilesSection').style.display = document.getElementById('defaultWorkload').checked ? 'none' : 'grid';
+        }
+
+        // --- Custom Alert Logic ---
+        function showError(msg) {
+            document.getElementById('errorMessage').textContent = msg;
+            document.getElementById('errorModal').style.display = 'flex';
+        }
+        function closeErrorModal() {
+            document.getElementById('errorModal').style.display = 'none';
+        }
+
+        // --- Data History Buffers (The Time Machine) ---
+        let histLabels = [];
+        let histRates = { find: [], insert: [], update: [], delete: [] };
+        let histLats = { find: [], insert: [], update: [], delete: [] };
+        let histTotals = { find: [], insert: [], update: [], delete: [] };
+        let isLiveMode = true;
+
+        // --- Chart.js Instances ---
+        let throughputChart, latencyChart, donutChart;
+        let sparkCharts = {};
+
+        const handleCrossHover = (sourceChartId) => {
+            return (e, activeEls, chart) => {
+                const targetChart = sourceChartId === 'throughput' ? latencyChart : throughputChart;
+                if (!targetChart) return;
+
+                if (activeEls.length > 0) {
+                    const idx = activeEls[0].index;
+                    const els = targetChart.data.datasets.map((_, i) => ({ datasetIndex: i, index: idx }));
+                    targetChart.setActiveElements(els);
+                    targetChart.tooltip.setActiveElements(els, { x: 0, y: 0 });
+                    targetChart.update();
+                } else {
+                    targetChart.setActiveElements([]);
+                    targetChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                    targetChart.update();
+                }
+            };
+        };
+
+        function initCharts() {
+            Chart.defaults.font.family = "'Roboto', sans-serif";
+            Chart.defaults.color = '#697793';
+
+            const createSparkline = (ctxId, color) => {
+                return new Chart(document.getElementById(ctxId), {
+                    type: 'line',
+                    data: { labels: Array(WINDOW_SIZE).fill(''), datasets: [{ data: Array(WINDOW_SIZE).fill(0), borderColor: color, borderWidth: 2, fill: true, backgroundColor: color + '20', tension: 0.4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, min: 0 } }, elements: { point: { radius: 0 } } }
+                });
+            };
+
+            sparkCharts.find = createSparkline('spark-find', colors.sky);
+            sparkCharts.insert = createSparkline('spark-insert', colors.aqua);
+            sparkCharts.update = createSparkline('spark-update', colors.sunrise);
+            sparkCharts.delete = createSparkline('spark-delete', colors.fire);
+
+            const getLineOptions = (sourceId) => ({
+                responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
+                interaction: { mode: 'index', intersect: false },
+                onHover: handleCrossHover(sourceId),
+                scales: {
+                    x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 11 } } },
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' } }
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 20 } },
+                    tooltip: { mode: 'index', intersect: false }
+                }
+            });
+
+            throughputChart = new Chart(document.getElementById('throughputChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(WINDOW_SIZE).fill(''),
+                    datasets: [
+                        { label: 'Find/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Insert/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Update/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.fire, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                    ]
+                }, options: getLineOptions('throughput')
+            });
+
+            latencyChart = new Chart(document.getElementById('latencyChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(WINDOW_SIZE).fill(''),
+                    datasets: [
+                        { label: 'Find (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Insert (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Update (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.fire, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                    ]
+                }, options: getLineOptions('latency')
+            });
+
+            donutChart = new Chart(document.getElementById('donutChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Find', 'Insert', 'Update', 'Delete'],
+                    datasets: [{ data: [0, 0, 0, 0], backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.fire], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '70%', animation: { duration: 0 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } } } }
+            });
+
+            const clearHovers = () => {
+                [throughputChart, latencyChart].forEach(c => {
+                    if (c) {
+                        c.setActiveElements([]);
+                        c.tooltip.setActiveElements([], { x: 0, y: 0 });
+                        c.update();
+                    }
+                });
+            };
+            document.getElementById('throughputChart').addEventListener('mouseleave', clearHovers);
+            document.getElementById('latencyChart').addEventListener('mouseleave', clearHovers);
+        }
+
+        function renderChartsAt(endIndex) {
+            if (endIndex < 0) return;
+            const start = Math.max(0, endIndex - WINDOW_SIZE + 1);
+
+            const getSlice = (arr, padVal = 0) => {
+                let res = arr.slice(start, endIndex + 1);
+                while (res.length < WINDOW_SIZE) res.unshift(padVal);
+                return res;
+            };
+
+            const labelsSlice = getSlice(histLabels, '');
+
+            throughputChart.data.labels = labelsSlice;
+            throughputChart.data.datasets[0].data = getSlice(histRates.find);
+            throughputChart.data.datasets[1].data = getSlice(histRates.insert);
+            throughputChart.data.datasets[2].data = getSlice(histRates.update);
+            throughputChart.data.datasets[3].data = getSlice(histRates.delete);
+            throughputChart.update();
+
+            latencyChart.data.labels = labelsSlice;
+            latencyChart.data.datasets[0].data = getSlice(histLats.find);
+            latencyChart.data.datasets[1].data = getSlice(histLats.insert);
+            latencyChart.data.datasets[2].data = getSlice(histLats.update);
+            latencyChart.data.datasets[3].data = getSlice(histLats.delete);
+            latencyChart.update();
+
+            sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
+            sparkCharts.insert.data.datasets[0].data = getSlice(histRates.insert); sparkCharts.insert.update();
+            sparkCharts.update.data.datasets[0].data = getSlice(histRates.update); sparkCharts.update.update();
+            sparkCharts.delete.data.datasets[0].data = getSlice(histRates.delete); sparkCharts.delete.update();
+
+            document.getElementById('rate-finds').textContent = (histRates.find[endIndex] || 0).toLocaleString() + ' ops/sec';
+            document.getElementById('rate-inserts').textContent = (histRates.insert[endIndex] || 0).toLocaleString() + ' ops/sec';
+            document.getElementById('rate-updates').textContent = (histRates.update[endIndex] || 0).toLocaleString() + ' ops/sec';
+            document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
+
+            document.getElementById('lat-find').textContent = (histLats.find[endIndex] || 0).toFixed(2) + ' ms';
+            document.getElementById('lat-insert').textContent = (histLats.insert[endIndex] || 0).toFixed(2) + ' ms';
+            document.getElementById('lat-update').textContent = (histLats.update[endIndex] || 0).toFixed(2) + ' ms';
+            document.getElementById('lat-delete').textContent = (histLats.delete[endIndex] || 0).toFixed(2) + ' ms';
+
+            const tF = histTotals.find[endIndex] || 0;
+            const tI = histTotals.insert[endIndex] || 0;
+            const tU = histTotals.update[endIndex] || 0;
+            const tD = histTotals.delete[endIndex] || 0;
+
+            document.getElementById('stat-finds').textContent = tF.toLocaleString();
+            document.getElementById('stat-inserts').textContent = tI.toLocaleString();
+            document.getElementById('stat-updates').textContent = tU.toLocaleString();
+            document.getElementById('stat-deletes').textContent = tD.toLocaleString();
+
+            if (tF > 0 || tI > 0 || tU > 0 || tD > 0) {
+                donutChart.data.datasets[0].data = [tF, tI, tU, tD];
+                donutChart.update();
+            }
+        }
+
+        // --- Scrubber Events ---
+        document.getElementById('timeScrubber').addEventListener('input', function () {
+            const maxIdx = parseInt(this.max);
+            const val = parseInt(this.value);
+            const liveBtn = document.getElementById('liveBtn');
+
+            if (val >= maxIdx) {
+                isLiveMode = true;
+                liveBtn.classList.remove('active');
+            } else {
+                isLiveMode = false;
+                liveBtn.classList.add('active');
+            }
+            renderChartsAt(val);
+        });
+
+        function goToLive() {
+            isLiveMode = true;
+            const scrubber = document.getElementById('timeScrubber');
+            scrubber.value = scrubber.max;
+            document.getElementById('liveBtn').classList.remove('active');
+            renderChartsAt(parseInt(scrubber.max));
+        }
+
+        let pollInterval;
+        let currentRefreshRate = 500;
+        let startTime;
+        let targetSeconds = 0;
+        let lastFormData = null;
+        let lastStats = { find: 0, insert: 0, update: 0, delete: 0 };
+
+        function parseDuration(str) {
+            if (!str) return 60;
+            const match = str.match(/(\d+)([smh])/);
+            if (!match) return parseInt(str) || 60;
+            const val = parseInt(match[1]);
+            const unit = match[2];
+            return unit === 'm' ? val * 60 : unit === 'h' ? val * 3600 : val;
+        }
+
+        function formatTime(sec) {
+            sec = Math.max(0, sec);
+            const m = Math.floor(sec / 60).toString().padStart(2, '0');
+            const s = Math.floor(sec % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function updateRefreshRate() {
+            const val = parseInt(document.getElementById('refreshRate').value);
+            if (val && val >= 100) {
+                currentRefreshRate = val;
+                if (pollInterval) startPolling();
+            }
+        }
+
+        function showConfigure() {
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('configForm').style.display = 'block';
+            document.getElementById('dashboardControls').style.display = 'none';
+            const badge = document.getElementById('statusIndicator');
+            badge.textContent = "STOPPED"; badge.style.background = "rgba(255,255,255,0.2)"; badge.style.color = "white";
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            initCharts();
+            fetch('/api/config').then(r => r.json()).then(cfg => {
+                document.querySelector('[name="uri"]').value = cfg.URI || '';
+                document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
+                document.querySelector('[name="duration"]').value = cfg.Duration || '60s';
+
+                const passInput = document.getElementById('uiPassword');
+
+                passInput.addEventListener('input', (e) => sessionStorage.setItem('plgm_password', e.target.value));
+
+                let bestPass = sessionStorage.getItem('plgm_password') || '';
+                if (cfg.ConnectionParams && cfg.ConnectionParams.Password) {
+                    bestPass = cfg.ConnectionParams.Password;
+                    sessionStorage.setItem('plgm_password', bestPass);
+                }
+                passInput.value = bestPass;
+
+                if (cfg.ConnectionParams) {
+                    document.querySelector('[name="username"]').value = cfg.ConnectionParams.Username || '';
+                    document.querySelector('[name="auth_source"]').value = cfg.ConnectionParams.AuthSource || 'admin';
+                    document.querySelector('[name="replicaset_name"]').value = cfg.ConnectionParams.ReplicaSetName || '';
+                    document.querySelector('[name="read_preference"]').value = cfg.ConnectionParams.ReadPreference || 'nearest';
+                    document.getElementById('directConn').checked = cfg.ConnectionParams.DirectConnection;
+                    document.querySelector('[name="max_pool_size"]').value = cfg.ConnectionParams.MaxPoolSize || 200;
+                    document.querySelector('[name="min_pool_size"]').value = cfg.ConnectionParams.MinPoolSize || 10;
+                    document.querySelector('[name="max_idle_time"]').value = cfg.ConnectionParams.MaxIdleTime || 30;
+                }
+
+                document.getElementById('debugLogs').checked = cfg.Debug;
+                document.getElementById('defaultWorkload').checked = cfg.DefaultWorkload; toggleCustomFiles();
+                document.getElementById('dropColl').checked = cfg.DropCollections;
+                document.getElementById('skipSeed').checked = cfg.SkipSeed;
+                document.querySelector('[name="documents_count"]').value = cfg.DocumentsCount || 100000;
+                document.getElementById('useTx').checked = cfg.UseTransactions;
+                document.querySelector('[name="max_transaction_ops"]').value = cfg.MaxTransactionOps || 5;
+
+                document.querySelector('[name="find_percent"]').value = cfg.FindPercent || 0;
+                document.querySelector('[name="update_percent"]').value = cfg.UpdatePercent || 0;
+                document.querySelector('[name="delete_percent"]').value = cfg.DeletePercent || 0;
+                document.querySelector('[name="insert_percent"]').value = cfg.InsertPercent || 0;
+                document.querySelector('[name="bulk_insert_percent"]').value = cfg.BulkInsertPercent || 0;
+                document.querySelector('[name="aggregate_percent"]').value = cfg.AggregatePercent || 0;
+                document.querySelector('[name="transaction_percent"]').value = cfg.TransactionPercent || 0;
+
+                document.querySelector('[name="find_batch_size"]').value = cfg.FindBatchSize || 10;
+                document.querySelector('[name="find_limit"]').value = cfg.FindLimit || 5;
+                document.querySelector('[name="insert_batch_size"]').value = cfg.InsertBatchSize || 10;
+                document.querySelector('[name="seed_batch_size"]').value = cfg.SeedBatchSize || 1000;
+                document.getElementById('useFindOne').checked = cfg.UseFindOneForLimitOne;
+                document.getElementById('csvExport').checked = cfg.CSVExportEnabled || false;
+                document.getElementById('csvAppend').checked = cfg.CSVExportAppend || false;
+                document.querySelector('[name="csv_export_path"]').value = cfg.CSVExportPath || 'plgm_metrics_export.csv';
+
+                if (cfg.RawInjector) {
+                    document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
+                    document.querySelector('[name="raw_injector_type"]').value = cfg.RawInjector.Type || 'insert';
+                    document.querySelector('[name="raw_injector_doc_size"]').value = cfg.RawInjector.DocumentSize || 1024;
+                    document.querySelector('[name="raw_injector_batch_size"]').value = cfg.RawInjector.BatchSize || 1000;
+                    document.querySelector('[name="raw_injector_max_docs"]').value = cfg.RawInjector.MaxDocs || 10000000;
+                    document.querySelector('[name="raw_injector_db"]').value = cfg.RawInjector.DBName || 'plgm_injector';
+                    document.querySelector('[name="raw_injector_coll"]').value = cfg.RawInjector.CollectionName || 'injector_data';
+                    document.getElementById('rawDrop').checked = cfg.RawInjector.DropCollection;
+                }
+            });
+        });
+
+        document.getElementById('configForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const username = document.querySelector('[name="username"]').value;
+            const password = document.querySelector('[name="password"]').value;
+            if (username !== "" && password === "") {
+                document.getElementById('passwordModal').style.display = 'flex';
+                document.getElementById('modalPasswordInput').focus();
+                return;
+            }
+            launchWorkload(new FormData(this));
+        });
+
+        function closeModal() { document.getElementById('passwordModal').style.display = 'none'; }
+
+        function submitWithPassword() {
+            const modalPass = document.getElementById('modalPasswordInput').value;
+            if (!modalPass) {
+                showError("Password is required.");
+                return;
+            }
+            document.querySelector('[name="password"]').value = modalPass;
+            sessionStorage.setItem('plgm_password', modalPass);
+            closeModal();
+            launchWorkload(new FormData(document.getElementById('configForm')));
+        }
+
+        function runAgain() { if (lastFormData) launchWorkload(lastFormData); }
+
+        function launchWorkload(formData) {
+            lastFormData = formData;
+            fetch('/api/start', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+
+                    if (data.status === 'error') {
+                        showError(data.message);
+                        return;
+                    }
+
+                    if (data.status === 'started') {
+                        document.getElementById('configForm').style.display = 'none';
+                        document.getElementById('dashboard').style.display = 'block';
+                        document.getElementById('dashboardControls').style.display = 'flex';
+                        document.getElementById('activeActions').style.display = 'block';
+                        document.getElementById('finishActions').style.display = 'none';
+                        document.getElementById('progressBar').style.width = "0%";
+
+                        targetSeconds = parseDuration(formData.get('duration'));
+
+                        histLabels = [];
+                        histRates = { find: [], insert: [], update: [], delete: [] };
+                        histLats = { find: [], insert: [], update: [], delete: [] };
+                        histTotals = { find: [], insert: [], update: [], delete: [] };
+                        lastStats = { find: 0, insert: 0, update: 0, delete: 0 };
+
+                        goToLive();
+
+                        startTime = Date.now();
+                        startPolling();
+                    }
+                }).catch(err => {
+                    showError("Network error contacting PLGM backend: " + err);
+                });
+        }
+
+        function stopWorkload() { fetch('/api/stop', { method: 'POST' }); }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+
+            pollInterval = setInterval(() => {
+                fetch('/api/stats')
+                    .then(r => r.json())
+                    .then(stats => {
+                        const badge = document.getElementById('statusIndicator');
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        if (stats.duration) targetSeconds = parseDuration(stats.duration);
+
+                        const displayElapsed = Math.min(elapsed, targetSeconds > 0 ? targetSeconds : elapsed);
+                        const timeStr = formatTime(displayElapsed);
+                        document.getElementById('timerDisplay').textContent = `${timeStr} / ${formatTime(targetSeconds)}`;
+
+                        if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((elapsed / targetSeconds) * 100, 100) + "%";
+
+                        if (!stats.isRunning) {
+                            badge.textContent = "FINISHED";
+                            badge.style.background = "rgba(255,255,255,0.2)";
+                            badge.style.color = "white";
+                            document.getElementById('activeActions').style.display = 'none';
+                            document.getElementById('finishActions').style.display = 'block';
+                            if (elapsed >= targetSeconds && targetSeconds > 0) {
+                                document.getElementById('progressBar').style.width = "100%";
+                                document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
+                            }
+                            clearInterval(pollInterval);
+                            return;
+                        } else {
+                            badge.textContent = "RUNNING";
+                            badge.style.background = "var(--p-aqua)";
+                            badge.style.color = "var(--p-night)";
+                        }
+
+                        if (stats.insertOps !== undefined) {
+                            const cFind = stats.findOps || 0;
+                            const cInsert = stats.insertOps || 0;
+                            const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
+                            const cDelete = stats.deleteOps || 0;
+
+                            const rateMultiplier = 1000 / currentRefreshRate;
+                            const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
+                            const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
+                            const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
+                            const rDelete = Math.max(0, Math.round((cDelete - lastStats.delete) * rateMultiplier));
+
+                            lastStats = { find: cFind, insert: cInsert, update: cUpdate, delete: cDelete };
+
+                            histLabels.push(timeStr);
+                            histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete);
+                            histLats.find.push(stats.findLatAvg || 0); histLats.insert.push(stats.insertLatAvg || 0); histLats.update.push(stats.updateLatAvg || 0); histLats.delete.push(stats.deleteLatAvg || 0);
+                            histTotals.find.push(cFind); histTotals.insert.push(cInsert); histTotals.update.push(cUpdate); histTotals.delete.push(cDelete);
+
+                            const maxIdx = histRates.find.length - 1;
+                            const scrubber = document.getElementById('timeScrubber');
+                            scrubber.max = maxIdx;
+
+                            if (isLiveMode) {
+                                scrubber.value = maxIdx;
+                                renderChartsAt(maxIdx);
+                            }
+                        }
+                    }).catch(err => console.error("Polling error:", err));
+            }, currentRefreshRate);
+        }
+
+        function shutdownApp() {
+                // Show the custom modal instead of the ugly browser confirm
+                document.getElementById('shutdownModal').style.display = 'flex';
+        }
+
+        function cancelShutdown() {
+            document.getElementById('shutdownModal').style.display = 'none';
+        }
+
+        function confirmShutdown() {
+            // Hide the modal
+            document.getElementById('shutdownModal').style.display = 'none';
+
+            // If the workload is running, send a stop signal first just to be safe
+            if (document.getElementById('statusIndicator').textContent === "RUNNING") {
+                stopWorkload();
+            }
+
+            fetch('/api/shutdown', { method: 'POST' })
+                .then(() => {
+                    // Wipe the screen and show a clean exit message
+                    document.body.innerHTML = `
+                    <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background: var(--bg); font-family: 'Roboto', sans-serif;">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--p-aqua)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 20px;">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <h2 style="color:var(--p-night); margin: 0 0 10px 0;">PLGM Shut Down Successfully</h2>
+                        <p style="color:var(--text-secondary); margin: 0;">The backend engine has been terminated. You can safely close this browser tab.</p>
+                    </div>
+                `;
+                })
+                .catch(err => {
+                    showError("Failed to shut down backend: " + err);
+                });
+        }
+
+    </script>
+</body>
+
+</html>

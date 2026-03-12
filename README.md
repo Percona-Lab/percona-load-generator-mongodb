@@ -6,6 +6,7 @@ It simulates real-world usage patterns by generating random data using robust BS
 
 This tool is a complete refactor of the previous Python version, offering:
 * **Single Binary:** No complex dependencies or Python environment setup.
+* **Interactive Web UI:** A beautiful dashboard for configuring and running workloads and monitoring live telemetry.
 * **High Concurrency:** Utilizes Go goroutines ("Active Workers") to generate massive load with minimal client-side resource usage.
 * **Configuration as Code:** Fully configurable via a simple `config.yaml` file or Environment Variables.
 * **Extensive Data Support:** Supports all standard MongoDB BSON data types (ObjectId, Decimal128, Date, Binary, etc.) and realistic data generation via `gofakeit` (supporting complex nested objects and arrays).
@@ -19,7 +20,7 @@ This tool is a complete refactor of the previous Python version, offering:
 
 **Option 1: Download Release**
 
-Navigate to the [Releases] page and download the .tar.gz file matching your operating system.
+Navigate to the Releases page and download the .tar.gz file matching your operating system.
 
 1. Download and Extract
 
@@ -36,7 +37,7 @@ tar -xzvf plgm-darwin-arm64.tar.gz
 This project includes a `Makefile` to simplify building and packaging.
 
 ```bash
-git clone https://github.com/Percona-Lab/percona-load-generator-mongodb.git
+git clone [https://github.com/Percona-Lab/percona-load-generator-mongodb.git](https://github.com/Percona-Lab/percona-load-generator-mongodb.git)
 cd percona-load-generator-mongodb
 go mod tidy
 
@@ -45,39 +46,6 @@ make build-local
 
 # Run it
 ./bin/plgm --help
-```
-
-### 2. Configuration & Resources
-
-To run the application, you need a configuration file. Depending on whether you want to run the built-in test or your own custom workload, you may also need to create resource folders.
-
-**Step A: Get the Config**
-
-Download the [`config.yaml`](./config.yaml) and adjust the `uri` to point to your MongoDB instance.
-
-**Step B: Choose Your Workload**
-
-* **Mode 1: Default Workload (Easiest)**
-    
-    By default (`default_workload: true` in `config.yaml`), the application uses the embedded collection and query definitions. You do **not** need to create any extra folders or files.
-
-* **Mode 2: Custom Workload**
-    
-    To run your own stress tests, you must set `default_workload: false` in `config.yaml` and provide the necessary files:
-
-    1.  **Create Directories**: Create folders for your definitions (e.g., `resources/collections` and `resources/queries`).
-    2.  **Add Files**: Place your JSON schema and query definitions inside these folders.
-    3.  **Update Config**: Ensure `collections_path` and `queries_path` in your `config.yaml` point to these new directories.
-
-    > **Important:** If you are running in Custom Mode, the application expects these folders to exist. If the folders are missing, `plgm` will revert to the embedded defaults to prevent a crash, but your custom test **will not run** until the files are in place.
-
-### 3. Run
-
-Once configured, run the application:
-
-```bash
-# The extracted binary will have the OS suffix
-./plgm-linux-amd64
 ```
 
 **Cross-Compilation (Build for different OS)**
@@ -94,7 +62,107 @@ make build
 # bin/plgm-darwin-arm64.tar.gz
 ```
 
-#### Usage
+### 2. Configuration
+
+To run the application you need a configuration file. Depending on whether you want to run the built-in workload or your own custom, you may also need to create resource folders.
+
+**Step A: Get the Config**
+
+Download the [`config.yaml`](./config.yaml) and make the necessary adjustments.
+
+### 3. Choose Your Interface
+
+`plgm` can be run completely headless via the CLI, or via a rich interactive Web Dashboard.
+
+* **Run via CLI (Headless):**
+  ```bash
+  ./bin/plgm
+  ```
+* **Run via Web UI:**
+  ```bash
+  ./bin/plgm --webui
+  ```
+
+## The Interactive UI
+
+`plgm` features a completely embedded Web UI. It allows you to configure your database connection, upload custom workload schemas, adjust operation ratios, and monitor real-time throughput and latency without ever touching a YAML file. It has the same functionality as the CLI version, but with an awesome UI.
+
+#### 1. Starting the UI
+To launch the UI, simply pass the `--webui` flag. The application will start a secure local server and automatically open your default web browser listening on port 9999. You can also set a custom port instead, as shown in the example below:
+
+```bash
+./bin/plgm --webui
+# Or, set a custom port:
+./bin/plgm --webui --webui-port=32000
+```
+
+#### 2. Configuration
+The UI provides an intuitive tabbed interface to configure every aspect of your workload. 
+
+* **Connection:** Set your URI, read preferences, and connection pooling limits. Passwords are never logged and are safely managed via session storage.
+
+![PLGM Configuration UI - Connection Tab](./images/connection.png)
+
+* **Workload & Mix:** Upload your own custom `collections.json` and `queries.json` files directly through the browser, and use visual inputs to ensure your Find/Insert/Update/Delete ratios total exactly 100%. You can also run the default workload by clicking the `Use built-in Default Workload` checkbox.
+
+![PLGM Configuration UI - Connection Tab](./images/workload.png)
+
+![PLGM Configuration UI - Mix Tab](./images/mix.png)
+
+* **Advanced & Raw Injector:** Fine-tune batch sizes, timeouts, or override the standard workload with the ultra-high-performance Raw Injector.
+
+![PLGM Configuration UI - Advanced Tab](./images/advanced.png)
+
+![PLGM Configuration UI - Raw Injector Tab](./images/raw_injector.png)
+
+#### 3. The Observability Dashboard
+Once the workload begins, the UI transitions to a real-time observability dashboard.
+
+![PLGM Observability Dashboard (Top)](./images/dashboard_top.png)
+![PLGM Observability Dashboard (Bottom)](./images/dashboard_bottom.png)
+
+* **Live Telemetry:** Watch throughput (Ops/sec) and average latency (ms) stream in real-time across four distinct operation categories.
+* **Workload Anatomy:** A live-updating donut chart proves that your database is accurately executing the exact operation ratios you configured.
+* **Crosshair Sync:** Hovering over a spike on the Throughput chart will instantly highlight the exact same moment in time on the Latency chart.
+
+#### 4. The "Time Machine" Scrubber
+If you are running a long benchmark, you might miss a sudden latency spike. The UI stores a running history buffer of the benchmark data. 
+
+Simply grab the **Time Machine** slider above the charts and drag it to the left to pause the live feed and "scrub" backward in time. All line charts, sparklines, and numeric values will perfectly synchronize to show you the exact state of the database at that specific historical second. Click **Back to Live** to resume real-time monitoring.
+
+![PLGM Time Machine Feature](./images/time_machine.png)
+
+
+## CLI 
+
+#### 1. Configuration
+
+Once you have configured your connection settings and any other parameters, you can choose your workload.
+
+* **Mode 1: Default Workload (Easiest)**
+    
+    By default (`default_workload: true` in `config.yaml`), the application uses the embedded collection and query definitions. You do **not** need to create any extra folders or files.
+
+* **Mode 2: Custom Workload**
+    
+    To run your own stress tests, you must set `default_workload: false` in `config.yaml` and provide the necessary files:
+
+    1.  **Create Directories**: Create folders for your definitions (e.g., `resources/collections` and `resources/queries`).
+    2.  **Add Files**: Place your JSON schema and query definitions inside these folders.
+    3.  **Update Config**: Ensure `collections_path` and `queries_path` in your `config.yaml` point to these new directories.
+
+    > **Important:** If you are running in Custom Mode, the application expects these folders to exist. If the folders are missing, `plgm` will revert to the embedded defaults to prevent a crash, but your custom test **will not run** until the files are in place.
+
+#### 2. Run
+
+Once configured, run the application:
+
+```bash
+# The extracted binary will have the OS suffix
+./plgm-linux-amd64
+```
+
+#### 3. CLI Usage
 
 To view the full usage guide, including available flags and environment variables, run the help command:
 
@@ -111,21 +179,25 @@ Examples:
 
 Flags:
   -config string
-    	Path to the configuration file (default "config.yaml")
+      Path to the configuration file (default "config.yaml")
   -raw-injector
-    	Enable Raw BSON Injector (High Performance Mode)
+      Enable Raw BSON Injector (High Performance Mode)
   -raw-injector-batch int
-    	Bulk batch size (ops per network round trip) (default 1000)
+      Bulk batch size (ops per network round trip) (default 1000)
   -raw-injector-drop
-    	Drop the collection before starting
+      Drop the collection before starting
   -raw-injector-max-docs int
-    	Maximum number of documents to operate on (default 10000000)
+      Maximum number of documents to operate on (default 10000000)
   -raw-injector-size int
-    	Document size in bytes (default 1024)
+      Document size in bytes (default 1024)
   -raw-injector-type string
-    	Operation: insert, upsert, update, delete, find, mixed (default "insert")
+      Operation: insert, upsert, update, delete, find, mixed (default "insert")
   -version
-    	Print version information and exit
+      Print version information and exit
+  -webui
+      Start the interactive Web UI
+  -webui-port int
+      Port for the Web UI (default 9999)
 
 Environment Variables (Overrides):
  [Connection]
@@ -135,6 +207,10 @@ Environment Variables (Overrides):
   PLGM_DIRECT_CONNECTION              Force direct connection (true/false)
   PLGM_REPLICASET_NAME                Replica Set name
   PLGM_READ_PREFERENCE                nearest
+
+ [Web UI]
+  PLGM_WEBUI_ENABLED                  Start the interactive Web UI (true/false)
+  PLGM_WEBUI_PORT                     Port for the Web UI (default: 9999)
 
  [Workload Core]
   PLGM_DEFAULT_WORKLOAD               Use built-in workload (true/false)
@@ -182,8 +258,9 @@ Environment Variables (Overrides):
   GOMAXPROCS                          Go Runtime CPU limit
 ```
 
-### 2. Default Workload
-plgm comes with a built-in default workload useful for immediate testing and get you started right away.
+## Default Workload
+
+Regardless of rather you are running PLGM from CLI or UI, it comes with a built-in default workload useful for immediate testing and get you started right away.
 ```bash
 # Edit config.yaml to set your URI, then run:
 ./bin/plgm
@@ -199,7 +276,7 @@ If you wish to use a different default workload, you can replace these two files
 ./bin/plgm /path/to/some/custom_config.yaml
 ```
 
-### 3. Raw Injector Mode (High Performance Hardware Test) Workload
+## Raw Injector Mode (High Performance Hardware Test) Workload
 
 The **Raw Injector** is a specialized, ultra-high-performance engine built directly into `PLGM`. Instead of using the standard MongoDB driver structs (which consume CPU and memory for BSON marshaling), the Raw Injector pre-compiles raw BSON byte arrays and performs zero-allocation bitwise mutations in a tight loop.
 
@@ -209,7 +286,7 @@ Unlike the other workloads PLGM supports, this mode is not configurable. It was 
 
 ***Important Note on Ops/Sec: In Raw Injector mode, the printed Ops/Sec refers to the number of documents processed, not the number of network commands. For example, if your batch size is 1,000, and plgm reports 50,000 Ops/Sec, it is executing 50 bulk network commands per second.***
 
-#### Configuration
+### Configuration
 
 You can configure the Raw Injector via `config.yaml` or directly via CLI flags/environment variables. These are the available options:
 
@@ -239,7 +316,7 @@ Environment variables:
   PLGM_INJECTOR_COLLECTION            Collection name
 ```
 
-#### Modes of Operation (type)
+### Modes of Operation (type)
 
  * insert: Floods the database with new documents. Automatically pre-splits chunks if sharding is enabled.
  * find / update / delete: Operates on the existing data seeded by an insert run.
@@ -247,7 +324,7 @@ Environment variables:
  * mixed: Runs a randomized distribution of reads, inserts, updates, and deletes simultaneously.
 
 
-#### Running via CLI
+### Running via CLI
 You can bypass the YAML config entirely and trigger a raw injection test purely through flags:
 
 ##### Run a pure insert flood, dropping existing data, with 4KB documents
@@ -381,7 +458,7 @@ PLGM_INJECTOR=true PLGM_INJECTOR_TYPE=mixed PLGM_DURATION=30s ./plgm
 
 </details>
 
-### 4. Additional Workloads
+## Additional Workloads
 
 You will find additional workloads that you can use as references to benchmark your environment in cases where you prefer not to provide your own collection definitions and queries. However, if your goal is to test your application accurately, we strongly recommend creating collection definitions and queries that match those used by your application.
 
@@ -391,7 +468,7 @@ The additional collection and query definitions can be found here:
 * [queries](./resources/queries/)
 
 
-### 5. Workload Configuration & Loading
+### Workload Configuration & Loading
 
 You can supply your own collections and queries using the `PLGM_COLLECTIONS_PATH` and `PLGM_QUERIES_PATH` environment variables (or the corresponding config file fields). 
 
@@ -443,8 +520,15 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `direct_connection` | `PLGM_DIRECT_CONNECTION` | Force direct connection (bypass topology discovery) | `true` |
 | `replicaset_name` | `PLGM_REPLICASET_NAME` | Replica Set name (required for sharded clusters/RS) | `rs0` |
 | `read_preference` | `PLGM_READ_PREFERENCE` | By default, an application directs its read operations to the primary member in a replica set. You can specify a read preference to send read operations to secondaries. | `nearest` |
-| `username` | `PLGM_USERNAME` |	Database User | `admin` |
-| ***can not be set via config*** | `PLGM_PASSWORD` |	Database Password (if not set, plgm will prompt) | `password123` |
+| `username` | `PLGM_USERNAME` |  Database User | `admin` |
+| ***can not be set via config*** | `PLGM_PASSWORD` | Database Password (if not set, plgm will prompt) | `password123` |
+| **Web UI** | | | |
+| `enabled` | `PLGM_WEBUI_ENABLED` | Force launch the Web UI | `true` |
+| `port` | `PLGM_WEBUI_PORT` | Port for the Web UI | `9999` |
+| **Metrics Export** | | | |
+| `csv_export_enabled` ||Continuously stream workload throughput metrics to a CSV file| `false` |
+| `csv_export_append` ||If true, appends to the file. If false, overwrites it.| `false` |
+| `csv_export_path` ||Path and metrics file name| `/tmp/plgm_metrics_export.csv` |
 | **Workload Control** | | | |
 | `concurrency` | `PLGM_CONCURRENCY` | Number of active worker goroutines | `50` |
 | `duration` | `PLGM_DURATION` | Test duration (Go duration string) | `5m`, `60s` |
@@ -502,6 +586,7 @@ When executed, plgm performs the following steps:
 4.  **Reporting:**
     * Outputs a real-time status report every N seconds (configurable).
     * Prints a detailed summary table at the end of the run.
+    * Export output to csv (off by default)
 
 ### Sample Output
 
@@ -646,15 +731,15 @@ You can fine-tune plgm internal behavior by adjusting the parameters in `config.
 #### Workload Type
 By default, the tool comes preconfigured with the following workload distribution:
 
-| Operation |	Percentage |
+| Operation | Percentage |
 | :--- | :--- | 
-| Find	| 50% | 
-| Update	| 20% | 
-| Delete	| 10% | 
-| Insert	| 5% | 
+| Find  | 50% | 
+| Update  | 20% | 
+| Delete  | 10% | 
+| Insert  | 5% | 
 | Bulk Inserts | 5% |
-| Aggregate	| 5% | 
-| Transaction	| 5% | 
+| Aggregate | 5% | 
+| Transaction | 5% | 
 
 You can modify any of the values above to run different types of workloads.
 
@@ -739,7 +824,7 @@ Because custom_params are directly injected into the MongoDB connection string, 
 
 Example config.yaml for TLS:
 
-```YAML
+```yaml
 custom_params:
   compressors: "none"
   tls: true
@@ -752,3 +837,6 @@ Further configuration and examples specific to [Kubernetes environments setup wi
 ***Note: Ensure you remove tls: false from your URI if you are using tls: true in custom_params, as the MongoDB Go driver will return a fatal error if conflicting security parameters are provided.***
 
 
+# Disclaimer
+
+This application is not supported by Percona. It has been provided as a community contribution and is not covered under any Percona services agreement.

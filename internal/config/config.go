@@ -45,8 +45,17 @@ type AppConfig struct {
 	ConnectionParams ConnectionParams       `yaml:"connection_params"`
 	CustomParamsMap  map[string]interface{} `yaml:"custom_params"`
 	Debug            bool                   `yaml:"debug"`
+	WebUI            WebUIConfig            `yaml:"web_ui"`
+	RawInjector      RawInjectorConfig      `yaml:"raw_injector"`
 
-	RawInjector RawInjectorConfig `yaml:"raw_injector"`
+	CSVExportEnabled bool   `yaml:"csv_export_enabled"`
+	CSVExportAppend  bool   `yaml:"csv_export_append"`
+	CSVExportPath    string `yaml:"csv_export_path"`
+}
+
+type WebUIConfig struct {
+	Enabled bool `yaml:"enabled"`
+	Port    int  `yaml:"port"`
 }
 
 type RawInjectorConfig struct {
@@ -62,7 +71,7 @@ type RawInjectorConfig struct {
 
 type ConnectionParams struct {
 	Username               string `yaml:"username"`
-	Password               string `yaml:"-"`
+	Password               string `yaml:"-" json:"Password" mapstructure:"password"`
 	AuthSource             string `yaml:"auth_source"`
 	DirectConnection       bool   `yaml:"direct_connection"`
 	ConnectionTimeout      int    `yaml:"connection_timeout"`
@@ -74,29 +83,114 @@ type ConnectionParams struct {
 	ReadPreference         string `yaml:"read_preference"`
 }
 
-func LoadAppConfig(path string) (*AppConfig, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config file %s: %w", path, err)
-	}
-
+func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 	cfg := &AppConfig{}
-	if err := yaml.Unmarshal(b, cfg); err != nil {
-		return nil, fmt.Errorf("invalid YAML format for config: %w", err)
+	configLoaded := false
+
+	// 1. Load the YAML file if it exists
+	if _, err := os.Stat(path); err == nil {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read config file %s: %w", path, err)
+		}
+		if err := yaml.Unmarshal(b, cfg); err != nil {
+			return nil, fmt.Errorf("invalid YAML format for config: %w", err)
+		}
+		configLoaded = true
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("error checking config file %s: %w", path, err)
 	}
 
+	// 2. Apply explicit environment variable overrides
 	overriddenStats := applyEnvOverrides(cfg)
 
-	normalizePercentages(cfg, overriddenStats)
+	// 3. Apply exact screenshot defaults ONLY if Web UI is requested AND no file was loaded
+	if isWebUI && !configLoaded {
+		applyUIDefaults(cfg)
+	}
 
-	applyDefaults(cfg)
+	// 4. Apply base safety limits (driver batch sizes, timeouts, etc.)
+	applyBaseDefaults(cfg)
+
+	// 5. Balance the mix percentages
+	normalizePercentages(cfg, overriddenStats)
 
 	return cfg, nil
 }
 
-func applyDefaults(cfg *AppConfig) {
+// applyUIDefaults forces exact visual values from screenshots when no config.yaml is found
+func applyUIDefaults(cfg *AppConfig) {
+	// --- CONNECTION TAB ---
+	cfg.URI = "mongodb://localhost:27017"
+	cfg.ConnectionParams.Username = "plgm"
+	cfg.ConnectionParams.AuthSource = "admin"
+	cfg.ConnectionParams.ReadPreference = "nearest"
+
+	// --- WORKLOAD TAB ---
+	cfg.Concurrency = 4
+	cfg.Duration = "20s"
+	cfg.DefaultWorkload = true
+	cfg.SkipSeed = true
+	cfg.DocumentsCount = 100000
+
+	// --- MIX TAB ---
+	cfg.FindPercent = 50
+	cfg.UpdatePercent = 20
+	cfg.DeletePercent = 10
+	cfg.InsertPercent = 20
+	cfg.BulkInsertPercent = 0
+	cfg.AggregatePercent = 0
+	cfg.TransactionPercent = 0
+
+	// --- EXPORT DEFAULTS ---
+	cfg.CSVExportEnabled = false
+	cfg.CSVExportAppend = false
+	cfg.CSVExportPath = "plgm_metrics_export.csv"
+}
+
+// applyBaseDefaults sets low-level engine safety limits & remaining UI limits
+func applyBaseDefaults(cfg *AppConfig) {
+	// --- HIDDEN WORKLOAD PATHS ---
+	// Required to find the default JSON files when no config.yaml is present
+	if cfg.CollectionsPath == "" {
+		cfg.CollectionsPath = "resources/collections"
+	}
+	if cfg.QueriesPath == "" {
+		cfg.QueriesPath = "resources/queries"
+	}
+
+	if cfg.CSVExportEnabled && cfg.CSVExportPath == "" {
+		cfg.CSVExportPath = "plgm_metrics_export.csv"
+	}
+
+	// Web UI Port
+	if cfg.WebUI.Port <= 0 {
+		cfg.WebUI.Port = 9999 // default if not specified via flag
+	}
+
+	// --- CONNECTION POOLS ---
+	if cfg.ConnectionParams.MaxPoolSize <= 0 {
+		cfg.ConnectionParams.MaxPoolSize = 200
+	}
+	if cfg.ConnectionParams.MinPoolSize <= 0 {
+		cfg.ConnectionParams.MinPoolSize = 10
+	}
+	if cfg.ConnectionParams.MaxIdleTime <= 0 {
+		cfg.ConnectionParams.MaxIdleTime = 30
+	}
+	if cfg.ConnectionParams.ConnectionTimeout <= 0 {
+		cfg.ConnectionParams.ConnectionTimeout = 30
+	}
+	if cfg.ConnectionParams.ServerSelectionTimeout <= 0 {
+		cfg.ConnectionParams.ServerSelectionTimeout = 15
+	}
+
+	// --- ADVANCED TAB ---
 	if cfg.FindBatchSize <= 0 {
 		cfg.FindBatchSize = 10
+	}
+	if cfg.FindLimit <= 0 {
+		cfg.FindLimit = 5
 	}
 	if cfg.InsertBatchSize <= 0 {
 		cfg.InsertBatchSize = 10
@@ -104,14 +198,8 @@ func applyDefaults(cfg *AppConfig) {
 	if cfg.SeedBatchSize <= 0 {
 		cfg.SeedBatchSize = 1000
 	}
-	if cfg.FindLimit <= 0 {
-		cfg.FindLimit = 5
-	}
 	if cfg.InsertCacheSize <= 0 {
 		cfg.InsertCacheSize = 1000
-	}
-	if cfg.StatusRefreshRateSec <= 0 {
-		cfg.StatusRefreshRateSec = 1
 	}
 	if cfg.OpTimeoutMs <= 0 {
 		cfg.OpTimeoutMs = 500
@@ -126,9 +214,9 @@ func applyDefaults(cfg *AppConfig) {
 		cfg.MaxTransactionOps = 3
 	}
 
-	// RawInjector Defaults
+	// --- RAW INJECTOR TAB ---
 	if cfg.RawInjector.Type == "" {
-		cfg.RawInjector.Type = "insert"
+		cfg.RawInjector.Type = "mixed"
 	}
 	if cfg.RawInjector.DocumentSize <= 0 {
 		cfg.RawInjector.DocumentSize = 1024
@@ -158,7 +246,7 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		cfg.ConnectionParams.Password = v
 	}
 
-	// 2. Default Workload (Explicit Override)
+	// Default Workload (Explicit Override)
 	explicitDefault := false
 	if v := os.Getenv("PLGM_DEFAULT_WORKLOAD"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -207,8 +295,6 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		hasCustomQuery = true
 	}
 
-	// If the user provides BOTH a custom collection and custom query path via ENV,
-	// and has NOT explicitly set PLGM_DEFAULT_WORKLOAD, assume they want the custom workload.
 	if !explicitDefault && hasCustomColl && hasCustomQuery {
 		cfg.DefaultWorkload = false
 	}
@@ -374,6 +460,18 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_INJECTOR_DROP"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			cfg.RawInjector.DropCollection = b
+		}
+	}
+
+	// --- Web UI Overrides ---
+	if v := os.Getenv("PLGM_WEBUI_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WebUI.Enabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_WEBUI_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.WebUI.Port = n
 		}
 	}
 

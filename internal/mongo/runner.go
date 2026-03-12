@@ -610,7 +610,7 @@ func processRecursive(v interface{}, rng *rand.Rand) {
 	}
 }
 
-func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig) error {
+func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
 	duration, err := time.ParseDuration(cfg.Duration)
 	if err != nil {
 		return err
@@ -622,7 +622,13 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		}
 	}
 
-	collector := stats.NewCollector()
+	var collector *stats.Collector
+	if len(uiCollector) > 0 && uiCollector[0] != nil {
+		collector = uiCollector[0]
+	} else {
+		collector = stats.NewCollector()
+	}
+
 	if duration <= 0 {
 		return runAllQueriesOnce(ctx, db, queries, cfg.DebugMode)
 	}
@@ -680,7 +686,9 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	}
 
 	monitorDone := make(chan struct{})
-	go func() { wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency) }()
+	go func() {
+		wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency, wCfg.appConfig.CSVExportEnabled, wCfg.appConfig.CSVExportAppend, wCfg.appConfig.CSVExportPath, wCfg.appConfig.WebUI.Enabled)
+	}()
 
 	var wg sync.WaitGroup
 	for i := 1; i <= wCfg.concurrency; i++ {
@@ -692,7 +700,7 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	<-workloadCtx.Done()
 	wg.Wait()
 	close(monitorDone)
-	wCfg.collector.PrintFinalSummary(wCfg.duration)
+	wCfg.collector.PrintFinalSummary(wCfg.duration, wCfg.appConfig.WebUI.Enabled)
 	return nil
 }
 

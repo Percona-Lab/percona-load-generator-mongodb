@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"encoding/csv"
 	"fmt"
 	"math"
 	"net/url"
@@ -27,6 +28,16 @@ type LatencyHistogram struct {
 	Sum      float64
 	Min      float64
 	Max      float64
+}
+
+func (h *LatencyHistogram) GetAverage() float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.Count == 0 {
+		return 0.0
+	}
+	return h.Sum / float64(h.Count)
 }
 
 func (h *LatencyHistogram) Record(ms float64) {
@@ -186,27 +197,120 @@ func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 
 const monitorLayout = " %-7s | %9s | %7s | %7s | %7s | %7s | %7s | %6s | %5s\n"
 
-func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrency int) {
+func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrency int, csvEnabled bool, csvAppend bool, csvPath string, silent ...bool) {
+	isSilent := false
+	if len(silent) > 0 {
+		isSilent = silent[0]
+	}
+
 	ticker := time.NewTicker(time.Duration(refreshRateSec) * time.Second)
 	defer ticker.Stop()
 
-	fmt.Println()
-	fmt.Println(logger.GreenString("> Starting Workload..."))
-	fmt.Println()
+	// --- CSV EXPORT SETUP ---
+	var csvFile *os.File
+	var csvWriter *csv.Writer
+	if csvEnabled {
+		var err error
+		needsHeader := true
 
-	header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPSERT", "UPDATE", "DELETE", "AGG", "TRANS")
-	fmt.Print(logger.BoldString(header))
+		if csvAppend {
+			// Smart Header Check: If the file exists and has data, skip the header
+			if info, e := os.Stat(csvPath); e == nil && info.Size() > 0 {
+				needsHeader = false
+			}
+			// Open in Append mode
+			csvFile, err = os.OpenFile(csvPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		} else {
+			// Standard overwrite mode
+			csvFile, err = os.Create(csvPath)
+		}
 
-	fmt.Println(logger.CyanString(
-		" -----------------------------------------------------------------------------------------",
-	))
+		if err != nil {
+			fmt.Println(logger.RedString(fmt.Sprintf("> Warning: Failed to open CSV export file: %v", err)))
+		} else {
+			defer csvFile.Close()
+			csvWriter = csv.NewWriter(csvFile)
+
+			if needsHeader {
+				// Write the CSV Header row only if it's a new or empty file
+				csvWriter.Write([]string{
+					"Timestamp", "ElapsedSec",
+					"Select_OpsSec", "Insert_OpsSec", "Upsert_OpsSec",
+					"Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec",
+				})
+				csvWriter.Flush()
+			}
+		}
+	}
+
+	if !isSilent {
+		fmt.Println()
+		fmt.Println(logger.GreenString("> Starting Workload..."))
+		header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPSERT", "UPDATE", "DELETE", "AGG", "TRANS")
+		fmt.Print(logger.BoldString(header))
+		fmt.Println(logger.CyanString(" -----------------------------------------------------------------------------------------"))
+	} else {
+		fmt.Println()
+		fmt.Println(logger.CyanString("[Web UI Active] Workload started. CLI output is disabled. Please view live progress in the browser dashboard."))
+	}
+
+	startTime := time.Now()
+	// Changed to uint64 and added lastAgg
+	var lastFind, lastInsert, lastUpsert, lastUpdate, lastDelete, lastAgg, lastTrans uint64
 
 	for {
 		select {
 		case <-done:
 			return
 		case <-ticker.C:
-			c.printInterval()
+			if !isSilent {
+				c.printInterval()
+			}
+
+			// --- CSV ROW WRITER ---
+			if csvWriter != nil {
+				elapsed := time.Since(startTime).Seconds()
+
+				// Load current totals safely using the correct struct field names
+				currentFind := atomic.LoadUint64(&c.FindOps)
+				currentInsert := atomic.LoadUint64(&c.InsertOps)
+				currentUpsert := atomic.LoadUint64(&c.UpsertOps)
+				currentUpdate := atomic.LoadUint64(&c.UpdateOps)
+				currentDelete := atomic.LoadUint64(&c.DeleteOps)
+				currentAgg := atomic.LoadUint64(&c.AggOps)
+				currentTrans := atomic.LoadUint64(&c.TransOps) // Fixed field name
+
+				// Calculate Ops/Sec for this specific window
+				rateFind := float64(currentFind-lastFind) / float64(refreshRateSec)
+				rateInsert := float64(currentInsert-lastInsert) / float64(refreshRateSec)
+				rateUpsert := float64(currentUpsert-lastUpsert) / float64(refreshRateSec)
+				rateUpdate := float64(currentUpdate-lastUpdate) / float64(refreshRateSec)
+				rateDelete := float64(currentDelete-lastDelete) / float64(refreshRateSec)
+				rateAgg := float64(currentAgg-lastAgg) / float64(refreshRateSec)
+				rateTrans := float64(currentTrans-lastTrans) / float64(refreshRateSec)
+
+				csvWriter.Write([]string{
+					time.Now().Format(time.RFC3339),
+					fmt.Sprintf("%.0f", elapsed),
+					fmt.Sprintf("%.2f", rateFind),
+					fmt.Sprintf("%.2f", rateInsert),
+					fmt.Sprintf("%.2f", rateUpsert),
+					fmt.Sprintf("%.2f", rateUpdate),
+					fmt.Sprintf("%.2f", rateDelete),
+					fmt.Sprintf("%.2f", rateAgg),
+					fmt.Sprintf("%.2f", rateTrans),
+				})
+				csvWriter.Flush() // Flush immediately so data is saved even if crashed
+
+				// Update 'last' trackers for the next tick
+				lastFind = currentFind
+				lastInsert = currentInsert
+				lastUpsert = currentUpsert
+				lastUpdate = currentUpdate
+				lastDelete = currentDelete
+				lastAgg = currentAgg
+				lastTrans = currentTrans
+			}
 		}
 	}
 }
@@ -251,7 +355,16 @@ func (c *Collector) printInterval() {
 	)
 }
 
-func (c *Collector) PrintFinalSummary(duration time.Duration) {
+func (c *Collector) PrintFinalSummary(duration time.Duration, silent ...bool) {
+	isSilent := false
+	if len(silent) > 0 {
+		isSilent = silent[0]
+	}
+	// If silent is true, return immediately without printing to CLI
+	if isSilent {
+		fmt.Printf("\n%s\n\n", logger.CyanString("[Web UI Active] Workload finished (Duration: %.2fs). Final summary is available in the browser dashboard.", duration.Seconds()))
+		return
+	}
 	fO, iO, upO, uO, dO, aO, tO := atomic.LoadUint64(&c.FindOps), atomic.LoadUint64(&c.InsertOps), atomic.LoadUint64(&c.UpsertOps), atomic.LoadUint64(&c.UpdateOps), atomic.LoadUint64(&c.DeleteOps), atomic.LoadUint64(&c.AggOps), atomic.LoadUint64(&c.TransOps)
 	totalOps := fO + iO + upO + uO + dO + aO + tO
 	seconds := duration.Seconds()
