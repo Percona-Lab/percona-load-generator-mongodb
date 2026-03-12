@@ -98,7 +98,7 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 
 #### PLGM UI Sample Usage
 
-<video src="./plgm.mp4" autoplay loop muted controls width="700"></video>
+![PLGM UI Sample Usage](./plgm_ui.gif)
 
 #### 2. Configuration
 The UI provides an intuitive tabbed interface to configure every aspect of your workload. 
