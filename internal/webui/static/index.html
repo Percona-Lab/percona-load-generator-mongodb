@@ -20,6 +20,7 @@
             --p-stone: #697793;
             --p-amethyst: #8b5cf6;
             --p-forest: #059669;
+            --p-pink: #ec4899;
 
             /* UI Variables */
             --bg: #f4f6f8;
@@ -264,12 +265,12 @@
         }
 
         .btn-secondary {
-            background: var(--p-stone); 
+            background: var(--p-stone);
             color: white;
         }
 
         .btn-secondary:hover {
-            background: #4a5568; 
+            background: #4a5568;
             box-shadow: var(--elevation-2);
         }
 
@@ -286,7 +287,7 @@
         .btn-exit {
             background: transparent;
             color: var(--p-fire);
-            border: 1px solid rgba(242, 69, 0, 0.5); 
+            border: 1px solid rgba(242, 69, 0, 0.5);
             padding: 6px 12px;
             font-size: 12px;
             border-radius: 4px;
@@ -361,6 +362,20 @@
         .stats-grid-4 {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stats-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .stats-grid-6 {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
             gap: 16px;
             margin-bottom: 16px;
         }
@@ -514,7 +529,7 @@
                 <h1>Percona Load Generator for MongoDB (PLGM)</h1>
                 <div id="statusIndicator" class="status-badge">STOPPED</div>
             </div>
-        
+
             <div style="display: flex; align-items: center; gap: 24px;">
                 <div id="dashboardControls" class="header-controls" style="display: none;">
                     <div class="refresh-rate-control">
@@ -524,7 +539,7 @@
                     </div>
                     <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
                 </div>
-        
+
                 <button type="button" class="btn-exit" onclick="shutdownApp()" title="Shut down the PLGM backend">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
@@ -548,7 +563,13 @@
                 <button id="liveBtn" class="btn-live active" onclick="goToLive()">Back to Live</button>
             </div>
 
-            <div class="stats-grid-4">
+            <div class="stats-grid-6">
+                <div class="mat-card" style="margin-bottom:0; background: #f1f5f9; border-color: #cbd5e1;">
+                    <div class="mat-card-title" style="color: var(--p-night); font-weight: 700;">Total Ops</div>
+                    <div class="stat-value" id="stat-total" style="font-weight: 500;">0</div>
+                    <div class="stat-subtitle" id="rate-total" style="font-weight: 500;">0 ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-total"></canvas></div>
+                </div>
                 <div class="mat-card" style="margin-bottom:0;">
                     <div class="mat-card-title" style="color: var(--p-sky);">Find Ops</div>
                     <div class="stat-value" id="stat-finds">0</div>
@@ -572,6 +593,12 @@
                     <div class="stat-value" id="stat-deletes">0</div>
                     <div class="stat-subtitle" id="rate-deletes">0 ops/sec</div>
                     <div class="sparkline-container"><canvas id="spark-delete"></canvas></div>
+                </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title" style="color: var(--p-pink);">Aggregate Ops</div>
+                    <div class="stat-value" id="ops-aggregate">0</div>
+                    <div class="stat-subtitle"><span id="rate-aggregate">0</span> ops/sec</div>
+                    <div class="sparkline-container"><canvas id="spark-aggregate"></canvas></div>
                 </div>
             </div>
 
@@ -598,7 +625,11 @@
                 </div>
             </div>
 
-            <div class="stats-grid-4">
+            <div class="stats-grid-6">
+                <div class="mat-card" style="margin-bottom:0; background: #f1f5f9; border-color: #cbd5e1;">
+                    <div class="mat-card-title" style="font-weight: 700;">Total Avg Latency</div>
+                    <div class="stat-value" id="lat-total" style="color: var(--p-night); font-weight: 500;">0 ms</div>
+                </div>
                 <div class="mat-card" style="margin-bottom:0;">
                     <div class="mat-card-title">Avg Find Latency</div>
                     <div class="stat-value" id="lat-find" style="color: var(--p-sky);">0 ms</div>
@@ -615,6 +646,10 @@
                     <div class="mat-card-title">Avg Delete Latency</div>
                     <div class="stat-value" id="lat-delete" style="color: var(--p-amethyst);">0 ms</div>
                 </div>
+                <div class="mat-card" style="margin-bottom:0;">
+                    <div class="mat-card-title">Avg Agg Latency</div>
+                    <div class="stat-value" id="lat-aggregate" style="color: var(--p-pink);">0 ms</div>
+                </div>
             </div>
 
             <div id="activeActions" style="text-align: right; margin-top: 8px;">
@@ -625,18 +660,20 @@
                 <button type="button" class="btn btn-secondary" onclick="downloadSummaryReport()"
                     style="margin-right: auto; float: left;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;">
+                        stroke-linecap="round" stroke-linejoin="round"
+                        style="vertical-align: text-bottom; margin-right: 4px;">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
                     Download Summary
                 </button>
-            
+
                 <button type="button" class="btn btn-flat" onclick="showConfigure()"
                     style="border: 1px solid var(--p-stone); color: var(--p-night);">Configure Settings</button>
-            
-                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run Again</button>
+
+                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run
+                    Again</button>
             </div>
         </div>
 
@@ -740,25 +777,32 @@
 
             <div id="tab-adv" class="tab-content">
                 <div class="grid-3">
-                    <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size" value="10">
+                    <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size"
+                            value="10">
                     </div>
-                    <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
-                    <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size"
-                            value="10"></div>
-                    <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000">
+                    <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5">
                     </div>
-                    <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size"
-                            value="1000"></div>
-                    <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500">
+                    <div class="form-group"><label>Insert Batch Size</label><input type="number"
+                            name="insert_batch_size" value="10"></div>
+                    <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size"
+                            value="1000">
                     </div>
-                    <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts" value="2"></div>
-                    <div class="form-group"><label>Retry Backoff (ms)</label><input type="number" name="retry_backoff_ms" value="5">
+                    <div class="form-group"><label>Insert Cache Size</label><input type="number"
+                            name="insert_cache_size" value="1000"></div>
+                    <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms"
+                            value="500">
+                    </div>
+                    <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts"
+                            value="2"></div>
+                    <div class="form-group"><label>Retry Backoff (ms)</label><input type="number"
+                            name="retry_backoff_ms" value="5">
                     </div>
                 </div>
                 <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="useFindOne"
-                        name="use_findone_for_limit_one" value="true" checked><label for="useFindOne">Optimization: Use FindOne for
+                        name="use_findone_for_limit_one" value="true" checked><label for="useFindOne">Optimization: Use
+                        FindOne for
                         limit 1</label></div>
-            
+
                 <div class="grid-2" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         <div class="checkbox-group">
@@ -862,7 +906,8 @@
                     Confirm Shutdown
                 </h3>
                 <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.5;">
-                    Are you sure you want to shut down the PLGM backend? This will immediately terminate the engine and you will
+                    Are you sure you want to shut down the PLGM backend? This will immediately terminate the engine and
+                    you will
                     no longer be able to run workloads from this UI.
                 </p>
                 <div class="modal-actions">
@@ -875,7 +920,7 @@
     </div>
 
     <script>
-        const colors = { sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', fire: '#f24500', amethyst: '#8b5cf6' };
+        const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669' };
         const WINDOW_SIZE = 30;
 
         // UI Tabs
@@ -900,9 +945,9 @@
 
         // --- Data History Buffers (The Time Machine) ---
         let histLabels = [];
-        let histRates = { find: [], insert: [], update: [], delete: [] };
-        let histLats = { find: [], insert: [], update: [], delete: [] };
-        let histTotals = { find: [], insert: [], update: [], delete: [] };
+        let histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+        let histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+        let histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let isLiveMode = true;
 
         // --- Chart.js Instances ---
@@ -940,10 +985,12 @@
                 });
             };
 
+            sparkCharts.total = createSparkline('spark-total', colors.night);
             sparkCharts.find = createSparkline('spark-find', colors.sky);
             sparkCharts.insert = createSparkline('spark-insert', colors.aqua);
             sparkCharts.update = createSparkline('spark-update', colors.sunrise);
             sparkCharts.delete = createSparkline('spark-delete', colors.amethyst);
+            sparkCharts.aggregate = createSparkline('spark-aggregate', colors.pink);
 
             const getLineOptions = (sourceId) => ({
                 responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
@@ -964,10 +1011,12 @@
                 data: {
                     labels: Array(WINDOW_SIZE).fill(''),
                     datasets: [
+                        { label: 'Total/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Find/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Aggregate/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('throughput')
             });
@@ -977,10 +1026,12 @@
                 data: {
                     labels: Array(WINDOW_SIZE).fill(''),
                     datasets: [
+                        { label: 'Total (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Find (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Aggregate (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('latency')
             });
@@ -988,8 +1039,12 @@
             donutChart = new Chart(document.getElementById('donutChart'), {
                 type: 'doughnut',
                 data: {
-                    labels: ['Find', 'Insert', 'Update', 'Delete'],
-                    datasets: [{ data: [0, 0, 0, 0], backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.amethyst], borderWidth: 0 }]
+                    labels: ['Find', 'Insert', 'Update', 'Delete', 'Aggregate'],
+                    datasets: [{
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.amethyst, colors.pink],
+                        borderWidth: 0
+                    }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '70%', animation: { duration: 0 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } } } }
             });
@@ -1020,46 +1075,60 @@
             const labelsSlice = getSlice(histLabels, '');
 
             throughputChart.data.labels = labelsSlice;
-            throughputChart.data.datasets[0].data = getSlice(histRates.find);
-            throughputChart.data.datasets[1].data = getSlice(histRates.insert);
-            throughputChart.data.datasets[2].data = getSlice(histRates.update);
-            throughputChart.data.datasets[3].data = getSlice(histRates.delete);
+            throughputChart.data.datasets[0].data = getSlice(histRates.total);
+            throughputChart.data.datasets[1].data = getSlice(histRates.find);
+            throughputChart.data.datasets[2].data = getSlice(histRates.insert);
+            throughputChart.data.datasets[3].data = getSlice(histRates.update);
+            throughputChart.data.datasets[4].data = getSlice(histRates.delete);
+            throughputChart.data.datasets[5].data = getSlice(histRates.aggregate);
             throughputChart.update();
 
             latencyChart.data.labels = labelsSlice;
-            latencyChart.data.datasets[0].data = getSlice(histLats.find);
-            latencyChart.data.datasets[1].data = getSlice(histLats.insert);
-            latencyChart.data.datasets[2].data = getSlice(histLats.update);
-            latencyChart.data.datasets[3].data = getSlice(histLats.delete);
+            latencyChart.data.datasets[0].data = getSlice(histLats.total);
+            latencyChart.data.datasets[1].data = getSlice(histLats.find);
+            latencyChart.data.datasets[2].data = getSlice(histLats.insert);
+            latencyChart.data.datasets[3].data = getSlice(histLats.update);
+            latencyChart.data.datasets[4].data = getSlice(histLats.delete);
+            latencyChart.data.datasets[5].data = getSlice(histLats.aggregate);
             latencyChart.update();
 
+            sparkCharts.total.data.datasets[0].data = getSlice(histRates.total); sparkCharts.total.update();
             sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
             sparkCharts.insert.data.datasets[0].data = getSlice(histRates.insert); sparkCharts.insert.update();
             sparkCharts.update.data.datasets[0].data = getSlice(histRates.update); sparkCharts.update.update();
             sparkCharts.delete.data.datasets[0].data = getSlice(histRates.delete); sparkCharts.delete.update();
+            sparkCharts.aggregate.data.datasets[0].data = getSlice(histRates.aggregate); sparkCharts.aggregate.update();
 
+            document.getElementById('rate-total').textContent = (histRates.total[endIndex] || 0).toLocaleString() + ' ops/sec';
             document.getElementById('rate-finds').textContent = (histRates.find[endIndex] || 0).toLocaleString() + ' ops/sec';
             document.getElementById('rate-inserts').textContent = (histRates.insert[endIndex] || 0).toLocaleString() + ' ops/sec';
             document.getElementById('rate-updates').textContent = (histRates.update[endIndex] || 0).toLocaleString() + ' ops/sec';
             document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
+            document.getElementById('rate-aggregate').textContent = (histRates.aggregate[endIndex] || 0).toLocaleString() + ' ops/sec';
 
+            document.getElementById('lat-total').textContent = (histLats.total[endIndex] || 0).toFixed(2) + ' ms';
             document.getElementById('lat-find').textContent = (histLats.find[endIndex] || 0).toFixed(2) + ' ms';
             document.getElementById('lat-insert').textContent = (histLats.insert[endIndex] || 0).toFixed(2) + ' ms';
             document.getElementById('lat-update').textContent = (histLats.update[endIndex] || 0).toFixed(2) + ' ms';
             document.getElementById('lat-delete').textContent = (histLats.delete[endIndex] || 0).toFixed(2) + ' ms';
+            document.getElementById('lat-aggregate').textContent = (histLats.aggregate[endIndex] || 0).toFixed(2) + ' ms';
 
+            const tT = histTotals.total[endIndex] || 0;
             const tF = histTotals.find[endIndex] || 0;
             const tI = histTotals.insert[endIndex] || 0;
             const tU = histTotals.update[endIndex] || 0;
             const tD = histTotals.delete[endIndex] || 0;
+            const tA = histTotals.aggregate[endIndex] || 0;
 
+            document.getElementById('stat-total').textContent = tT.toLocaleString();
             document.getElementById('stat-finds').textContent = tF.toLocaleString();
             document.getElementById('stat-inserts').textContent = tI.toLocaleString();
             document.getElementById('stat-updates').textContent = tU.toLocaleString();
             document.getElementById('stat-deletes').textContent = tD.toLocaleString();
+            document.getElementById('ops-aggregate').textContent = tA.toLocaleString();
 
-            if (tF > 0 || tI > 0 || tU > 0 || tD > 0) {
-                donutChart.data.datasets[0].data = [tF, tI, tU, tD];
+            if (tF > 0 || tI > 0 || tU > 0 || tD > 0 || tA > 0) {
+                donutChart.data.datasets[0].data = [tF, tI, tU, tD, tA];
                 donutChart.update();
             }
         }
@@ -1093,7 +1162,7 @@
         let startTime;
         let targetSeconds = 0;
         let lastFormData = null;
-        let lastStats = { find: 0, insert: 0, update: 0, delete: 0 };
+        let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
         let finalReportData = null;
 
         function parseDuration(str) {
@@ -1245,10 +1314,10 @@
                         targetSeconds = parseDuration(formData.get('duration'));
 
                         histLabels = [];
-                        histRates = { find: [], insert: [], update: [], delete: [] };
-                        histLats = { find: [], insert: [], update: [], delete: [] };
-                        histTotals = { find: [], insert: [], update: [], delete: [] };
-                        lastStats = { find: 0, insert: 0, update: 0, delete: 0 };
+                        histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+                        histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+                        histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+                        lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
 
                         goToLive();
 
@@ -1291,7 +1360,7 @@
                             }
 
                             // --- CAPTURE FINAL REPORT DATA ---
-                            const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0);
+                            const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
                             const safeElapsed = Math.max(1, elapsed); // Prevent division by zero
 
                             finalReportData = {
@@ -1303,24 +1372,27 @@
                                     find: ((stats.findOps || 0) / safeElapsed).toFixed(2),
                                     insert: ((stats.insertOps || 0) / safeElapsed).toFixed(2),
                                     update: (((stats.updateOps || 0) + (stats.upsertOps || 0)) / safeElapsed).toFixed(2),
-                                    delete: ((stats.deleteOps || 0) / safeElapsed).toFixed(2)
+                                    delete: ((stats.deleteOps || 0) / safeElapsed).toFixed(2),
+                                    aggregate: ((stats.aggOps || 0) / safeElapsed).toFixed(2)
                                 },
                                 operations: {
                                     find: stats.findOps || 0,
                                     insert: stats.insertOps || 0,
                                     update: (stats.updateOps || 0) + (stats.upsertOps || 0),
-                                    delete: stats.deleteOps || 0
+                                    delete: stats.deleteOps || 0,
+                                    aggregate: stats.aggOps || 0
                                 },
                                 average_latencies_ms: {
                                     find: (stats.findLatAvg || 0).toFixed(2),
                                     insert: (stats.insertLatAvg || 0).toFixed(2),
                                     update: (stats.updateLatAvg || 0).toFixed(2),
-                                    delete: (stats.deleteLatAvg || 0).toFixed(2)
+                                    delete: (stats.deleteLatAvg || 0).toFixed(2),
+                                    aggregate: (stats.aggLatAvg || 0).toFixed(2)
                                 },
-                                // Convert FormData to a clean JSON object for the receipt
+                                // Convert FormData to a clean JSON object
                                 configuration: lastFormData ? Object.fromEntries(lastFormData.entries()) : {}
                             };
-                            // Delete sensitive data from the receipt!
+                            // Delete sensitive data
                             if (finalReportData.configuration.password) {
                                 finalReportData.configuration.password = "********";
                             }
@@ -1338,19 +1410,39 @@
                             const cInsert = stats.insertOps || 0;
                             const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
                             const cDelete = stats.deleteOps || 0;
+                            const cAggregate = stats.aggOps || 0;
+                            const cTotal = cFind + cInsert + cUpdate + cDelete + cAggregate;
 
                             const rateMultiplier = 1000 / currentRefreshRate;
                             const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
                             const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
                             const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
                             const rDelete = Math.max(0, Math.round((cDelete - lastStats.delete) * rateMultiplier));
+                            const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
+                            const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
 
-                            lastStats = { find: cFind, insert: cInsert, update: cUpdate, delete: cDelete };
+                            // Weighted Average Latency Calculation
+                            let tLatAvg = 0;
+                            if (rTotal > 0) {
+                                tLatAvg = ((rFind * (stats.findLatAvg || 0)) +
+                                    (rInsert * (stats.insertLatAvg || 0)) +
+                                    (rUpdate * (stats.updateLatAvg || 0)) +
+                                    (rDelete * (stats.deleteLatAvg || 0)) +
+                                    (rAggregate * (stats.aggLatAvg || 0))) / rTotal;
+                            }
+
+                            lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
 
                             histLabels.push(timeStr);
-                            histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete);
-                            histLats.find.push(stats.findLatAvg || 0); histLats.insert.push(stats.insertLatAvg || 0); histLats.update.push(stats.updateLatAvg || 0); histLats.delete.push(stats.deleteLatAvg || 0);
-                            histTotals.find.push(cFind); histTotals.insert.push(cInsert); histTotals.update.push(cUpdate); histTotals.delete.push(cDelete);
+
+                            histRates.total.push(rTotal);
+                            histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete); histRates.aggregate.push(rAggregate);
+
+                            histLats.total.push(tLatAvg);
+                            histLats.find.push(stats.findLatAvg || 0); histLats.insert.push(stats.insertLatAvg || 0); histLats.update.push(stats.updateLatAvg || 0); histLats.delete.push(stats.deleteLatAvg || 0); histLats.aggregate.push(stats.aggLatAvg || 0);
+
+                            histTotals.total.push(cTotal);
+                            histTotals.find.push(cFind); histTotals.insert.push(cInsert); histTotals.update.push(cUpdate); histTotals.delete.push(cDelete); histTotals.aggregate.push(cAggregate);
 
                             const maxIdx = histRates.find.length - 1;
                             const scrubber = document.getElementById('timeScrubber');
@@ -1366,8 +1458,8 @@
         }
 
         function shutdownApp() {
-                // Show the custom modal instead of the ugly browser confirm
-                document.getElementById('shutdownModal').style.display = 'flex';
+            // Show the custom modal instead of the ugly browser confirm
+            document.getElementById('shutdownModal').style.display = 'flex';
         }
 
         function cancelShutdown() {

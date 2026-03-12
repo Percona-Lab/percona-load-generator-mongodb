@@ -192,7 +192,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.CSVExportPath = v
 	}
 
-	// Integers: Use the pre-loaded config value as the fallback instead of hardcoded numbers!
 	cfg.ConnectionParams.ConnectionTimeout = parseInt(r.FormValue("connection_timeout"), cfg.ConnectionParams.ConnectionTimeout)
 	cfg.ConnectionParams.ServerSelectionTimeout = parseInt(r.FormValue("server_selection_timeout"), cfg.ConnectionParams.ServerSelectionTimeout)
 	cfg.ConnectionParams.MaxPoolSize = parseInt(r.FormValue("max_pool_size"), cfg.ConnectionParams.MaxPoolSize)
@@ -509,11 +508,13 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"upsertOps": atomic.LoadUint64(&collector.UpsertOps),
 		"updateOps": atomic.LoadUint64(&collector.UpdateOps),
 		"deleteOps": atomic.LoadUint64(&collector.DeleteOps),
+		"aggOps":    atomic.LoadUint64(&collector.AggOps),
 
 		"findLatAvg":   collector.FindHist.GetAverage(),
 		"insertLatAvg": collector.InsertHist.GetAverage(),
 		"updateLatAvg": collector.UpdateHist.GetAverage(),
 		"deleteLatAvg": collector.DeleteHist.GetAverage(),
+		"aggLatAvg":    collector.AggHist.GetAverage(),
 	}
 	json.NewEncoder(w).Encode(statsResp)
 }
