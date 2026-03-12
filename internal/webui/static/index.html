@@ -19,6 +19,7 @@
             --p-aqua: #30d1b2;
             --p-stone: #697793;
             --p-amethyst: #8b5cf6;
+            --p-forest: #059669;
 
             /* UI Variables */
             --bg: #f4f6f8;
@@ -262,6 +263,16 @@
             box-shadow: var(--elevation-2);
         }
 
+        .btn-secondary {
+            background: var(--p-stone); 
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568; 
+            box-shadow: var(--elevation-2);
+        }
+
         .btn-danger {
             background: var(--p-fire);
             color: white;
@@ -270,6 +281,27 @@
         .btn-danger:hover {
             background: #d83d00;
             box-shadow: var(--elevation-2);
+        }
+
+        .btn-exit {
+            background: transparent;
+            color: var(--p-fire);
+            border: 1px solid rgba(242, 69, 0, 0.5); 
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-exit:hover {
+            background: var(--p-fire);
+            color: white;
+            border-color: var(--p-fire);
+            box-shadow: 0 0 8px rgba(242, 69, 0, 0.4);
         }
 
         .btn-flat {
@@ -302,7 +334,7 @@
         .progress-bar {
             width: 0%;
             height: 100%;
-            background: var(--p-sunset);
+            background: var(--p-forest);
             transition: width 0.3s ease;
         }
 
@@ -493,11 +525,9 @@
                     <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
                 </div>
         
-                <button type="button" class="btn btn-flat"
-                    style="color: white; border-color: rgba(255,255,255,0.3); padding: 6px 12px; font-size: 12px;"
-                    onclick="shutdownApp()" title="Shut down the PLGM backend">
+                <button type="button" class="btn-exit" onclick="shutdownApp()" title="Shut down the PLGM backend">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+                        stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
                         <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -592,7 +622,7 @@
             </div>
 
             <div id="finishActions" style="display: none; text-align: right; margin-top: 8px;">
-                <button type="button" class="btn btn-flat" onclick="downloadSummaryReport()"
+                <button type="button" class="btn btn-secondary" onclick="downloadSummaryReport()"
                     style="margin-right: auto; float: left;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;">
@@ -600,10 +630,12 @@
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Download Summary Report
+                    Download Summary
                 </button>
             
-                <button type="button" class="btn btn-flat" onclick="showConfigure()">Configure Settings</button>
+                <button type="button" class="btn btn-flat" onclick="showConfigure()"
+                    style="border: 1px solid var(--p-stone); color: var(--p-night);">Configure Settings</button>
+            
                 <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run Again</button>
             </div>
         </div>
@@ -1260,11 +1292,19 @@
 
                             // --- CAPTURE FINAL REPORT DATA ---
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0);
+                            const safeElapsed = Math.max(1, elapsed); // Prevent division by zero
+
                             finalReportData = {
                                 generated_at: new Date().toISOString(),
                                 duration_seconds: elapsed.toFixed(2),
                                 total_operations: totalOps,
-                                average_throughput_ops_sec: (totalOps / Math.max(1, elapsed)).toFixed(2),
+                                average_throughput_ops_sec: (totalOps / safeElapsed).toFixed(2),
+                                average_throughput_per_op: {
+                                    find: ((stats.findOps || 0) / safeElapsed).toFixed(2),
+                                    insert: ((stats.insertOps || 0) / safeElapsed).toFixed(2),
+                                    update: (((stats.updateOps || 0) + (stats.upsertOps || 0)) / safeElapsed).toFixed(2),
+                                    delete: ((stats.deleteOps || 0) / safeElapsed).toFixed(2)
+                                },
                                 operations: {
                                     find: stats.findOps || 0,
                                     insert: stats.insertOps || 0,

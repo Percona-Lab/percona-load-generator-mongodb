@@ -488,6 +488,35 @@ The CSV includes the following headers:
 
 *Tip: Enable the **Append to existing file** option to run a series of varying workloads (e.g., ramping up concurrency from 4 to 16 to 64) and capture the entire progression in a single, unbroken CSV file for easy graphing!*
 
+## Post-Run JSON Summary Report
+If you forget to enable the real-time CSV export, or if you just want a clean summary of your final results, PLGM provides a Download Summary Report button in the Web UI that appears the moment a workload finishes.
+
+This generates a downloadable JSON summary report that captures both the final performance metrics (total ops, average latencies, and throughput per operation type) alongside the exact configuration parameters used to achieve those results. Passwords are automatically redacted from this file for safe sharing.
+
+Example Summary Snippet:
+
+```json
+{
+    "generated_at": "2026-03-12T20:32:00.409Z",
+    "duration_seconds": "10.51",
+    "total_operations": 2159,
+    "average_throughput_ops_sec": "205.50",
+    "average_throughput_per_op": {
+        "find": "59.56",
+        "insert": "109.42",
+        "update": "23.69",
+        "delete": "12.75"
+    },
+    "operations": { ... },
+    "average_latencies_ms": { ... },
+    "configuration": {
+        "concurrency": "4",
+        "find_batch_size": "10",
+        "password": "********"
+    }
+}
+```
+
 ### Workload Configuration & Loading
 
 You can supply your own collections and queries using the `PLGM_COLLECTIONS_PATH` and `PLGM_QUERIES_PATH` environment variables (or the corresponding config file fields). 
