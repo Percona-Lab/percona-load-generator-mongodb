@@ -87,7 +87,7 @@ Download the [`config.yaml`](./config.yaml) and make the necessary adjustments.
 
 `plgm` features a completely embedded Web UI. It allows you to configure your database connection, upload custom workload schemas, adjust operation ratios, and monitor real-time throughput and latency without ever touching a YAML file. It has the same functionality as the CLI version, but with an awesome UI.
 
-#### 1. Starting the UI
+### 1. Starting the UI
 To launch the UI, simply pass the `--webui` flag. The application will start a secure local server and automatically open your default web browser listening on port 9999. You can also set a custom port instead, as shown in the example below:
 
 ```bash
@@ -96,11 +96,21 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 ./bin/plgm --webui --webui-port=32000
 ```
 
-#### PLGM UI Sample Usage
+### PLGM UI Sample Usage
 
 ![PLGM UI Sample Usage](./plgm_ui.gif)
 
-#### 2. Configuration
+### 2. UI Features
+
+When running `plgm` with the `--webui` flag, you get access to a rich, browser-based dashboard that requires no external dependencies. 
+
+* **Configuration Editor:** Edit connection pools, timeouts, and workload distributions on the fly without needing a `config.yaml` file.
+* **Live Telemetry & Dashboard:** Watch operations per second (Find, Insert, Update, Delete) and latencies update in real-time with sub-second precision.
+* **The "Time Machine" Scrubber:** Pause the live feed and scrub backward through the benchmark timeline to investigate specific latency spikes or throughput drops.
+* **Real-Time CSV Export:** Configure and stream metrics to a local CSV file directly from the Advanced tab. Use the "Append" feature to stitch multiple benchmark runs into a single dataset.
+* **Graceful Shutdown:** Click the **EXIT** button in the header to safely terminate close the application directly from the browser, ensuring all background workers are cleaned up properly.
+
+### 3. Configuration
 The UI provides an intuitive tabbed interface to configure every aspect of your workload. 
 
 * **Connection:** Set your URI, read preferences, and connection pooling limits. Passwords are never logged and are safely managed via session storage.
@@ -119,7 +129,7 @@ The UI provides an intuitive tabbed interface to configure every aspect of your 
 
 ![PLGM Configuration UI - Raw Injector Tab](./images/raw_injector.png)
 
-#### 3. The Observability Dashboard
+### 4. The Observability Dashboard
 Once the workload begins, the UI transitions to a real-time observability dashboard.
 
 ![PLGM Observability Dashboard (Top)](./images/dashboard_top.png)
@@ -129,13 +139,12 @@ Once the workload begins, the UI transitions to a real-time observability dashbo
 * **Workload Anatomy:** A live-updating donut chart proves that your database is accurately executing the exact operation ratios you configured.
 * **Crosshair Sync:** Hovering over a spike on the Throughput chart will instantly highlight the exact same moment in time on the Latency chart.
 
-#### 4. The "Time Machine" Scrubber
+### 5. The "Time Machine" Scrubber
 If you are running a long benchmark, you might miss a sudden latency spike. The UI stores a running history buffer of the benchmark data. 
 
 Simply grab the **Time Machine** slider above the charts and drag it to the left to pause the live feed and "scrub" backward in time. All line charts, sparklines, and numeric values will perfectly synchronize to show you the exact state of the database at that specific historical second. Click **Back to Live** to resume real-time monitoring.
 
 ![PLGM Time Machine Feature](./images/time_machine.png)
-
 
 ## CLI 
 
@@ -471,6 +480,13 @@ The additional collection and query definitions can be found here:
 * [collections](./resources/collections/)
 * [queries](./resources/queries/)
 
+## CSV Metrics Export 
+When CSV export is enabled, PLGM writes a new row to the file every time the `status_refresh_rate_sec` ticker fires. Because it flushes to disk continuously, your benchmark data is completely preserved even if the test is forcefully interrupted.
+
+The CSV includes the following headers:
+`Timestamp`, `ElapsedSec`, `Select_OpsSec`, `Insert_OpsSec`, `Upsert_OpsSec`, `Update_OpsSec`, `Delete_OpsSec`, `Agg_OpsSec`, `Trans_OpsSec`
+
+*Tip: Enable the **Append to existing file** option to run a series of varying workloads (e.g., ramping up concurrency from 4 to 16 to 64) and capture the entire progression in a single, unbroken CSV file for easy graphing!*
 
 ### Workload Configuration & Loading
 

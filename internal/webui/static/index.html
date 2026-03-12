@@ -18,6 +18,7 @@
             --p-sunrise: #f0b336;
             --p-aqua: #30d1b2;
             --p-stone: #697793;
+            --p-amethyst: #8b5cf6;
 
             /* UI Variables */
             --bg: #f4f6f8;
@@ -537,7 +538,7 @@
                     <div class="sparkline-container"><canvas id="spark-update"></canvas></div>
                 </div>
                 <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-fire);">Delete Ops</div>
+                    <div class="mat-card-title" style="color: var(--p-amethyst);">Delete Ops</div>
                     <div class="stat-value" id="stat-deletes">0</div>
                     <div class="stat-subtitle" id="rate-deletes">0 ops/sec</div>
                     <div class="sparkline-container"><canvas id="spark-delete"></canvas></div>
@@ -582,7 +583,7 @@
                 </div>
                 <div class="mat-card" style="margin-bottom:0;">
                     <div class="mat-card-title">Avg Delete Latency</div>
-                    <div class="stat-value" id="lat-delete" style="color: var(--p-fire);">0 ms</div>
+                    <div class="stat-value" id="lat-delete" style="color: var(--p-amethyst);">0 ms</div>
                 </div>
             </div>
 
@@ -591,9 +592,19 @@
             </div>
 
             <div id="finishActions" style="display: none; text-align: right; margin-top: 8px;">
+                <button type="button" class="btn btn-flat" onclick="downloadSummaryReport()"
+                    style="margin-right: auto; float: left;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download Summary Report
+                </button>
+            
                 <button type="button" class="btn btn-flat" onclick="showConfigure()">Configure Settings</button>
-                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run
-                    Again</button>
+                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run Again</button>
             </div>
         </div>
 
@@ -832,7 +843,7 @@
     </div>
 
     <script>
-        const colors = { sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', fire: '#f24500' };
+        const colors = { sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', fire: '#f24500', amethyst: '#8b5cf6' };
         const WINDOW_SIZE = 30;
 
         // UI Tabs
@@ -900,7 +911,7 @@
             sparkCharts.find = createSparkline('spark-find', colors.sky);
             sparkCharts.insert = createSparkline('spark-insert', colors.aqua);
             sparkCharts.update = createSparkline('spark-update', colors.sunrise);
-            sparkCharts.delete = createSparkline('spark-delete', colors.fire);
+            sparkCharts.delete = createSparkline('spark-delete', colors.amethyst);
 
             const getLineOptions = (sourceId) => ({
                 responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
@@ -924,7 +935,7 @@
                         { label: 'Find/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.fire, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('throughput')
             });
@@ -937,7 +948,7 @@
                         { label: 'Find (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.fire, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('latency')
             });
@@ -946,7 +957,7 @@
                 type: 'doughnut',
                 data: {
                     labels: ['Find', 'Insert', 'Update', 'Delete'],
-                    datasets: [{ data: [0, 0, 0, 0], backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.fire], borderWidth: 0 }]
+                    datasets: [{ data: [0, 0, 0, 0], backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.amethyst], borderWidth: 0 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, cutout: '70%', animation: { duration: 0 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } } } }
             });
@@ -1051,6 +1062,7 @@
         let targetSeconds = 0;
         let lastFormData = null;
         let lastStats = { find: 0, insert: 0, update: 0, delete: 0 };
+        let finalReportData = null;
 
         function parseDuration(str) {
             if (!str) return 60;
@@ -1245,6 +1257,34 @@
                                 document.getElementById('progressBar').style.width = "100%";
                                 document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
                             }
+
+                            // --- CAPTURE FINAL REPORT DATA ---
+                            const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0);
+                            finalReportData = {
+                                generated_at: new Date().toISOString(),
+                                duration_seconds: elapsed.toFixed(2),
+                                total_operations: totalOps,
+                                average_throughput_ops_sec: (totalOps / Math.max(1, elapsed)).toFixed(2),
+                                operations: {
+                                    find: stats.findOps || 0,
+                                    insert: stats.insertOps || 0,
+                                    update: (stats.updateOps || 0) + (stats.upsertOps || 0),
+                                    delete: stats.deleteOps || 0
+                                },
+                                average_latencies_ms: {
+                                    find: (stats.findLatAvg || 0).toFixed(2),
+                                    insert: (stats.insertLatAvg || 0).toFixed(2),
+                                    update: (stats.updateLatAvg || 0).toFixed(2),
+                                    delete: (stats.deleteLatAvg || 0).toFixed(2)
+                                },
+                                // Convert FormData to a clean JSON object for the receipt
+                                configuration: lastFormData ? Object.fromEntries(lastFormData.entries()) : {}
+                            };
+                            // Delete sensitive data from the receipt!
+                            if (finalReportData.configuration.password) {
+                                finalReportData.configuration.password = "********";
+                            }
+
                             clearInterval(pollInterval);
                             return;
                         } else {
@@ -1320,6 +1360,24 @@
                 .catch(err => {
                     showError("Failed to shut down backend: " + err);
                 });
+        }
+
+        function downloadSummaryReport() {
+            if (!finalReportData) return;
+
+            // Convert the object to a pretty-printed JSON string
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalReportData, null, 4));
+
+            // Create a fake hidden download link and click it
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+
+            const dateStr = new Date().toISOString().replace(/[:\-T]/g, '').slice(0, 14);
+            downloadAnchorNode.setAttribute("download", `plgm_summary_${dateStr}.json`);
+
+            document.body.appendChild(downloadAnchorNode); // Required for Firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
         }
 
     </script>
