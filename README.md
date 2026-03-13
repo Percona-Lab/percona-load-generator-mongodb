@@ -98,13 +98,22 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 
 ### PLGM UI Sample Usage
 
-[▶ Default Workload](./images/plgm_default.mp4)
+**Default Workload**
 
-[▶ Custom Workload](./images/plgm_custom_workload.mp4)
+<video src="./images/plgm_default.mp4" controls width="700"></video>
 
-[▶ Raw Injector Workload](./images/plgm_raw_injector.mp4)
+**Custom Workload**
 
-[▶ Time machine](./images/plgm_time_machine.mp4)
+<video src="./images/plgm_custom_workload.mp4" controls width="700"></video>
+
+**Raw Injector Workload**
+
+<video src="./images/plgm_raw_injector.mp4" controls width="700"></video>
+
+**Time machine**
+
+<video src="./images/plgm_time_machine.mp4" controls width="700"></video>
+
 
 ### 2. UI Features
 
