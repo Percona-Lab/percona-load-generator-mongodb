@@ -98,7 +98,13 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 
 ### PLGM UI Sample Usage
 
-![PLGM UI Sample Usage](./plgm_ui.gif)
+[▶ Default Workload](./images/plgm_default.mp4)
+
+[▶ Custom Workload](./images/plgm_custom_workload.mp4)
+
+[▶ Raw Injector Workload](./images/plgm_raw_injector.mp4)
+
+[▶ Time machine](./images/plgm_time_machine.mp4)
 
 ### 2. UI Features
 
