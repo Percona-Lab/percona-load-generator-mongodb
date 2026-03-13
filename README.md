@@ -502,6 +502,36 @@ The CSV includes the following headers:
 
 *Tip: Enable the **Append to existing file** option to run a series of varying workloads (e.g., ramping up concurrency from 4 to 16 to 64) and capture the entire progression in a single, unbroken CSV file for easy graphing!*
 
+<details>
+<summary>Sample output:</summary>
+
+`cat /tmp/plgm_metrics_export.csv`
+
+```csv
+Timestamp,ElapsedSec,Select_OpsSec,Insert_OpsSec,Upsert_OpsSec,Update_OpsSec,Delete_OpsSec,Agg_OpsSec,Trans_OpsSec
+2026-03-13T10:35:55-04:00,1,39.00,200.00,0.00,19.00,7.00,6.00,0.00
+2026-03-13T10:35:56-04:00,2,54.00,160.00,0.00,17.00,9.00,4.00,0.00
+2026-03-13T10:35:57-04:00,3,45.00,140.00,0.00,19.00,16.00,6.00,0.00
+2026-03-13T10:35:58-04:00,4,49.00,120.00,0.00,20.00,8.00,6.00,0.00
+2026-03-13T10:35:59-04:00,5,51.00,170.00,0.00,23.00,5.00,4.00,0.00
+2026-03-13T10:36:00-04:00,6,52.00,170.00,0.00,22.00,10.00,4.00,0.00
+2026-03-13T10:36:01-04:00,7,54.00,180.00,0.00,21.00,10.00,3.00,0.00
+2026-03-13T10:36:02-04:00,8,47.00,160.00,0.00,16.00,11.00,6.00,0.00
+2026-03-13T10:36:03-04:00,9,61.00,120.00,0.00,20.00,11.00,2.00,0.00
+2026-03-13T10:36:04-04:00,10,48.00,220.00,0.00,14.00,12.00,5.00,0.00
+2026-03-13T10:36:05-04:00,11,55.00,140.00,0.00,20.00,4.00,6.00,0.00
+2026-03-13T10:36:06-04:00,12,45.00,230.00,0.00,27.00,8.00,3.00,0.00
+2026-03-13T10:36:07-04:00,13,45.00,200.00,0.00,17.00,4.00,8.00,0.00
+2026-03-13T10:36:08-04:00,14,57.00,120.00,0.00,17.00,17.00,3.00,0.00
+2026-03-13T10:36:09-04:00,15,55.00,160.00,0.00,24.00,9.00,2.00,0.00
+2026-03-13T10:36:10-04:00,16,52.00,130.00,0.00,25.00,10.00,4.00,0.00
+2026-03-13T10:36:11-04:00,17,49.00,140.00,0.00,18.00,11.00,5.00,0.00
+2026-03-13T10:36:12-04:00,18,53.00,80.00,0.00,17.00,6.00,9.00,0.00
+2026-03-13T10:36:13-04:00,19,46.00,170.00,0.00,31.00,9.00,2.00,0.00
+2026-03-13T10:36:14-04:00,20,46.00,120.00,0.00,18.00,10.00,9.00,0.00
+```
+</details>
+
 ## Post-Run JSON Summary Report
 If you forget to enable the real-time CSV export, or if you just want a clean summary of your final results, PLGM provides a Download Summary Report button in the Web UI that appears the moment a workload finishes.
 
@@ -653,7 +683,7 @@ When executed, plgm performs the following steps:
 
 ### Sample Output
 
-![plgm](./plgm.gif)
+![plgm](./images/plgm.gif)
 
 ### Interpreting the Output
 
