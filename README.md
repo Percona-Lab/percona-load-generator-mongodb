@@ -100,20 +100,19 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 
 **Default Workload**
 
-<video src="./images/plgm_default.mp4" controls width="700"></video>
+<video src="https://github.com/user-attachments/assets/1d1d9641-1b11-4b6c-b82f-ff85bd18c4d6" controls width="700"></video>
 
 **Custom Workload**
 
-<video src="./images/plgm_custom_workload.mp4" controls width="700"></video>
+<video src="https://github.com/user-attachments/assets/e05d08ed-77ea-4ca1-9fee-9206811295f6" controls width="700"></video>
 
 **Raw Injector Workload**
 
-<video src="./images/plgm_raw_injector.mp4" controls width="700"></video>
+<video src="https://github.com/user-attachments/assets/d3ff03b0-4941-4cef-88b3-df4e3c012fa2" controls width="700"></video>
 
 **Time machine**
 
-<video src="./images/plgm_time_machine.mp4" controls width="700"></video>
-
+<video src="https://github.com/user-attachments/assets/68a57bb0-f500-4f75-99c3-c599d485444a" controls width="700"></video>
 
 ### 2. UI Features
 
