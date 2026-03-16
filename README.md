@@ -313,6 +313,24 @@ Unlike the other workloads PLGM supports, this mode is not configurable. It was 
 
 ***Important Note on Ops/Sec: In Raw Injector mode, the printed Ops/Sec refers to the number of documents processed, not the number of network commands. For example, if your batch size is 1,000, and plgm reports 50,000 Ops/Sec, it is executing 50 bulk network commands per second.***
 
+### Understanding Raw Injector Throughput (Ops/Sec)
+
+When running in **Raw Injector Mode**, the Web UI and CLI may report extremely high throughput numbers (e.g., 100,000+ Ops/Sec) that appear significantly higher than the command rates shown in Percona Monitoring and Management (PMM). This is expected behavior due to how the high-performance engine is architected.
+
+#### Document-Level vs. Command-Level Metrics
+The "Ops/Sec" reported by PLGM refers to individual **documents** processed. To achieve maximum performance, the Raw Injector bypasses standard BSON marshaling and groups thousands of operations into a single network round-trip command.
+
+#### The "Batch Size" Discrepancy
+The relationship between PLGM reporting and standard "Opcounters" in PMM is defined by your configured `batch_size`. 
+
+* **PLGM Reporting**: Counts every individual document within a batch. For example, with a `batch_size` of **2,000**, a report of **100,000 Ops/Sec** means 100,000 records are being processed per second.
+* **PMM Opcounters**: Standard monitoring counts the **network commands**. In the example scenario above, PMM Opcounters will show only **50 operations per second** (100,000 \ 2,000 = 50).
+
+***How to Verify High Throughput in PMM: To see PMM metrics that align with the high numbers in the PLGM dashboard, you must look at **Document Operations** (storage engine activity) rather than **Opcounters** (protocol activity).***
+
+#### Performance Note: Duplicate Keys
+To maintain maximum stress-test velocity, the Raw Injector is programmed to ignore **Duplicate Key Errors** during `insert` or `mixed` workloads to prevent the generator from stalling. If you are inserting into a collection that already contains the target data, PLGM will report high "Ops/Sec" (attempts), but MongoDB's internal `inserted` counters in PMM will remain at **0** because the storage engine did not need to write new records.
+
 ### Configuration
 
 You can configure the Raw Injector via `config.yaml` or directly via CLI flags/environment variables. These are the available options:
@@ -349,7 +367,6 @@ Environment variables:
  * find / update / delete: Operates on the existing data seeded by an insert run.
  * upsert: Fires upsert commands, creating documents if they don't exist.
  * mixed: Runs a randomized distribution of reads, inserts, updates, and deletes simultaneously.
-
 
 ### Running via CLI
 You can bypass the YAML config entirely and trigger a raw injection test purely through flags:
