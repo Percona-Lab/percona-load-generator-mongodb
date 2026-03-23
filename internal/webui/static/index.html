@@ -1194,10 +1194,8 @@
                 if (endIndex < 0) return;
                 const start = Math.max(0, endIndex - WINDOW_SIZE + 1);
 
-                const getSlice = (arr, padVal = null) => {
-                    let res = arr.slice(start, endIndex + 1);
-                    while (res.length < WINDOW_SIZE) res.push(padVal);
-                    return res;
+                const getSlice = (arr) => {
+                    return arr.slice(start, endIndex + 1);
                 };
 
                 const labelsSlice = getSlice(histLabels, '');
@@ -1488,7 +1486,12 @@
                             badge.style.color = "white";
                             document.getElementById('activeActions').style.display = 'none';
                             document.getElementById('finishActions').style.display = 'block';
-                            document.getElementById('iterationBadge').style.display = 'none';
+
+                            const iterBadge = document.getElementById('iterationBadge');
+                            iterBadge.textContent = `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
+                            iterBadge.style.background = 'var(--p-forest)'; 
+                            iterBadge.style.display = 'block'; 
+
                             if (elapsed >= targetSeconds && targetSeconds > 0) {
                                 document.getElementById('progressBar').style.width = "100%";
                                 document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
@@ -1617,7 +1620,7 @@
                             lastKnownWaiting = stats.isWaiting;
                             globalMarkers.push(currentMarker);
 
-                            histLabels.push(timeStr);
+                            histLabels.push(formatTime(elapsed));
 
                             histRates.total.push(rTotal);
                             histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete); histRates.aggregate.push(rAggregate);
