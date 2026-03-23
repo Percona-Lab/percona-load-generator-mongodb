@@ -239,8 +239,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.RawInjector.CollectionName = coln
 	}
 
+	var uploadedTempDir string
+
 	if !cfg.DefaultWorkload {
 		tempDir, _ := os.MkdirTemp("", "plgm-ui-workload-*")
+		uploadedTempDir = tempDir
+
 		collFile, _, err := r.FormFile("collections_file")
 		if err == nil {
 			defer collFile.Close()
@@ -325,6 +329,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 		go func() {
+			defer func() {
+				if uploadedTempDir != "" {
+					os.RemoveAll(uploadedTempDir)
+				}
+			}()
 			defer benchConn.Disconnect(context.Background())
 			defer func() {
 				s.mu.Lock()
@@ -439,6 +448,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 	go func() {
+		defer func() {
+			if uploadedTempDir != "" {
+				os.RemoveAll(uploadedTempDir)
+			}
+		}()
 		defer benchConn.Disconnect(context.Background())
 		defer func() {
 			s.mu.Lock()
