@@ -244,6 +244,8 @@ Environment Variables (Overrides):
   PLGM_COLLECTIONS_PATH               Path to collection JSON
   PLGM_QUERIES_PATH                   Path to query JSON
   PLGM_DURATION                       Test duration (e.g. 60s, 5m)
+  PLGM_ITERATIONS                     Number of times to repeat the workload
+  PLGM_INTERVAL_DELAY                 Time to pause between iterations (e.g. 5s, 1m)
   PLGM_CONCURRENCY                    Number of active workers
   PLGM_DOCUMENTS_COUNT                Initial seed document count
   PLGM_DROP_COLLECTIONS               Drop collections on start (true/false)
@@ -642,6 +644,8 @@ You can override any setting in `config.yaml` using environment variables. This 
 | **Workload Control** | | | |
 | `concurrency` | `PLGM_CONCURRENCY` | Number of active worker goroutines | `50` |
 | `duration` | `PLGM_DURATION` | Test duration (Go duration string) | `5m`, `60s` |
+| `iterations` | `PLGM_ITERATIONS` | Number of times to repeat the workload | `1` |
+| `interval_delay` | `PLGM_INTERVAL_DELAY` | Time to pause between iterations (e.g. 5s, 1m) | `0s` |
 | `default_workload` | `PLGM_DEFAULT_WORKLOAD` | Use built-in "Flights" workload (`true`/`false`) | `false` |
 | `collections_path` | `PLGM_COLLECTIONS_PATH` | Path to custom collection JSON files (supports directories for multi-collection load) | `./schemas` |
 | `queries_path` | `PLGM_QUERIES_PATH` | Path to custom query JSON files or directory. | `./queries` |
@@ -907,6 +911,18 @@ Control how plgm reacts to network lag or database pressure.
 * **`retry_attempts`** & **`retry_backoff_ms`**: Logic for handling transient failures.
     * *Tip:* For stress testing, you might want to set `retry_attempts: 0` to see raw failure rates immediately.
     * *Default:* `2` attempts with `5ms` backoff.
+
+
+#### Workload Iterations & Scheduling
+Control how plgm repeats a given workload and schedules the time between runs.
+
+* **`iterations`**: The number of times to run the defined workload duration back-to-back.
+    * *Tip:* This is perfect for warming up the database cache during the first iteration and capturing true performance metrics on subsequent iterations, without having to manually restart the tool.
+    * *Default:* `1`
+* **`interval_delay`**: The amount of time to pause the workload between each iteration (e.g., `10s`, `1m`).
+    * *Tip:* Adding a delay allows database background processes (like log flushing, checkpointing, or compaction) to catch up, simulating real-world batch-processing patterns. 
+    * *Default:* `0s`
+
 
 ### 3. Custom Connection Parameters (`custom_params`)
 

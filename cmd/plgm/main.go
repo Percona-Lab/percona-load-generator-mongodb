@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/benchmark"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -66,6 +67,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_COLLECTIONS_PATH", "Path to collection JSON")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_QUERIES_PATH", "Path to query JSON")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DURATION", "Test duration (e.g. 60s, 5m)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_ITERATIONS", "Number of times to repeat the workload")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INTERVAL_DELAY", "Time to pause between iterations (e.g. 5s, 1m)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_CONCURRENCY", "Number of active workers")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DOCUMENTS_COUNT", "Initial seed document count")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DROP_COLLECTIONS", "Drop collections on start (true/false)")
@@ -235,8 +238,16 @@ func main() {
 		}
 		defer benchConn.Disconnect(ctx)
 
-		if err := benchmark.RunRawInjector(ctx, benchConn.Database, appCfg); err != nil {
-			log.Fatal(err)
+		intervalDuration, _ := time.ParseDuration(appCfg.IntervalDelay)
+		for i := 1; i <= appCfg.Iterations; i++ {
+			log.Printf("Starting Raw Injector iteration %d of %d", i, appCfg.Iterations)
+			if err := benchmark.RunRawInjector(ctx, benchConn.Database, appCfg); err != nil {
+				log.Fatal(err)
+			}
+			if i < appCfg.Iterations && intervalDuration > 0 {
+				log.Printf("Waiting %s before next iteration...", appCfg.IntervalDelay)
+				time.Sleep(intervalDuration)
+			}
 		}
 		return
 	}
@@ -295,7 +306,15 @@ func main() {
 		}
 	}
 
-	if err := mongo.RunWorkload(ctx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {
-		log.Fatal(err)
+	intervalDuration, _ := time.ParseDuration(appCfg.IntervalDelay)
+	for i := 1; i <= appCfg.Iterations; i++ {
+		log.Printf("Starting Standard Workload iteration %d of %d", i, appCfg.Iterations)
+		if err := mongo.RunWorkload(ctx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {
+			log.Fatal(err)
+		}
+		if i < appCfg.Iterations && intervalDuration > 0 {
+			log.Printf("Waiting %s before next iteration...", appCfg.IntervalDelay)
+			time.Sleep(intervalDuration)
+		}
 	}
 }

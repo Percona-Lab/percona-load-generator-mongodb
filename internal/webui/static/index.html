@@ -359,20 +359,6 @@
             margin-bottom: 8px;
         }
 
-        .stats-grid-4 {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .stats-grid-5 {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
         .stats-grid-6 {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -415,6 +401,42 @@
             font-weight: 500;
             letter-spacing: 0.5px;
             background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Latency table */
+        .latency-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .latency-table th,
+        .latency-table td {
+            text-align: right;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .latency-table th:first-child,
+        .latency-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .latency-table th {
+            color: var(--text-secondary);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: #f8fafc;
+        }
+
+        .latency-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .empty-dash {
+            color: #cbd5e1;
         }
 
         /* TIME MACHINE SCRUBBER */
@@ -528,6 +550,9 @@
             <div style="display: flex; align-items: center; gap: 16px;">
                 <h1>Percona Load Generator for MongoDB (PLGM)</h1>
                 <div id="statusIndicator" class="status-badge">STOPPED</div>
+                <div id="iterationBadge" class="status-badge"
+                    style="display:none; background: var(--p-amethyst); color: white;">
+                    ITERATION 1 / 1</div>
             </div>
 
             <div style="display: flex; align-items: center; gap: 24px;">
@@ -625,30 +650,81 @@
                 </div>
             </div>
 
-            <div class="stats-grid-6">
-                <div class="mat-card" style="margin-bottom:0; background: #f1f5f9; border-color: #cbd5e1;">
-                    <div class="mat-card-title" style="font-weight: 700;">Total Avg Latency</div>
-                    <div class="stat-value" id="lat-total" style="color: var(--p-night); font-weight: 500;">0 ms</div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title">Avg Find Latency</div>
-                    <div class="stat-value" id="lat-find" style="color: var(--p-sky);">0 ms</div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title">Avg Insert Latency</div>
-                    <div class="stat-value" id="lat-insert" style="color: var(--p-aqua);">0 ms</div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title">Avg Update Latency</div>
-                    <div class="stat-value" id="lat-update" style="color: var(--p-sunrise);">0 ms</div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title">Avg Delete Latency</div>
-                    <div class="stat-value" id="lat-delete" style="color: var(--p-amethyst);">0 ms</div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title">Avg Agg Latency</div>
-                    <div class="stat-value" id="lat-aggregate" style="color: var(--p-pink);">0 ms</div>
+            <div class="mat-card" style="margin-bottom: 16px; padding: 0;">
+                <div class="mat-card-title" style="padding: 16px 20px 0 20px; margin-bottom: 12px;">Cumulative Latency
+                    Distribution
+                    (ms)</div>
+                <div style="overflow-x: auto;">
+                    <table class="latency-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>AVG</th>
+                                <th>MIN</th>
+                                <th>MAX</th>
+                                <th>P95</th>
+                                <th>P99</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="background-color: #e2e8f0; font-weight: 700;">
+                                <td style="color: var(--p-night);">TOTAL (ALL)</td>
+                                <td id="dist-total-avg">-</td>
+                                <td id="dist-total-min">-</td>
+                                <td id="dist-total-max">-</td>
+                                <td id="dist-total-p95">-</td>
+                                <td id="dist-total-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-sky);">SELECT</td>
+                                <td id="dist-find-avg">-</td>
+                                <td id="dist-find-min">-</td>
+                                <td id="dist-find-max">-</td>
+                                <td id="dist-find-p95">-</td>
+                                <td id="dist-find-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-aqua);">INSERT</td>
+                                <td id="dist-insert-avg">-</td>
+                                <td id="dist-insert-min">-</td>
+                                <td id="dist-insert-max">-</td>
+                                <td id="dist-insert-p95">-</td>
+                                <td id="dist-insert-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-sunrise);">UPDATE</td>
+                                <td id="dist-update-avg">-</td>
+                                <td id="dist-update-min">-</td>
+                                <td id="dist-update-max">-</td>
+                                <td id="dist-update-p95">-</td>
+                                <td id="dist-update-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-amethyst);">DELETE</td>
+                                <td id="dist-delete-avg">-</td>
+                                <td id="dist-delete-min">-</td>
+                                <td id="dist-delete-max">-</td>
+                                <td id="dist-delete-p95">-</td>
+                                <td id="dist-delete-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-pink);">AGGREGATE</td>
+                                <td id="dist-agg-avg">-</td>
+                                <td id="dist-agg-min">-</td>
+                                <td id="dist-agg-max">-</td>
+                                <td id="dist-agg-p95">-</td>
+                                <td id="dist-agg-p99">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color: var(--p-night);">TRANSACTION</td>
+                                <td id="dist-trans-avg">-</td>
+                                <td id="dist-trans-min">-</td>
+                                <td id="dist-trans-max">-</td>
+                                <td id="dist-trans-p95">-</td>
+                                <td id="dist-trans-p99">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -729,6 +805,18 @@
                     <div class="form-group"><label>Duration (e.g. 60s, 5m)</label><input type="text" name="duration"
                             value="60s" required></div>
                 </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label>Iterations (Run Count)</label>
+                        <input type="number" name="iterations" value="1" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Interval Delay (e.g. 5s, 1m)</label>
+                        <input type="text" name="interval_delay" value="0s" required>
+                    </div>
+                </div>
+
                 <div class="form-group checkbox-group" style="margin-bottom: 24px;">
                     <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
                         onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default
@@ -922,8 +1010,48 @@
     <script>
         const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669' };
         const WINDOW_SIZE = 30;
+        let globalMarkers = [];
+        let lastKnownIteration = 0;
+        let lastKnownWaiting = false;
 
-        // UI Tabs
+        // Custom plugin to draw vertical lines safely
+        const verticalLinePlugin = {
+            id: 'verticalLines',
+            afterDraw: (chart) => {
+                try {
+                    if (!chart.data.markers) return;
+                    const ctx = chart.ctx;
+                    const yAxis = chart.scales.y || Object.values(chart.scales).find(s => s.axis === 'y');
+                    if (!yAxis) return;
+
+                    chart.data.markers.forEach((marker, index) => {
+                        if (marker) {
+                            const meta = chart.getDatasetMeta(0);
+                            if (!meta || !meta.data || !meta.data[index]) return;
+                            const x = meta.data[index].x;
+                            if (x === undefined || isNaN(x)) return;
+
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.moveTo(x, yAxis.top);
+                            ctx.lineTo(x, yAxis.bottom);
+                            ctx.lineWidth = 2;
+                            ctx.strokeStyle = marker.color;
+                            ctx.setLineDash([4, 4]);
+                            ctx.stroke();
+
+                            ctx.fillStyle = marker.color;
+                            ctx.font = 'bold 11px Roboto';
+                            ctx.fillText(marker.text, x + 4, yAxis.top + 15);
+                            ctx.restore();
+                        }
+                    });
+                } catch (e) {
+                    console.error("Marker Plugin Error (Ignored):", e);
+                }
+            }
+        };
+
         function showTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -934,7 +1062,6 @@
             document.getElementById('customFilesSection').style.display = document.getElementById('defaultWorkload').checked ? 'none' : 'grid';
         }
 
-        // --- Custom Alert Logic ---
         function showError(msg) {
             document.getElementById('errorMessage').textContent = msg;
             document.getElementById('errorModal').style.display = 'flex';
@@ -943,14 +1070,12 @@
             document.getElementById('errorModal').style.display = 'none';
         }
 
-        // --- Data History Buffers (The Time Machine) ---
         let histLabels = [];
         let histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let isLiveMode = true;
 
-        // --- Chart.js Instances ---
         let throughputChart, latencyChart, donutChart;
         let sparkCharts = {};
 
@@ -1018,7 +1143,8 @@
                         { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Aggregate/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
-                }, options: getLineOptions('throughput')
+                }, options: getLineOptions('throughput'),
+                plugins: [verticalLinePlugin]
             });
 
             latencyChart = new Chart(document.getElementById('latencyChart'), {
@@ -1033,7 +1159,8 @@
                         { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Aggregate (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
-                }, options: getLineOptions('latency')
+                }, options: getLineOptions('latency'),
+                plugins: [verticalLinePlugin]
             });
 
             donutChart = new Chart(document.getElementById('donutChart'), {
@@ -1063,77 +1190,77 @@
         }
 
         function renderChartsAt(endIndex) {
-            if (endIndex < 0) return;
-            const start = Math.max(0, endIndex - WINDOW_SIZE + 1);
+            try {
+                if (endIndex < 0) return;
+                const start = Math.max(0, endIndex - WINDOW_SIZE + 1);
 
-            const getSlice = (arr, padVal = 0) => {
-                let res = arr.slice(start, endIndex + 1);
-                while (res.length < WINDOW_SIZE) res.unshift(padVal);
-                return res;
-            };
+                const getSlice = (arr, padVal = null) => {
+                    let res = arr.slice(start, endIndex + 1);
+                    while (res.length < WINDOW_SIZE) res.push(padVal);
+                    return res;
+                };
 
-            const labelsSlice = getSlice(histLabels, '');
+                const labelsSlice = getSlice(histLabels, '');
+                const markersSlice = getSlice(globalMarkers, null);
 
-            throughputChart.data.labels = labelsSlice;
-            throughputChart.data.datasets[0].data = getSlice(histRates.total);
-            throughputChart.data.datasets[1].data = getSlice(histRates.find);
-            throughputChart.data.datasets[2].data = getSlice(histRates.insert);
-            throughputChart.data.datasets[3].data = getSlice(histRates.update);
-            throughputChart.data.datasets[4].data = getSlice(histRates.delete);
-            throughputChart.data.datasets[5].data = getSlice(histRates.aggregate);
-            throughputChart.update();
+                throughputChart.data.markers = markersSlice;
+                latencyChart.data.markers = markersSlice;
 
-            latencyChart.data.labels = labelsSlice;
-            latencyChart.data.datasets[0].data = getSlice(histLats.total);
-            latencyChart.data.datasets[1].data = getSlice(histLats.find);
-            latencyChart.data.datasets[2].data = getSlice(histLats.insert);
-            latencyChart.data.datasets[3].data = getSlice(histLats.update);
-            latencyChart.data.datasets[4].data = getSlice(histLats.delete);
-            latencyChart.data.datasets[5].data = getSlice(histLats.aggregate);
-            latencyChart.update();
+                throughputChart.data.labels = labelsSlice;
+                throughputChart.data.datasets[0].data = getSlice(histRates.total);
+                throughputChart.data.datasets[1].data = getSlice(histRates.find);
+                throughputChart.data.datasets[2].data = getSlice(histRates.insert);
+                throughputChart.data.datasets[3].data = getSlice(histRates.update);
+                throughputChart.data.datasets[4].data = getSlice(histRates.delete);
+                throughputChart.data.datasets[5].data = getSlice(histRates.aggregate);
+                throughputChart.update();
 
-            sparkCharts.total.data.datasets[0].data = getSlice(histRates.total); sparkCharts.total.update();
-            sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
-            sparkCharts.insert.data.datasets[0].data = getSlice(histRates.insert); sparkCharts.insert.update();
-            sparkCharts.update.data.datasets[0].data = getSlice(histRates.update); sparkCharts.update.update();
-            sparkCharts.delete.data.datasets[0].data = getSlice(histRates.delete); sparkCharts.delete.update();
-            sparkCharts.aggregate.data.datasets[0].data = getSlice(histRates.aggregate); sparkCharts.aggregate.update();
+                latencyChart.data.labels = labelsSlice;
+                latencyChart.data.datasets[0].data = getSlice(histLats.total);
+                latencyChart.data.datasets[1].data = getSlice(histLats.find);
+                latencyChart.data.datasets[2].data = getSlice(histLats.insert);
+                latencyChart.data.datasets[3].data = getSlice(histLats.update);
+                latencyChart.data.datasets[4].data = getSlice(histLats.delete);
+                latencyChart.data.datasets[5].data = getSlice(histLats.aggregate);
+                latencyChart.update();
 
-            document.getElementById('rate-total').textContent = (histRates.total[endIndex] || 0).toLocaleString() + ' ops/sec';
-            document.getElementById('rate-finds').textContent = (histRates.find[endIndex] || 0).toLocaleString() + ' ops/sec';
-            document.getElementById('rate-inserts').textContent = (histRates.insert[endIndex] || 0).toLocaleString() + ' ops/sec';
-            document.getElementById('rate-updates').textContent = (histRates.update[endIndex] || 0).toLocaleString() + ' ops/sec';
-            document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
-            document.getElementById('rate-aggregate').textContent = (histRates.aggregate[endIndex] || 0).toLocaleString() + ' ops/sec';
+                sparkCharts.total.data.datasets[0].data = getSlice(histRates.total); sparkCharts.total.update();
+                sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
+                sparkCharts.insert.data.datasets[0].data = getSlice(histRates.insert); sparkCharts.insert.update();
+                sparkCharts.update.data.datasets[0].data = getSlice(histRates.update); sparkCharts.update.update();
+                sparkCharts.delete.data.datasets[0].data = getSlice(histRates.delete); sparkCharts.delete.update();
+                sparkCharts.aggregate.data.datasets[0].data = getSlice(histRates.aggregate); sparkCharts.aggregate.update();
 
-            document.getElementById('lat-total').textContent = (histLats.total[endIndex] || 0).toFixed(2) + ' ms';
-            document.getElementById('lat-find').textContent = (histLats.find[endIndex] || 0).toFixed(2) + ' ms';
-            document.getElementById('lat-insert').textContent = (histLats.insert[endIndex] || 0).toFixed(2) + ' ms';
-            document.getElementById('lat-update').textContent = (histLats.update[endIndex] || 0).toFixed(2) + ' ms';
-            document.getElementById('lat-delete').textContent = (histLats.delete[endIndex] || 0).toFixed(2) + ' ms';
-            document.getElementById('lat-aggregate').textContent = (histLats.aggregate[endIndex] || 0).toFixed(2) + ' ms';
+                document.getElementById('rate-total').textContent = (histRates.total[endIndex] || 0).toLocaleString() + ' ops/sec';
+                document.getElementById('rate-finds').textContent = (histRates.find[endIndex] || 0).toLocaleString() + ' ops/sec';
+                document.getElementById('rate-inserts').textContent = (histRates.insert[endIndex] || 0).toLocaleString() + ' ops/sec';
+                document.getElementById('rate-updates').textContent = (histRates.update[endIndex] || 0).toLocaleString() + ' ops/sec';
+                document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
+                document.getElementById('rate-aggregate').textContent = (histRates.aggregate[endIndex] || 0).toLocaleString() + ' ops/sec';
 
-            const tT = histTotals.total[endIndex] || 0;
-            const tF = histTotals.find[endIndex] || 0;
-            const tI = histTotals.insert[endIndex] || 0;
-            const tU = histTotals.update[endIndex] || 0;
-            const tD = histTotals.delete[endIndex] || 0;
-            const tA = histTotals.aggregate[endIndex] || 0;
+                const tT = histTotals.total[endIndex] || 0;
+                const tF = histTotals.find[endIndex] || 0;
+                const tI = histTotals.insert[endIndex] || 0;
+                const tU = histTotals.update[endIndex] || 0;
+                const tD = histTotals.delete[endIndex] || 0;
+                const tA = histTotals.aggregate[endIndex] || 0;
 
-            document.getElementById('stat-total').textContent = tT.toLocaleString();
-            document.getElementById('stat-finds').textContent = tF.toLocaleString();
-            document.getElementById('stat-inserts').textContent = tI.toLocaleString();
-            document.getElementById('stat-updates').textContent = tU.toLocaleString();
-            document.getElementById('stat-deletes').textContent = tD.toLocaleString();
-            document.getElementById('ops-aggregate').textContent = tA.toLocaleString();
+                document.getElementById('stat-total').textContent = tT.toLocaleString();
+                document.getElementById('stat-finds').textContent = tF.toLocaleString();
+                document.getElementById('stat-inserts').textContent = tI.toLocaleString();
+                document.getElementById('stat-updates').textContent = tU.toLocaleString();
+                document.getElementById('stat-deletes').textContent = tD.toLocaleString();
+                document.getElementById('ops-aggregate').textContent = tA.toLocaleString();
 
-            if (tF > 0 || tI > 0 || tU > 0 || tD > 0 || tA > 0) {
-                donutChart.data.datasets[0].data = [tF, tI, tU, tD, tA];
-                donutChart.update();
+                if (tF > 0 || tI > 0 || tU > 0 || tD > 0 || tA > 0) {
+                    donutChart.data.datasets[0].data = [tF, tI, tU, tD, tA];
+                    donutChart.update();
+                }
+            } catch (e) {
+                console.error("Chart render error:", e);
             }
         }
 
-        // --- Scrubber Events ---
         document.getElementById('timeScrubber').addEventListener('input', function () {
             const maxIdx = parseInt(this.max);
             const val = parseInt(this.value);
@@ -1203,6 +1330,8 @@
                 document.querySelector('[name="uri"]').value = cfg.URI || '';
                 document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
                 document.querySelector('[name="duration"]').value = cfg.Duration || '60s';
+                document.querySelector('[name="iterations"]').value = cfg.Iterations || 1;
+                document.querySelector('[name="interval_delay"]').value = cfg.IntervalDelay || '0s';
 
                 const passInput = document.getElementById('uiPassword');
 
@@ -1319,6 +1448,11 @@
                         histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
                         lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
 
+                        globalMarkers = [];
+                        lastKnownIteration = 0;
+                        lastKnownWaiting = false;
+                        document.getElementById('iterationBadge').style.display = 'block';
+
                         goToLive();
 
                         startTime = Date.now();
@@ -1354,14 +1488,14 @@
                             badge.style.color = "white";
                             document.getElementById('activeActions').style.display = 'none';
                             document.getElementById('finishActions').style.display = 'block';
+                            document.getElementById('iterationBadge').style.display = 'none';
                             if (elapsed >= targetSeconds && targetSeconds > 0) {
                                 document.getElementById('progressBar').style.width = "100%";
                                 document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
                             }
 
-                            // --- CAPTURE FINAL REPORT DATA ---
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
-                            const safeElapsed = Math.max(1, elapsed); // Prevent division by zero
+                            const safeElapsed = Math.max(1, elapsed);
 
                             finalReportData = {
                                 generated_at: new Date().toISOString(),
@@ -1383,16 +1517,16 @@
                                     aggregate: stats.aggOps || 0
                                 },
                                 average_latencies_ms: {
-                                    find: (stats.findLatAvg || 0).toFixed(2),
-                                    insert: (stats.insertLatAvg || 0).toFixed(2),
-                                    update: (stats.updateLatAvg || 0).toFixed(2),
-                                    delete: (stats.deleteLatAvg || 0).toFixed(2),
-                                    aggregate: (stats.aggLatAvg || 0).toFixed(2)
+                                    total: stats.distTotal || {},
+                                    find: stats.distFind || {},
+                                    insert: stats.distInsert || {},
+                                    update: stats.distUpdate || {},
+                                    delete: stats.distDelete || {},
+                                    aggregate: stats.distAgg || {},
+                                    transaction: stats.distTrans || {}
                                 },
-                                // Convert FormData to a clean JSON object
                                 configuration: lastFormData ? Object.fromEntries(lastFormData.entries()) : {}
                             };
-                            // Delete sensitive data
                             if (finalReportData.configuration.password) {
                                 finalReportData.configuration.password = "********";
                             }
@@ -1403,9 +1537,50 @@
                             badge.textContent = "RUNNING";
                             badge.style.background = "var(--p-aqua)";
                             badge.style.color = "var(--p-night)";
+
+                            let badgeText = `ITERATION ${stats.currentIteration || 1} / ${stats.totalIterations || 1}`;
+                            if (stats.isWaiting) {
+                                badgeText += ` (WAITING: ${stats.intervalDelay})`;
+                                document.getElementById('iterationBadge').style.background = 'var(--p-sunrise)';
+                            } else {
+                                document.getElementById('iterationBadge').style.background = 'var(--p-amethyst)';
+                            }
+                            document.getElementById('iterationBadge').textContent = badgeText;
+                            document.getElementById('iterationBadge').style.display = 'block';
                         }
 
                         if (stats.insertOps !== undefined) {
+
+                            const updateLatRow = (id, data) => {
+                                try {
+                                    if (!data) return;
+
+                                    const isActive = data.max > 0;
+
+                                    const formatVal = (val) => isActive ? Number(val).toFixed(2) + ' ms' : '<span class="empty-dash">-</span>';
+
+                                    const setHtml = (suffix, val) => {
+                                        const el = document.getElementById(`dist-${id}-${suffix}`);
+                                        if (el) el.innerHTML = formatVal(val);
+                                    };
+
+                                    setHtml('avg', data.avg);
+                                    setHtml('min', data.min);
+                                    setHtml('max', data.max);
+                                    setHtml('p95', data.p95);
+                                    setHtml('p99', data.p99);
+                                } catch (e) {
+                                    console.error("Table update error:", e);
+                                }
+                            };
+                            updateLatRow('total', stats.distTotal);
+                            updateLatRow('find', stats.distFind);
+                            updateLatRow('insert', stats.distInsert);
+                            updateLatRow('update', stats.distUpdate);
+                            updateLatRow('delete', stats.distDelete);
+                            updateLatRow('agg', stats.distAgg);
+                            updateLatRow('trans', stats.distTrans);
+
                             const cFind = stats.findOps || 0;
                             const cInsert = stats.insertOps || 0;
                             const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
@@ -1421,7 +1596,6 @@
                             const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
                             const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
 
-                            // Weighted Average Latency Calculation
                             let tLatAvg = 0;
                             if (rTotal > 0) {
                                 tLatAvg = ((rFind * (stats.findLatAvg || 0)) +
@@ -1433,16 +1607,30 @@
 
                             lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
 
+                            let currentMarker = null;
+                            if (stats.currentIteration && stats.currentIteration !== lastKnownIteration) {
+                                currentMarker = { text: `Iter ${stats.currentIteration}`, color: colors.amethyst };
+                                lastKnownIteration = stats.currentIteration;
+                            } else if (stats.isWaiting && !lastKnownWaiting) {
+                                currentMarker = { text: `Wait`, color: colors.sunrise };
+                            }
+                            lastKnownWaiting = stats.isWaiting;
+                            globalMarkers.push(currentMarker);
+
                             histLabels.push(timeStr);
 
                             histRates.total.push(rTotal);
                             histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete); histRates.aggregate.push(rAggregate);
 
-                            histLats.total.push(tLatAvg);
-                            histLats.find.push(stats.findLatAvg || 0); histLats.insert.push(stats.insertLatAvg || 0); histLats.update.push(stats.updateLatAvg || 0); histLats.delete.push(stats.deleteLatAvg || 0); histLats.aggregate.push(stats.aggLatAvg || 0);
-
                             histTotals.total.push(cTotal);
                             histTotals.find.push(cFind); histTotals.insert.push(cInsert); histTotals.update.push(cUpdate); histTotals.delete.push(cDelete); histTotals.aggregate.push(cAggregate);
+
+                            histLats.total.push(tLatAvg);
+                            histLats.find.push(rFind > 0 ? (stats.findLatAvg || 0) : 0);
+                            histLats.insert.push(rInsert > 0 ? (stats.insertLatAvg || 0) : 0);
+                            histLats.update.push(rUpdate > 0 ? (stats.updateLatAvg || 0) : 0);
+                            histLats.delete.push(rDelete > 0 ? (stats.deleteLatAvg || 0) : 0);
+                            histLats.aggregate.push(rAggregate > 0 ? (stats.aggLatAvg || 0) : 0);
 
                             const maxIdx = histRates.find.length - 1;
                             const scrubber = document.getElementById('timeScrubber');
@@ -1453,12 +1641,19 @@
                                 renderChartsAt(maxIdx);
                             }
                         }
-                    }).catch(err => console.error("Polling error:", err));
+                    })
+                    .catch(err => {
+                        console.error("Polling error:", err);
+                        if (err.message && err.message.includes("Unexpected end of JSON")) {
+                            console.log("Ignored partial JSON load.");
+                        } else {
+                            showError("UI Render Error: " + err.message);
+                        }
+                    });
             }, currentRefreshRate);
         }
 
         function shutdownApp() {
-            // Show the custom modal instead of the ugly browser confirm
             document.getElementById('shutdownModal').style.display = 'flex';
         }
 
@@ -1467,17 +1662,14 @@
         }
 
         function confirmShutdown() {
-            // Hide the modal
             document.getElementById('shutdownModal').style.display = 'none';
 
-            // If the workload is running, send a stop signal first just to be safe
             if (document.getElementById('statusIndicator').textContent === "RUNNING") {
                 stopWorkload();
             }
 
             fetch('/api/shutdown', { method: 'POST' })
                 .then(() => {
-                    // Wipe the screen and show a clean exit message
                     document.body.innerHTML = `
                     <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background: var(--bg); font-family: 'Roboto', sans-serif;">
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--p-aqua)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 20px;">
@@ -1497,17 +1689,15 @@
         function downloadSummaryReport() {
             if (!finalReportData) return;
 
-            // Convert the object to a pretty-printed JSON string
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalReportData, null, 4));
 
-            // Create a fake hidden download link and click it
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute("href", dataStr);
 
             const dateStr = new Date().toISOString().replace(/[:\-T]/g, '').slice(0, 14);
             downloadAnchorNode.setAttribute("download", `plgm_summary_${dateStr}.json`);
 
-            document.body.appendChild(downloadAnchorNode); // Required for Firefox
+            document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
         }

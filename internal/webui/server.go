@@ -38,12 +38,16 @@ import (
 var staticFiles embed.FS
 
 type WebServer struct {
-	mu           sync.Mutex
-	IsRunning    bool
-	LastError    string
-	CurrentStats *stats.Collector
-	ActiveCancel context.CancelFunc
-	AppConfig    *config.AppConfig
+	mu               sync.Mutex
+	IsRunning        bool
+	LastError        string
+	CurrentStats     *stats.Collector
+	ActiveCancel     context.CancelFunc
+	AppConfig        *config.AppConfig
+	CurrentIteration int
+	TotalIterations  int
+	IsWaiting        bool
+	IntervalStr      string
 }
 
 func NewServer(cfg *config.AppConfig) *WebServer {
@@ -139,8 +143,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	s.IsRunning = true
 
-	// 1. CLONE THE PRE-LOADED CONFIG:
-	// This ensures config.yaml values are preserved for anything not present in the UI
 	baseCfg := *s.AppConfig
 	s.mu.Unlock()
 
@@ -151,11 +153,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. OVERLAY THE UI FORM VALUES ON TOP OF THE CLONED CONFIG
 	cfg := &baseCfg
 	cfg.WebUI.Enabled = true
 
-	// Strings: Override if present
 	if v := r.FormValue("uri"); v != "" {
 		cfg.URI = v
 	}
@@ -171,13 +171,10 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if v := r.FormValue("read_preference"); v != "" {
 		cfg.ConnectionParams.ReadPreference = v
 	}
-
-	// Password: Only override if the user explicitly typed a new one in the UI
 	if uiPassword := r.FormValue("password"); uiPassword != "" {
 		cfg.ConnectionParams.Password = uiPassword
 	}
 
-	// Booleans: HTML forms send "on" when checked. Unchecked boxes send nothing.
 	cfg.ConnectionParams.DirectConnection = r.FormValue("direct_connection") == "true" || r.FormValue("direct_connection") == "on"
 	cfg.DefaultWorkload = r.FormValue("default_workload") == "true" || r.FormValue("default_workload") == "on"
 	cfg.DropCollections = r.FormValue("drop_collections") == "true" || r.FormValue("drop_collections") == "on"
@@ -185,7 +182,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.UseTransactions = r.FormValue("use_transactions") == "true" || r.FormValue("use_transactions") == "on"
 	cfg.DebugMode = r.FormValue("debug_mode") == "true" || r.FormValue("debug_mode") == "on"
 
-	// --- CSV PARSING ---
 	cfg.CSVExportEnabled = r.FormValue("csv_export_enabled") == "true" || r.FormValue("csv_export_enabled") == "on"
 	cfg.CSVExportAppend = r.FormValue("csv_export_append") == "true" || r.FormValue("csv_export_append") == "on"
 	if v := r.FormValue("csv_export_path"); v != "" {
@@ -204,6 +200,10 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.Duration = d
 	}
 	cfg.MaxTransactionOps = parseInt(r.FormValue("max_transaction_ops"), cfg.MaxTransactionOps)
+	cfg.Iterations = parseInt(r.FormValue("iterations"), cfg.Iterations)
+	if v := r.FormValue("interval_delay"); v != "" {
+		cfg.IntervalDelay = v
+	}
 
 	cfg.FindPercent = parseInt(r.FormValue("find_percent"), cfg.FindPercent)
 	cfg.UpdatePercent = parseInt(r.FormValue("update_percent"), cfg.UpdatePercent)
@@ -224,7 +224,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.RetryAttempts = parseInt(r.FormValue("retry_attempts"), cfg.RetryAttempts)
 	cfg.RetryBackoffMs = parseInt(r.FormValue("retry_backoff_ms"), cfg.RetryBackoffMs)
 
-	// Raw Injector Overrides
 	cfg.RawInjector.Enabled = r.FormValue("raw_injector_enabled") == "true" || r.FormValue("raw_injector_enabled") == "on"
 	if t := r.FormValue("raw_injector_type"); t != "" {
 		cfg.RawInjector.Type = t
@@ -240,7 +239,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.RawInjector.CollectionName = coln
 	}
 
-	// 3. HANDLE FILE UPLOADS FOR CUSTOM WORKLOADS
 	if !cfg.DefaultWorkload {
 		tempDir, _ := os.MkdirTemp("", "plgm-ui-workload-*")
 		collFile, _, err := r.FormFile("collections_file")
@@ -263,7 +261,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Enforce strict minimums so the Go routines never panic, regardless of UI input
 	if cfg.StatusRefreshRateSec <= 0 {
 		cfg.StatusRefreshRateSec = 1
 	}
@@ -316,7 +313,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.CurrentStats = stats.NewCollector()
 		s.AppConfig = cfg
 		s.ActiveCancel = cancel
-		s.LastError = "" // Reset error state
+		s.LastError = ""
+		s.CurrentIteration = 1
+		s.TotalIterations = cfg.Iterations
+		s.IntervalStr = cfg.IntervalDelay
+		s.IsWaiting = false
+		s.CurrentStats.CurrentIteration = 1
 		s.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -330,13 +332,39 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				s.mu.Unlock()
 			}()
 
-			if err := benchmark.RunRawInjector(ctx, benchConn.Database, cfg, s.CurrentStats); err != nil {
-				if err != context.Canceled { // Ignore explicit stop signals
-					msg := fmt.Sprintf("Injector Runtime Error: %v", err)
-					log.Println("UI Run Error:", msg)
+			intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
+
+			for i := 1; i <= cfg.Iterations; i++ {
+				if ctx.Err() != nil {
+					break
+				}
+
+				s.mu.Lock()
+				s.CurrentIteration = i
+				s.IsWaiting = false
+				s.CurrentStats.CurrentIteration = i
+				s.mu.Unlock()
+
+				if err := benchmark.RunRawInjector(ctx, benchConn.Database, cfg, s.CurrentStats); err != nil {
+					if err != context.Canceled {
+						msg := fmt.Sprintf("Injector Runtime Error: %v", err)
+						log.Println("UI Run Error:", msg)
+						s.mu.Lock()
+						s.LastError = msg
+						s.mu.Unlock()
+						break
+					}
+				}
+
+				if i < cfg.Iterations && intervalDuration > 0 {
 					s.mu.Lock()
-					s.LastError = msg
+					s.IsWaiting = true
 					s.mu.Unlock()
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(intervalDuration):
+					}
 				}
 			}
 		}()
@@ -399,7 +427,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.CurrentStats = stats.NewCollector()
 	s.AppConfig = cfg
 	s.ActiveCancel = cancel
-	s.LastError = "" // Reset error state
+	s.LastError = ""
+	s.CurrentIteration = 1
+	s.TotalIterations = cfg.Iterations
+	s.IntervalStr = cfg.IntervalDelay
+	s.IsWaiting = false
+	s.CurrentStats.CurrentIteration = 1
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -413,7 +446,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 		}()
 
-		// Catch and report setup errors to the UI
 		if err := mongo.CreateCollectionsFromConfig(ctx, benchConn.Database, collectionsCfg, cfg.DropCollections); err != nil {
 			msg := fmt.Sprintf("Failed to create collections: %v", err)
 			log.Println("UI Run Error:", msg)
@@ -444,14 +476,39 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Catch and report execution errors
-		if err := mongo.RunWorkload(ctx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
-			if err != context.Canceled { // Ignore explicit user stop requests
-				msg := fmt.Sprintf("Workload crashed: %v", err)
-				log.Println("UI Run Error:", msg)
+		intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
+
+		for i := 1; i <= cfg.Iterations; i++ {
+			if ctx.Err() != nil {
+				break
+			}
+
+			s.mu.Lock()
+			s.CurrentIteration = i
+			s.IsWaiting = false
+			s.CurrentStats.CurrentIteration = i
+			s.mu.Unlock()
+
+			if err := mongo.RunWorkload(ctx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
+				if err != context.Canceled {
+					msg := fmt.Sprintf("Workload crashed: %v", err)
+					log.Println("UI Run Error:", msg)
+					s.mu.Lock()
+					s.LastError = msg
+					s.mu.Unlock()
+					break
+				}
+			}
+
+			if i < cfg.Iterations && intervalDuration > 0 {
 				s.mu.Lock()
-				s.LastError = msg
+				s.IsWaiting = true
 				s.mu.Unlock()
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(intervalDuration):
+				}
 			}
 		}
 	}()
@@ -491,6 +548,10 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	if s.AppConfig != nil {
 		durationStr = s.AppConfig.Duration
 	}
+	curIter := s.CurrentIteration
+	totIter := s.TotalIterations
+	isWait := s.IsWaiting
+	intStr := s.IntervalStr
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -500,9 +561,14 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	statsResp := map[string]interface{}{
-		"isRunning": running,
-		"lastError": lastErr,
-		"duration":  durationStr,
+		"isRunning":        running,
+		"lastError":        lastErr,
+		"duration":         durationStr,
+		"currentIteration": curIter,
+		"totalIterations":  totIter,
+		"isWaiting":        isWait,
+		"intervalDelay":    intStr,
+
 		"findOps":   atomic.LoadUint64(&collector.FindOps),
 		"insertOps": atomic.LoadUint64(&collector.InsertOps),
 		"upsertOps": atomic.LoadUint64(&collector.UpsertOps),
@@ -515,6 +581,15 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"updateLatAvg": collector.UpdateHist.GetAverage(),
 		"deleteLatAvg": collector.DeleteHist.GetAverage(),
 		"aggLatAvg":    collector.AggHist.GetAverage(),
+
+		"distFind":   collector.FindHist.GetStats(),
+		"distInsert": collector.InsertHist.GetStats(),
+		"distUpsert": collector.UpsertHist.GetStats(),
+		"distUpdate": collector.UpdateHist.GetStats(),
+		"distDelete": collector.DeleteHist.GetStats(),
+		"distAgg":    collector.AggHist.GetStats(),
+		"distTrans":  collector.TransHist.GetStats(),
+		"distTotal":  collector.TotalHist.GetStats(),
 	}
 	json.NewEncoder(w).Encode(statsResp)
 }
@@ -543,11 +618,9 @@ func (s *WebServer) handleShutdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Tell the UI we received the command
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "shutting_down"})
 
-	// Wait 500ms for the HTTP response to reach the browser, then kill the app
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		log.Println("Shutdown requested via Web UI. Exiting application...")

@@ -18,6 +18,8 @@ type AppConfig struct {
 	SkipSeed        bool   `yaml:"skip_seed"`
 	DocumentsCount  int    `yaml:"documents_count"`
 	Concurrency     int    `yaml:"concurrency"`
+	Iterations      int    `yaml:"iterations"`
+	IntervalDelay   string `yaml:"interval_delay"`
 
 	Duration           string `yaml:"duration"`
 	FindPercent        int    `yaml:"find_percent"`
@@ -132,6 +134,8 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.DefaultWorkload = true
 	cfg.SkipSeed = true
 	cfg.DocumentsCount = 100000
+	cfg.Iterations = 1
+	cfg.IntervalDelay = "0s"
 
 	// --- MIX TAB ---
 	cfg.FindPercent = 50
@@ -334,6 +338,15 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	}
 	if envDuration := os.Getenv("PLGM_DURATION"); envDuration != "" {
 		cfg.Duration = envDuration
+	}
+
+	if envIterations := os.Getenv("PLGM_ITERATIONS"); envIterations != "" {
+		if n, err := strconv.Atoi(envIterations); err == nil && n > 0 {
+			cfg.Iterations = n
+		}
+	}
+	if envInterval := os.Getenv("PLGM_INTERVAL_DELAY"); envInterval != "" {
+		cfg.IntervalDelay = envInterval
 	}
 
 	// Percentages

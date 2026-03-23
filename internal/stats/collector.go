@@ -101,6 +101,41 @@ func (h *LatencyHistogram) GetPercentile(p float64) float64 {
 	return float64(MaxLatencyBin)
 }
 
+func (h *LatencyHistogram) GetStats() map[string]float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.Count == 0 {
+		return map[string]float64{"avg": 0, "min": 0, "max": 0, "p95": 0, "p99": 0}
+	}
+
+	min := h.Min
+	if min == math.MaxFloat64 {
+		min = 0 // Sanity check to prevent rendering giant float limits
+	}
+
+	// Inline percentile calculation to avoid deadlocking
+	getPerc := func(p float64) float64 {
+		targetCount := int64(math.Ceil((p / 100.0) * float64(h.Count)))
+		var currentCount int64 = 0
+		for i, count := range h.Buckets {
+			currentCount += count
+			if currentCount >= targetCount {
+				return float64(i)
+			}
+		}
+		return float64(MaxLatencyBin)
+	}
+
+	return map[string]float64{
+		"avg": h.Sum / float64(h.Count),
+		"min": min,
+		"max": h.Max,
+		"p95": getPerc(95.0),
+		"p99": getPerc(99.0),
+	}
+}
+
 type Collector struct {
 	FindOps   uint64
 	InsertOps uint64
@@ -117,6 +152,9 @@ type Collector struct {
 	DeleteHist *LatencyHistogram
 	AggHist    *LatencyHistogram
 	TransHist  *LatencyHistogram
+	TotalHist  *LatencyHistogram
+
+	CurrentIteration int
 
 	startTime  time.Time
 	prevFind   uint64
@@ -137,12 +175,14 @@ func NewCollector() *Collector {
 		DeleteHist: &LatencyHistogram{Min: math.MaxFloat64},
 		AggHist:    &LatencyHistogram{Min: math.MaxFloat64},
 		TransHist:  &LatencyHistogram{Min: math.MaxFloat64},
+		TotalHist:  &LatencyHistogram{Min: math.MaxFloat64},
 		startTime:  time.Now(),
 	}
 }
 
 func (c *Collector) Track(opType string, duration time.Duration) {
 	ms := float64(duration.Nanoseconds()) / 1e6
+	c.TotalHist.Record(ms)
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, 1)
@@ -170,6 +210,7 @@ func (c *Collector) Track(opType string, duration time.Duration) {
 
 func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 	ms := float64(duration.Nanoseconds()) / 1e6
+	c.TotalHist.RecordBatch(ms, count)
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, uint64(count))
@@ -236,7 +277,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 				csvWriter.Write([]string{
 					"Timestamp", "ElapsedSec",
 					"Select_OpsSec", "Insert_OpsSec", "Upsert_OpsSec",
-					"Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec",
+					"Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec", "Iteration",
 				})
 				csvWriter.Flush()
 			}
@@ -289,6 +330,11 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 				rateAgg := float64(currentAgg-lastAgg) / float64(refreshRateSec)
 				rateTrans := float64(currentTrans-lastTrans) / float64(refreshRateSec)
 
+				iter := c.CurrentIteration
+				if iter < 1 {
+					iter = 1
+				}
+
 				csvWriter.Write([]string{
 					time.Now().Format(time.RFC3339),
 					fmt.Sprintf("%.0f", elapsed),
@@ -299,8 +345,9 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 					fmt.Sprintf("%.2f", rateDelete),
 					fmt.Sprintf("%.2f", rateAgg),
 					fmt.Sprintf("%.2f", rateTrans),
+					strconv.Itoa(iter),
 				})
-				csvWriter.Flush() // Flush immediately so data is saved even if crashed
+				csvWriter.Flush()
 
 				// Update 'last' trackers for the next tick
 				lastFind = currentFind

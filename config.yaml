@@ -92,6 +92,12 @@ concurrency: 4
 # Set to "0" to run the queries exactly once and exit.
 duration: "10s"
 
+# Number of times to repeat the workload execution.
+iterations: 1
+
+# Time to pause between iterations (e.g. "5s", "1m").
+interval_delay: "0s"
+
 # Enable transactional workload
 use_transactions: false
 
