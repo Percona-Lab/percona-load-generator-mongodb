@@ -114,6 +114,13 @@ To launch the UI, simply pass the `--webui` flag. The application will start a s
 
 <video src="https://github.com/user-attachments/assets/68a57bb0-f500-4f75-99c3-c599d485444a" controls width="700"></video>
 
+**Multiple Iterations**
+
+You can configure how PLGM repeats a given workload and control the time between runs in the `Workload` tab. Set the iterations value to determine how many times the workload will run, and configure the interval to define the time between each run. See [Workload Iterations & Scheduling](#workload-iterations--scheduling) section for more details.
+
+<video src="https://github.com/user-attachments/assets/58c51250-8acc-46ce-a756-8f897f73a2b2" controls width="700"></video>
+
+
 ### 2. UI Features
 
 When running `plgm` with the `--webui` flag, you get access to a rich, browser-based dashboard that requires no external dependencies. 
