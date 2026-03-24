@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
@@ -239,29 +238,51 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.RawInjector.CollectionName = coln
 	}
 
-	var uploadedTempDir string
+	var customCollections *config.CollectionsFile
+	var customQueries *config.QueriesFile
 
 	if !cfg.DefaultWorkload {
-		tempDir, _ := os.MkdirTemp("", "plgm-ui-workload-*")
-		uploadedTempDir = tempDir
-
 		collFile, _, err := r.FormFile("collections_file")
 		if err == nil {
 			defer collFile.Close()
-			collPath := filepath.Join(tempDir, "collections.json")
-			dst, _ := os.Create(collPath)
-			io.Copy(dst, collFile)
-			dst.Close()
-			cfg.CollectionsPath = collPath
+			b, _ := io.ReadAll(collFile)
+			var wrapped config.CollectionsFile
+			if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Collections) > 0 {
+				customCollections = &wrapped
+			} else {
+				var arr []config.CollectionDefinition
+				if err := json.Unmarshal(b, &arr); err == nil && len(arr) > 0 {
+					customCollections = &config.CollectionsFile{Collections: arr}
+				}
+			}
+
+			if customCollections != nil {
+				for i, col := range customCollections.Collections {
+					if col.DatabaseName == "" || col.Name == "" {
+						s.abortRun(fmt.Sprintf("Loaded collection at index %d has empty 'database' or 'collection' name.", i))
+						http.Error(w, "Invalid collections format: missing db or collection name", http.StatusBadRequest)
+						return
+					}
+				}
+			} else {
+				s.abortRun("Failed to parse custom collections_file")
+				http.Error(w, "Invalid collections format", http.StatusBadRequest)
+				return
+			}
 		}
+
 		queryFile, _, err := r.FormFile("queries_file")
 		if err == nil {
 			defer queryFile.Close()
-			queryPath := filepath.Join(tempDir, "queries.json")
-			dst, _ := os.Create(queryPath)
-			io.Copy(dst, queryFile)
-			dst.Close()
-			cfg.QueriesPath = queryPath
+			b, _ := io.ReadAll(queryFile)
+			var defs []config.QueryDefinition
+			if err := json.Unmarshal(b, &defs); err == nil && len(defs) > 0 {
+				customQueries = &config.QueriesFile{Queries: defs}
+			} else {
+				s.abortRun("Failed to parse custom queries_file")
+				http.Error(w, "Invalid queries format", http.StatusBadRequest)
+				return
+			}
 		}
 	}
 
@@ -329,11 +350,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 		go func() {
-			defer func() {
-				if uploadedTempDir != "" {
-					os.RemoveAll(uploadedTempDir)
-				}
-			}()
 			defer benchConn.Disconnect(context.Background())
 			defer func() {
 				s.mu.Lock()
@@ -383,22 +399,34 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	// -----------------------------------------------------------------------
 	// EXECUTION BRANCH 2: STANDARD WORKLOAD
 	// -----------------------------------------------------------------------
-	collectionsCfg, loadErr := config.LoadCollections(cfg.CollectionsPath, cfg.DefaultWorkload)
-	if loadErr != nil {
-		s.abortRun("Failed to load collections: " + loadErr.Error())
-		cancel()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "message": loadErr.Error()})
-		return
+	var collectionsCfg *config.CollectionsFile
+	var loadErr error
+
+	if customCollections != nil {
+		collectionsCfg = customCollections
+	} else {
+		collectionsCfg, loadErr = config.LoadCollections(cfg.CollectionsPath, cfg.DefaultWorkload)
+		if loadErr != nil {
+			s.abortRun("Failed to load collections: " + loadErr.Error())
+			cancel()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "message": loadErr.Error()})
+			return
+		}
 	}
 
-	queriesCfg, loadErr := config.LoadQueries(cfg.QueriesPath, cfg.DefaultWorkload)
-	if loadErr != nil {
-		s.abortRun("Failed to load queries: " + loadErr.Error())
-		cancel()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "message": loadErr.Error()})
-		return
+	var queriesCfg *config.QueriesFile
+	if customQueries != nil {
+		queriesCfg = customQueries
+	} else {
+		queriesCfg, loadErr = config.LoadQueries(cfg.QueriesPath, cfg.DefaultWorkload)
+		if loadErr != nil {
+			s.abortRun("Failed to load queries: " + loadErr.Error())
+			cancel()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "message": loadErr.Error()})
+			return
+		}
 	}
 
 	if len(collectionsCfg.Collections) == 0 {
@@ -448,11 +476,6 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 	go func() {
-		defer func() {
-			if uploadedTempDir != "" {
-				os.RemoveAll(uploadedTempDir)
-			}
-		}()
 		defer benchConn.Disconnect(context.Background())
 		defer func() {
 			s.mu.Lock()

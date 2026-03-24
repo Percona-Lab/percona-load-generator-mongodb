@@ -1042,7 +1042,14 @@
 
                             ctx.fillStyle = marker.color;
                             ctx.font = 'bold 11px Roboto';
-                            ctx.fillText(marker.text, x + 4, yAxis.top + 15);
+
+                            const textWidth = ctx.measureText(marker.text).width;
+                            let textX = x + 4;
+                            if (textX + textWidth > chart.chartArea.right) {
+                                textX = x - textWidth - 4; // Shift text to the left side of the line
+                            }
+
+                            ctx.fillText(marker.text, textX, yAxis.top + 15);
                             ctx.restore();
                         }
                     });
@@ -1438,7 +1445,10 @@
                         document.getElementById('finishActions').style.display = 'none';
                         document.getElementById('progressBar').style.width = "0%";
 
-                        targetSeconds = parseDuration(formData.get('duration'));
+                        const durSecs = parseDuration(formData.get('duration'));
+                        const iters = parseInt(formData.get('iterations')) || 1;
+                        const intervalSecs = parseDuration(formData.get('interval_delay') || '0s');
+                        targetSeconds = (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
 
                         histLabels = [];
                         histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
@@ -1472,7 +1482,14 @@
                     .then(stats => {
                         const badge = document.getElementById('statusIndicator');
                         const elapsed = (Date.now() - startTime) / 1000;
-                        if (stats.duration) targetSeconds = parseDuration(stats.duration);
+
+                        // Keep total expected duration dynamic with active backend config data
+                        if (stats.duration) {
+                            const durSecs = parseDuration(stats.duration);
+                            const iters = stats.totalIterations || 1;
+                            const intervalSecs = parseDuration(stats.intervalDelay || '0s');
+                            targetSeconds = (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
+                        }
 
                         const displayElapsed = Math.min(elapsed, targetSeconds > 0 ? targetSeconds : elapsed);
                         const timeStr = formatTime(displayElapsed);
@@ -1480,6 +1497,107 @@
 
                         if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((elapsed / targetSeconds) * 100, 100) + "%";
 
+                        // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
+                        if (stats.insertOps !== undefined) {
+                            const updateLatRow = (id, data) => {
+                                try {
+                                    if (!data) return;
+                                    const isActive = data.max > 0;
+                                    const formatVal = (val) => isActive ? Number(val).toFixed(2) + ' ms' : '<span class="empty-dash">-</span>';
+
+                                    const setHtml = (suffix, val) => {
+                                        const el = document.getElementById(`dist-${id}-${suffix}`);
+                                        if (el) el.innerHTML = formatVal(val);
+                                    };
+
+                                    setHtml('avg', data.avg);
+                                    setHtml('min', data.min);
+                                    setHtml('max', data.max);
+                                    setHtml('p95', data.p95);
+                                    setHtml('p99', data.p99);
+                                } catch (e) {
+                                    console.error("Table update error:", e);
+                                }
+                            };
+
+                            updateLatRow('total', stats.distTotal);
+                            updateLatRow('find', stats.distFind);
+                            updateLatRow('insert', stats.distInsert);
+                            updateLatRow('update', stats.distUpdate);
+                            updateLatRow('delete', stats.distDelete);
+                            updateLatRow('agg', stats.distAgg);
+                            updateLatRow('trans', stats.distTrans);
+
+                            const cFind = stats.findOps || 0;
+                            const cInsert = stats.insertOps || 0;
+                            const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
+                            const cDelete = stats.deleteOps || 0;
+                            const cAggregate = stats.aggOps || 0;
+                            const cTotal = cFind + cInsert + cUpdate + cDelete + cAggregate;
+
+                            const rateMultiplier = 1000 / currentRefreshRate;
+                            const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
+                            const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
+                            const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
+                            const rDelete = Math.max(0, Math.round((cDelete - lastStats.delete) * rateMultiplier));
+                            const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
+                            const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
+
+                            let tLatAvg = 0;
+                            if (rTotal > 0) {
+                                tLatAvg = ((rFind * (stats.findLatAvg || 0)) +
+                                    (rInsert * (stats.insertLatAvg || 0)) +
+                                    (rUpdate * (stats.updateLatAvg || 0)) +
+                                    (rDelete * (stats.deleteLatAvg || 0)) +
+                                    (rAggregate * (stats.aggLatAvg || 0))) / rTotal;
+                            }
+
+                            lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
+
+                            let currentMarker = null;
+                            if (stats.currentIteration && stats.currentIteration !== lastKnownIteration) {
+                                currentMarker = { text: `Iter ${stats.currentIteration}`, color: colors.amethyst };
+                                lastKnownIteration = stats.currentIteration;
+                            } else if (stats.isWaiting && !lastKnownWaiting) {
+                                currentMarker = { text: `Wait`, color: colors.sunrise };
+                            }
+                            lastKnownWaiting = stats.isWaiting;
+                            globalMarkers.push(currentMarker);
+
+                            histLabels.push(formatTime(elapsed));
+
+                            histRates.total.push(rTotal);
+                            histRates.find.push(rFind);
+                            histRates.insert.push(rInsert);
+                            histRates.update.push(rUpdate);
+                            histRates.delete.push(rDelete);
+                            histRates.aggregate.push(rAggregate);
+
+                            histTotals.total.push(cTotal);
+                            histTotals.find.push(cFind);
+                            histTotals.insert.push(cInsert);
+                            histTotals.update.push(cUpdate);
+                            histTotals.delete.push(cDelete);
+                            histTotals.aggregate.push(cAggregate);
+
+                            histLats.total.push(tLatAvg);
+                            histLats.find.push(rFind > 0 ? (stats.findLatAvg || 0) : 0);
+                            histLats.insert.push(rInsert > 0 ? (stats.insertLatAvg || 0) : 0);
+                            histLats.update.push(rUpdate > 0 ? (stats.updateLatAvg || 0) : 0);
+                            histLats.delete.push(rDelete > 0 ? (stats.deleteLatAvg || 0) : 0);
+                            histLats.aggregate.push(rAggregate > 0 ? (stats.aggLatAvg || 0) : 0);
+
+                            const maxIdx = histRates.find.length - 1;
+                            const scrubber = document.getElementById('timeScrubber');
+                            scrubber.max = maxIdx;
+
+                            if (isLiveMode && stats.isRunning) {
+                                scrubber.value = maxIdx;
+                                renderChartsAt(maxIdx);
+                            }
+                        }
+
+                        // === 2. HANDLE STOPPING / FINISHED STATE ===
                         if (!stats.isRunning) {
                             badge.textContent = "FINISHED";
                             badge.style.background = "rgba(255,255,255,0.2)";
@@ -1489,13 +1607,49 @@
 
                             const iterBadge = document.getElementById('iterationBadge');
                             iterBadge.textContent = `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
-                            iterBadge.style.background = 'var(--p-forest)'; 
-                            iterBadge.style.display = 'block'; 
+                            iterBadge.style.background = 'var(--p-forest)';
+                            iterBadge.style.display = 'block';
 
                             if (elapsed >= targetSeconds && targetSeconds > 0) {
                                 document.getElementById('progressBar').style.width = "100%";
                                 document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
                             }
+
+                            // === 3. INJECT THE ZERO-DATA POINT TO SMOOTHLY END THE GRAPHS ===
+                            histLabels.push(formatTime(elapsed));
+
+                            histRates.total.push(0);
+                            histRates.find.push(0);
+                            histRates.insert.push(0);
+                            histRates.update.push(0);
+                            histRates.delete.push(0);
+                            histRates.aggregate.push(0);
+
+                            histTotals.total.push(lastStats.total || 0);
+                            histTotals.find.push(lastStats.find || 0);
+                            histTotals.insert.push(lastStats.insert || 0);
+                            histTotals.update.push(lastStats.update || 0);
+                            histTotals.delete.push(lastStats.delete || 0);
+                            histTotals.aggregate.push(lastStats.aggregate || 0);
+
+                            histLats.total.push(0);
+                            histLats.find.push(0);
+                            histLats.insert.push(0);
+                            histLats.update.push(0);
+                            histLats.delete.push(0);
+                            histLats.aggregate.push(0);
+
+                            globalMarkers.push({ text: "Finished", color: colors.forest });
+
+                            const finalMaxIdx = histRates.find.length - 1;
+                            const scrubber = document.getElementById('timeScrubber');
+                            scrubber.max = finalMaxIdx;
+
+                            if (isLiveMode) {
+                                scrubber.value = finalMaxIdx;
+                                renderChartsAt(finalMaxIdx);
+                            }
+                            // ================================================================
 
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
                             const safeElapsed = Math.max(1, elapsed);
@@ -1550,99 +1704,6 @@
                             }
                             document.getElementById('iterationBadge').textContent = badgeText;
                             document.getElementById('iterationBadge').style.display = 'block';
-                        }
-
-                        if (stats.insertOps !== undefined) {
-
-                            const updateLatRow = (id, data) => {
-                                try {
-                                    if (!data) return;
-
-                                    const isActive = data.max > 0;
-
-                                    const formatVal = (val) => isActive ? Number(val).toFixed(2) + ' ms' : '<span class="empty-dash">-</span>';
-
-                                    const setHtml = (suffix, val) => {
-                                        const el = document.getElementById(`dist-${id}-${suffix}`);
-                                        if (el) el.innerHTML = formatVal(val);
-                                    };
-
-                                    setHtml('avg', data.avg);
-                                    setHtml('min', data.min);
-                                    setHtml('max', data.max);
-                                    setHtml('p95', data.p95);
-                                    setHtml('p99', data.p99);
-                                } catch (e) {
-                                    console.error("Table update error:", e);
-                                }
-                            };
-                            updateLatRow('total', stats.distTotal);
-                            updateLatRow('find', stats.distFind);
-                            updateLatRow('insert', stats.distInsert);
-                            updateLatRow('update', stats.distUpdate);
-                            updateLatRow('delete', stats.distDelete);
-                            updateLatRow('agg', stats.distAgg);
-                            updateLatRow('trans', stats.distTrans);
-
-                            const cFind = stats.findOps || 0;
-                            const cInsert = stats.insertOps || 0;
-                            const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
-                            const cDelete = stats.deleteOps || 0;
-                            const cAggregate = stats.aggOps || 0;
-                            const cTotal = cFind + cInsert + cUpdate + cDelete + cAggregate;
-
-                            const rateMultiplier = 1000 / currentRefreshRate;
-                            const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
-                            const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
-                            const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
-                            const rDelete = Math.max(0, Math.round((cDelete - lastStats.delete) * rateMultiplier));
-                            const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
-                            const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
-
-                            let tLatAvg = 0;
-                            if (rTotal > 0) {
-                                tLatAvg = ((rFind * (stats.findLatAvg || 0)) +
-                                    (rInsert * (stats.insertLatAvg || 0)) +
-                                    (rUpdate * (stats.updateLatAvg || 0)) +
-                                    (rDelete * (stats.deleteLatAvg || 0)) +
-                                    (rAggregate * (stats.aggLatAvg || 0))) / rTotal;
-                            }
-
-                            lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
-
-                            let currentMarker = null;
-                            if (stats.currentIteration && stats.currentIteration !== lastKnownIteration) {
-                                currentMarker = { text: `Iter ${stats.currentIteration}`, color: colors.amethyst };
-                                lastKnownIteration = stats.currentIteration;
-                            } else if (stats.isWaiting && !lastKnownWaiting) {
-                                currentMarker = { text: `Wait`, color: colors.sunrise };
-                            }
-                            lastKnownWaiting = stats.isWaiting;
-                            globalMarkers.push(currentMarker);
-
-                            histLabels.push(formatTime(elapsed));
-
-                            histRates.total.push(rTotal);
-                            histRates.find.push(rFind); histRates.insert.push(rInsert); histRates.update.push(rUpdate); histRates.delete.push(rDelete); histRates.aggregate.push(rAggregate);
-
-                            histTotals.total.push(cTotal);
-                            histTotals.find.push(cFind); histTotals.insert.push(cInsert); histTotals.update.push(cUpdate); histTotals.delete.push(cDelete); histTotals.aggregate.push(cAggregate);
-
-                            histLats.total.push(tLatAvg);
-                            histLats.find.push(rFind > 0 ? (stats.findLatAvg || 0) : 0);
-                            histLats.insert.push(rInsert > 0 ? (stats.insertLatAvg || 0) : 0);
-                            histLats.update.push(rUpdate > 0 ? (stats.updateLatAvg || 0) : 0);
-                            histLats.delete.push(rDelete > 0 ? (stats.deleteLatAvg || 0) : 0);
-                            histLats.aggregate.push(rAggregate > 0 ? (stats.aggLatAvg || 0) : 0);
-
-                            const maxIdx = histRates.find.length - 1;
-                            const scrubber = document.getElementById('timeScrubber');
-                            scrubber.max = maxIdx;
-
-                            if (isLiveMode) {
-                                scrubber.value = maxIdx;
-                                renderChartsAt(maxIdx);
-                            }
                         }
                     })
                     .catch(err => {
