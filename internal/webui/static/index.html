@@ -1009,7 +1009,8 @@
 
     <script>
         const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669' };
-        const WINDOW_SIZE = 30;
+        // Hold the last 60 data points in the graphs. For a 500 millisecond refresh rate this is equivalent to the last 30 seconds of graph history
+        const WINDOW_SIZE = 60; 
         let globalMarkers = [];
         let lastKnownIteration = 0;
         let lastKnownWaiting = false;

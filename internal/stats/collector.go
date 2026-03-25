@@ -354,16 +354,9 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 
 			if needsHeader {
 				csvWriter.Write([]string{
-					"Timestamp", "ElapsedSec",
+					"Timestamp", "ElapsedSec", "Total_OpsSec",
 					"Select_OpsSec", "Insert_OpsSec", "Upsert_OpsSec", "Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec",
-					"Total_Lat_Avg", "Total_Lat_P99",
-					"Select_Lat_Avg", "Select_Lat_P99",
-					"Insert_Lat_Avg", "Insert_Lat_P99",
-					"Upsert_Lat_Avg", "Upsert_Lat_P99",
-					"Update_Lat_Avg", "Update_Lat_P99",
-					"Delete_Lat_Avg", "Delete_Lat_P99",
-					"Agg_Lat_Avg", "Agg_Lat_P99",
-					"Trans_Lat_Avg", "Trans_Lat_P99",
+					"Total_Lat_P99", "Select_Lat_P99", "Insert_Lat_P99", "Upsert_Lat_P99", "Update_Lat_P99", "Delete_Lat_P99", "Agg_Lat_P99", "Trans_Lat_P99",
 					"Iteration",
 				})
 				csvWriter.Flush()
@@ -424,9 +417,9 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 				rateDelete := float64(currentDelete-lastDelete) / float64(refreshRateSec)
 				rateAgg := float64(currentAgg-lastAgg) / float64(refreshRateSec)
 				rateTrans := float64(currentTrans-lastTrans) / float64(refreshRateSec)
+				rateTotal := rateFind + rateInsert + rateUpsert + rateUpdate + rateDelete + rateAgg + rateTrans
 
 				// Fetch cumulative latency stats at this exact point in time
-				latStats := c.IntervalTotalHist.GetStatsAndReset()
 				totLat := c.IntervalTotalHist.GetStatsAndReset()
 				fndLat := c.IntervalFindHist.GetStatsAndReset()
 				insLat := c.IntervalInsertHist.GetStatsAndReset()
@@ -444,6 +437,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 				csvWriter.Write([]string{
 					time.Now().Format(time.RFC3339),
 					fmt.Sprintf("%.0f", elapsed),
+					fmt.Sprintf("%.2f", rateTotal),
 					fmt.Sprintf("%.2f", rateFind),
 					fmt.Sprintf("%.2f", rateInsert),
 					fmt.Sprintf("%.2f", rateUpsert),
@@ -451,19 +445,14 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 					fmt.Sprintf("%.2f", rateDelete),
 					fmt.Sprintf("%.2f", rateAgg),
 					fmt.Sprintf("%.2f", rateTrans),
-					fmt.Sprintf("%.2f", latStats["avg"]),
-					fmt.Sprintf("%.2f", latStats["min"]),
-					fmt.Sprintf("%.2f", latStats["max"]),
-					fmt.Sprintf("%.2f", latStats["p95"]),
-					fmt.Sprintf("%.2f", latStats["p99"]),
-					fmt.Sprintf("%.2f", totLat["avg"]), fmt.Sprintf("%.2f", totLat["p99"]),
-					fmt.Sprintf("%.2f", fndLat["avg"]), fmt.Sprintf("%.2f", fndLat["p99"]),
-					fmt.Sprintf("%.2f", insLat["avg"]), fmt.Sprintf("%.2f", insLat["p99"]),
-					fmt.Sprintf("%.2f", upsLat["avg"]), fmt.Sprintf("%.2f", upsLat["p99"]),
-					fmt.Sprintf("%.2f", updLat["avg"]), fmt.Sprintf("%.2f", updLat["p99"]),
-					fmt.Sprintf("%.2f", delLat["avg"]), fmt.Sprintf("%.2f", delLat["p99"]),
-					fmt.Sprintf("%.2f", aggLat["avg"]), fmt.Sprintf("%.2f", aggLat["p99"]),
-					fmt.Sprintf("%.2f", trnLat["avg"]), fmt.Sprintf("%.2f", trnLat["p99"]),
+					fmt.Sprintf("%.2f", totLat["p99"]),
+					fmt.Sprintf("%.2f", fndLat["p99"]),
+					fmt.Sprintf("%.2f", insLat["p99"]),
+					fmt.Sprintf("%.2f", upsLat["p99"]),
+					fmt.Sprintf("%.2f", updLat["p99"]),
+					fmt.Sprintf("%.2f", delLat["p99"]),
+					fmt.Sprintf("%.2f", aggLat["p99"]),
+					fmt.Sprintf("%.2f", trnLat["p99"]),
 					strconv.Itoa(iter),
 				})
 				csvWriter.Flush()
