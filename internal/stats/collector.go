@@ -106,7 +106,7 @@ func (h *LatencyHistogram) GetStats() map[string]float64 {
 	defer h.mu.Unlock()
 
 	if h.Count == 0 {
-		return map[string]float64{"avg": 0, "min": 0, "max": 0, "p95": 0, "p99": 0}
+		return map[string]float64{"avg": 0, "min": 0, "max": 0, "p95": 0, "p99": 0, "sum": 0, "count": 0}
 	}
 
 	min := h.Min
@@ -128,11 +128,13 @@ func (h *LatencyHistogram) GetStats() map[string]float64 {
 	}
 
 	return map[string]float64{
-		"avg": h.Sum / float64(h.Count),
-		"min": min,
-		"max": h.Max,
-		"p95": getPerc(95.0),
-		"p99": getPerc(99.0),
+		"avg":   h.Sum / float64(h.Count),
+		"min":   min,
+		"max":   h.Max,
+		"p95":   getPerc(95.0),
+		"p99":   getPerc(99.0),
+		"sum":   h.Sum,
+		"count": float64(h.Count),
 	}
 }
 
@@ -141,7 +143,7 @@ func (h *LatencyHistogram) GetStatsAndReset() map[string]float64 {
 	defer h.mu.Unlock()
 
 	if h.Count == 0 {
-		return map[string]float64{"avg": 0, "min": 0, "max": 0, "p95": 0, "p99": 0}
+		return map[string]float64{"avg": 0, "min": 0, "max": 0, "p95": 0, "p99": 0, "sum": 0, "count": 0}
 	}
 
 	min := h.Min
@@ -162,11 +164,13 @@ func (h *LatencyHistogram) GetStatsAndReset() map[string]float64 {
 	}
 
 	stats := map[string]float64{
-		"avg": h.Sum / float64(h.Count),
-		"min": min,
-		"max": h.Max,
-		"p95": getPerc(95.0),
-		"p99": getPerc(99.0),
+		"avg":   h.Sum / float64(h.Count),
+		"min":   min,
+		"max":   h.Max,
+		"p95":   getPerc(95.0),
+		"p99":   getPerc(99.0),
+		"sum":   h.Sum,
+		"count": float64(h.Count),
 	}
 
 	// Reset the histogram for the next interval
@@ -189,15 +193,22 @@ type Collector struct {
 	AggOps    uint64
 	TransOps  uint64
 
-	FindHist          *LatencyHistogram
-	InsertHist        *LatencyHistogram
-	UpsertHist        *LatencyHistogram
-	UpdateHist        *LatencyHistogram
-	DeleteHist        *LatencyHistogram
-	AggHist           *LatencyHistogram
-	TransHist         *LatencyHistogram
-	TotalHist         *LatencyHistogram
-	IntervalTotalHist *LatencyHistogram
+	FindHist           *LatencyHistogram
+	InsertHist         *LatencyHistogram
+	UpsertHist         *LatencyHistogram
+	UpdateHist         *LatencyHistogram
+	DeleteHist         *LatencyHistogram
+	AggHist            *LatencyHistogram
+	TransHist          *LatencyHistogram
+	TotalHist          *LatencyHistogram
+	IntervalFindHist   *LatencyHistogram
+	IntervalInsertHist *LatencyHistogram
+	IntervalUpsertHist *LatencyHistogram
+	IntervalUpdateHist *LatencyHistogram
+	IntervalDeleteHist *LatencyHistogram
+	IntervalAggHist    *LatencyHistogram
+	IntervalTransHist  *LatencyHistogram
+	IntervalTotalHist  *LatencyHistogram
 
 	CurrentIteration int
 
@@ -213,16 +224,23 @@ type Collector struct {
 
 func NewCollector() *Collector {
 	return &Collector{
-		FindHist:          &LatencyHistogram{Min: math.MaxFloat64},
-		InsertHist:        &LatencyHistogram{Min: math.MaxFloat64},
-		UpsertHist:        &LatencyHistogram{Min: math.MaxFloat64},
-		UpdateHist:        &LatencyHistogram{Min: math.MaxFloat64},
-		DeleteHist:        &LatencyHistogram{Min: math.MaxFloat64},
-		AggHist:           &LatencyHistogram{Min: math.MaxFloat64},
-		TransHist:         &LatencyHistogram{Min: math.MaxFloat64},
-		TotalHist:         &LatencyHistogram{Min: math.MaxFloat64},
-		IntervalTotalHist: &LatencyHistogram{Min: math.MaxFloat64},
-		startTime:         time.Now(),
+		FindHist:           &LatencyHistogram{Min: math.MaxFloat64},
+		InsertHist:         &LatencyHistogram{Min: math.MaxFloat64},
+		UpsertHist:         &LatencyHistogram{Min: math.MaxFloat64},
+		UpdateHist:         &LatencyHistogram{Min: math.MaxFloat64},
+		DeleteHist:         &LatencyHistogram{Min: math.MaxFloat64},
+		AggHist:            &LatencyHistogram{Min: math.MaxFloat64},
+		TransHist:          &LatencyHistogram{Min: math.MaxFloat64},
+		TotalHist:          &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalFindHist:   &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalInsertHist: &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalUpsertHist: &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalUpdateHist: &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalDeleteHist: &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalAggHist:    &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalTransHist:  &LatencyHistogram{Min: math.MaxFloat64},
+		IntervalTotalHist:  &LatencyHistogram{Min: math.MaxFloat64},
+		startTime:          time.Now(),
 	}
 }
 
@@ -234,24 +252,31 @@ func (c *Collector) Track(opType string, duration time.Duration) {
 	case "find":
 		atomic.AddUint64(&c.FindOps, 1)
 		c.FindHist.Record(ms)
+		c.IntervalFindHist.Record(ms)
 	case "insert":
 		atomic.AddUint64(&c.InsertOps, 1)
 		c.InsertHist.Record(ms)
+		c.IntervalInsertHist.Record(ms)
 	case "upsert":
 		atomic.AddUint64(&c.UpsertOps, 1)
 		c.UpsertHist.Record(ms)
+		c.IntervalUpsertHist.Record(ms)
 	case "update", "updateOne", "updateMany":
 		atomic.AddUint64(&c.UpdateOps, 1)
 		c.UpdateHist.Record(ms)
+		c.IntervalUpdateHist.Record(ms)
 	case "delete", "deleteOne", "deleteMany":
 		atomic.AddUint64(&c.DeleteOps, 1)
 		c.DeleteHist.Record(ms)
+		c.IntervalDeleteHist.Record(ms)
 	case "aggregate":
 		atomic.AddUint64(&c.AggOps, 1)
 		c.AggHist.Record(ms)
+		c.IntervalAggHist.Record(ms)
 	case "transaction":
 		atomic.AddUint64(&c.TransOps, 1)
 		c.TransHist.Record(ms)
+		c.IntervalTransHist.Record(ms)
 	}
 }
 
@@ -263,24 +288,31 @@ func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 	case "find":
 		atomic.AddUint64(&c.FindOps, uint64(count))
 		c.FindHist.RecordBatch(ms, count)
+		c.IntervalFindHist.RecordBatch(ms, count)
 	case "insert":
 		atomic.AddUint64(&c.InsertOps, uint64(count))
 		c.InsertHist.RecordBatch(ms, count)
+		c.IntervalInsertHist.RecordBatch(ms, count)
 	case "upsert":
 		atomic.AddUint64(&c.UpsertOps, uint64(count))
 		c.UpsertHist.RecordBatch(ms, count)
+		c.IntervalUpsertHist.RecordBatch(ms, count)
 	case "update", "updateOne", "updateMany":
 		atomic.AddUint64(&c.UpdateOps, uint64(count))
 		c.UpdateHist.RecordBatch(ms, count)
+		c.IntervalUpdateHist.RecordBatch(ms, count)
 	case "delete", "deleteOne", "deleteMany":
 		atomic.AddUint64(&c.DeleteOps, uint64(count))
 		c.DeleteHist.RecordBatch(ms, count)
+		c.IntervalDeleteHist.RecordBatch(ms, count)
 	case "aggregate":
 		atomic.AddUint64(&c.AggOps, uint64(count))
 		c.AggHist.RecordBatch(ms, count)
+		c.IntervalAggHist.RecordBatch(ms, count)
 	case "transaction":
 		atomic.AddUint64(&c.TransOps, uint64(count))
 		c.TransHist.RecordBatch(ms, count)
+		c.IntervalTransHist.RecordBatch(ms, count)
 	}
 }
 
@@ -321,12 +353,17 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 			csvWriter = csv.NewWriter(csvFile)
 
 			if needsHeader {
-				// Write the CSV Header row only if it's a new or empty file
 				csvWriter.Write([]string{
 					"Timestamp", "ElapsedSec",
-					"Select_OpsSec", "Insert_OpsSec", "Upsert_OpsSec",
-					"Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec",
-					"Lat_Avg_ms", "Lat_Min_ms", "Lat_Max_ms", "Lat_P95_ms", "Lat_P99_ms",
+					"Select_OpsSec", "Insert_OpsSec", "Upsert_OpsSec", "Update_OpsSec", "Delete_OpsSec", "Agg_OpsSec", "Trans_OpsSec",
+					"Total_Lat_Avg", "Total_Lat_P99",
+					"Select_Lat_Avg", "Select_Lat_P99",
+					"Insert_Lat_Avg", "Insert_Lat_P99",
+					"Upsert_Lat_Avg", "Upsert_Lat_P99",
+					"Update_Lat_Avg", "Update_Lat_P99",
+					"Delete_Lat_Avg", "Delete_Lat_P99",
+					"Agg_Lat_Avg", "Agg_Lat_P99",
+					"Trans_Lat_Avg", "Trans_Lat_P99",
 					"Iteration",
 				})
 				csvWriter.Flush()
@@ -377,7 +414,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 				currentUpdate := atomic.LoadUint64(&c.UpdateOps)
 				currentDelete := atomic.LoadUint64(&c.DeleteOps)
 				currentAgg := atomic.LoadUint64(&c.AggOps)
-				currentTrans := atomic.LoadUint64(&c.TransOps) // Fixed field name
+				currentTrans := atomic.LoadUint64(&c.TransOps)
 
 				// Calculate Ops/Sec for this specific window
 				rateFind := float64(currentFind-lastFind) / float64(refreshRateSec)
@@ -390,6 +427,14 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 
 				// Fetch cumulative latency stats at this exact point in time
 				latStats := c.IntervalTotalHist.GetStatsAndReset()
+				totLat := c.IntervalTotalHist.GetStatsAndReset()
+				fndLat := c.IntervalFindHist.GetStatsAndReset()
+				insLat := c.IntervalInsertHist.GetStatsAndReset()
+				upsLat := c.IntervalUpsertHist.GetStatsAndReset()
+				updLat := c.IntervalUpdateHist.GetStatsAndReset()
+				delLat := c.IntervalDeleteHist.GetStatsAndReset()
+				aggLat := c.IntervalAggHist.GetStatsAndReset()
+				trnLat := c.IntervalTransHist.GetStatsAndReset()
 
 				iter := c.CurrentIteration
 				if iter < 1 {
@@ -411,6 +456,14 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 					fmt.Sprintf("%.2f", latStats["max"]),
 					fmt.Sprintf("%.2f", latStats["p95"]),
 					fmt.Sprintf("%.2f", latStats["p99"]),
+					fmt.Sprintf("%.2f", totLat["avg"]), fmt.Sprintf("%.2f", totLat["p99"]),
+					fmt.Sprintf("%.2f", fndLat["avg"]), fmt.Sprintf("%.2f", fndLat["p99"]),
+					fmt.Sprintf("%.2f", insLat["avg"]), fmt.Sprintf("%.2f", insLat["p99"]),
+					fmt.Sprintf("%.2f", upsLat["avg"]), fmt.Sprintf("%.2f", upsLat["p99"]),
+					fmt.Sprintf("%.2f", updLat["avg"]), fmt.Sprintf("%.2f", updLat["p99"]),
+					fmt.Sprintf("%.2f", delLat["avg"]), fmt.Sprintf("%.2f", delLat["p99"]),
+					fmt.Sprintf("%.2f", aggLat["avg"]), fmt.Sprintf("%.2f", aggLat["p99"]),
+					fmt.Sprintf("%.2f", trnLat["avg"]), fmt.Sprintf("%.2f", trnLat["p99"]),
 					strconv.Itoa(iter),
 				})
 				csvWriter.Flush()

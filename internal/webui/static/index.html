@@ -1295,6 +1295,14 @@
         let targetSeconds = 0;
         let lastFormData = null;
         let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
+        let lastLat = {
+            total: { sum: 0, count: 0 },
+            find: { sum: 0, count: 0 },
+            insert: { sum: 0, count: 0 },
+            update: { sum: 0, count: 0 },
+            delete: { sum: 0, count: 0 },
+            aggregate: { sum: 0, count: 0 }
+        };
         let finalReportData = null;
 
         function parseDuration(str) {
@@ -1455,6 +1463,14 @@
                         histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
                         histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
                         lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
+                        lastLat = {
+                            total: { sum: 0, count: 0 },
+                            find: { sum: 0, count: 0 },
+                            insert: { sum: 0, count: 0 },
+                            update: { sum: 0, count: 0 },
+                            delete: { sum: 0, count: 0 },
+                            aggregate: { sum: 0, count: 0 }
+                        };
 
                         globalMarkers = [];
                         lastKnownIteration = 0;
@@ -1543,14 +1559,30 @@
                             const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
                             const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
 
-                            let tLatAvg = 0;
-                            if (rTotal > 0) {
-                                tLatAvg = ((rFind * (stats.findLatAvg || 0)) +
-                                    (rInsert * (stats.insertLatAvg || 0)) +
-                                    (rUpdate * (stats.updateLatAvg || 0)) +
-                                    (rDelete * (stats.deleteLatAvg || 0)) +
-                                    (rAggregate * (stats.aggLatAvg || 0))) / rTotal;
-                            }
+                            const calcIntervalAvg = (current, last) => {
+                                if (!current) return 0;
+                                const diffCount = (current.count || 0) - last.count;
+                                const diffSum = (current.sum || 0) - last.sum;
+                                last.count = current.count || 0;
+                                last.sum = current.sum || 0;
+                                return diffCount > 0 ? diffSum / diffCount : 0;
+                            };
+
+                            const intTotalLat = calcIntervalAvg(stats.distTotal, lastLat.total);
+                            const intFindLat = calcIntervalAvg(stats.distFind, lastLat.find);
+                            const intInsertLat = calcIntervalAvg(stats.distInsert, lastLat.insert);
+
+                            // Update and Upsert are combined in the UI ops, so combine their sums/counts
+                            const curUpdateSum = (stats.distUpdate?.sum || 0) + (stats.distUpsert?.sum || 0);
+                            const curUpdateCount = (stats.distUpdate?.count || 0) + (stats.distUpsert?.count || 0);
+                            const diffUpdateCount = curUpdateCount - lastLat.update.count;
+                            const diffUpdateSum = curUpdateSum - lastLat.update.sum;
+                            lastLat.update.count = curUpdateCount;
+                            lastLat.update.sum = curUpdateSum;
+                            const intUpdateLat = diffUpdateCount > 0 ? diffUpdateSum / diffUpdateCount : 0;
+
+                            const intDeleteLat = calcIntervalAvg(stats.distDelete, lastLat.delete);
+                            const intAggLat = calcIntervalAvg(stats.distAgg, lastLat.aggregate);
 
                             lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
 
@@ -1580,12 +1612,12 @@
                             histTotals.delete.push(cDelete);
                             histTotals.aggregate.push(cAggregate);
 
-                            histLats.total.push(tLatAvg);
-                            histLats.find.push(rFind > 0 ? (stats.findLatAvg || 0) : 0);
-                            histLats.insert.push(rInsert > 0 ? (stats.insertLatAvg || 0) : 0);
-                            histLats.update.push(rUpdate > 0 ? (stats.updateLatAvg || 0) : 0);
-                            histLats.delete.push(rDelete > 0 ? (stats.deleteLatAvg || 0) : 0);
-                            histLats.aggregate.push(rAggregate > 0 ? (stats.aggLatAvg || 0) : 0);
+                            histLats.total.push(intTotalLat);
+                            histLats.find.push(intFindLat);
+                            histLats.insert.push(intInsertLat);
+                            histLats.update.push(intUpdateLat);
+                            histLats.delete.push(intDeleteLat);
+                            histLats.aggregate.push(intAggLat);
 
                             const maxIdx = histRates.find.length - 1;
                             const scrubber = document.getElementById('timeScrubber');
