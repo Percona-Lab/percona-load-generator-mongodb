@@ -64,7 +64,3 @@ go test ./...
 go test -tags=integration ./internal/mongo -run TestRunWorkloadIntegration_OneShotExecutesFindUpdateAndSkipsInsert -v
 ```
 
-## CI Notes (Optional)
-
-- Keep `go test ./...` as the required fast gate.
-- Run `-tags=integration` tests in a separate optional/extended CI job with Docker services.
