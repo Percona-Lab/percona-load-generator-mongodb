@@ -1,0 +1,12 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: plgm-it-mongo
+    ports:
+      - "30777:27017"
+    command: ["--bind_ip_all"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 2s
+      timeout: 2s
+      retries: 20

@@ -83,6 +83,10 @@ Download the [`config.yaml`](./config.yaml) and make the necessary adjustments.
   ./bin/plgm --webui
   ```
 
+### 4. Testing
+
+For unit and integration test instructions (including Docker-based MongoDB setup), see [`TESTING.md`](./TESTING.md).
+
 ## The Interactive UI
 
 `plgm` features a completely embedded Web UI. It allows you to configure your database connection, upload custom workload schemas, adjust operation ratios, and monitor real-time throughput and latency without ever touching a YAML file. It has the same functionality as the CLI version, but with an awesome UI.

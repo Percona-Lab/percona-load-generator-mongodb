@@ -49,6 +49,18 @@ type WebServer struct {
 	IntervalStr      string
 }
 
+var (
+	loadCollectionsFn   = config.LoadCollections
+	loadQueriesFn       = config.LoadQueries
+	connectFn           = db.Connect
+	disconnectFn        = func(c *db.Connection, ctx context.Context) { c.Disconnect(ctx) }
+	createCollectionsFn = mongo.CreateCollectionsFromConfig
+	createIndexesFn     = mongo.CreateIndexesFromConfig
+	insertRandomDocsFn  = mongo.InsertRandomDocuments
+	runWorkloadFn       = mongo.RunWorkload
+	runRawInjectorFn    = benchmark.RunRawInjector
+)
+
 func NewServer(cfg *config.AppConfig) *WebServer {
 	return &WebServer{
 		AppConfig: cfg,
@@ -325,7 +337,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			dbName = "plgm_injector"
 		}
 
-		benchConn, connectErr := db.Connect(ctx, cfg, dbName)
+		benchConn, connectErr := connectFn(ctx, cfg, dbName)
 		if connectErr != nil {
 			s.abortRun("Database connection failed: " + connectErr.Error())
 			cancel()
@@ -350,7 +362,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 		go func() {
-			defer benchConn.Disconnect(context.Background())
+			defer disconnectFn(benchConn, context.Background())
 			defer func() {
 				s.mu.Lock()
 				s.IsRunning = false
@@ -370,7 +382,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				s.CurrentStats.CurrentIteration = i
 				s.mu.Unlock()
 
-				if err := benchmark.RunRawInjector(ctx, benchConn.Database, cfg, s.CurrentStats); err != nil {
+				if err := runRawInjectorFn(ctx, benchConn.Database, cfg, s.CurrentStats); err != nil {
 					if err != context.Canceled {
 						msg := fmt.Sprintf("Injector Runtime Error: %v", err)
 						log.Println("UI Run Error:", msg)
@@ -405,7 +417,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if customCollections != nil {
 		collectionsCfg = customCollections
 	} else {
-		collectionsCfg, loadErr = config.LoadCollections(cfg.CollectionsPath, cfg.DefaultWorkload)
+		collectionsCfg, loadErr = loadCollectionsFn(cfg.CollectionsPath, cfg.DefaultWorkload)
 		if loadErr != nil {
 			s.abortRun("Failed to load collections: " + loadErr.Error())
 			cancel()
@@ -419,7 +431,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if customQueries != nil {
 		queriesCfg = customQueries
 	} else {
-		queriesCfg, loadErr = config.LoadQueries(cfg.QueriesPath, cfg.DefaultWorkload)
+		queriesCfg, loadErr = loadQueriesFn(cfg.QueriesPath, cfg.DefaultWorkload)
 		if loadErr != nil {
 			s.abortRun("Failed to load queries: " + loadErr.Error())
 			cancel()
@@ -451,7 +463,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	queriesCfg.Queries = filteredQueries
 	dbName := collectionsCfg.Collections[0].DatabaseName
 
-	benchConn, connectErr := db.Connect(ctx, cfg, dbName)
+	benchConn, connectErr := connectFn(ctx, cfg, dbName)
 	if connectErr != nil {
 		s.abortRun("Database connection failed: " + connectErr.Error())
 		cancel()
@@ -476,14 +488,14 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 	go func() {
-		defer benchConn.Disconnect(context.Background())
+		defer disconnectFn(benchConn, context.Background())
 		defer func() {
 			s.mu.Lock()
 			s.IsRunning = false
 			s.mu.Unlock()
 		}()
 
-		if err := mongo.CreateCollectionsFromConfig(ctx, benchConn.Database, collectionsCfg, cfg.DropCollections); err != nil {
+		if err := createCollectionsFn(ctx, benchConn.Database, collectionsCfg, cfg.DropCollections); err != nil {
 			msg := fmt.Sprintf("Failed to create collections: %v", err)
 			log.Println("UI Run Error:", msg)
 			s.mu.Lock()
@@ -491,7 +503,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 			return
 		}
-		if err := mongo.CreateIndexesFromConfig(ctx, benchConn.Database, collectionsCfg); err != nil {
+		if err := createIndexesFn(ctx, benchConn.Database, collectionsCfg); err != nil {
 			msg := fmt.Sprintf("Failed to create indexes: %v", err)
 			log.Println("UI Run Error:", msg)
 			s.mu.Lock()
@@ -502,7 +514,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 		if !cfg.SkipSeed && cfg.DocumentsCount > 0 {
 			for _, col := range collectionsCfg.Collections {
-				if err := mongo.InsertRandomDocuments(ctx, benchConn.Database, col, cfg.DocumentsCount, cfg); err != nil {
+				if err := insertRandomDocsFn(ctx, benchConn.Database, col, cfg.DocumentsCount, cfg); err != nil {
 					msg := fmt.Sprintf("Failed during data seeding: %v", err)
 					log.Println("UI Run Error:", msg)
 					s.mu.Lock()
@@ -526,7 +538,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			s.CurrentStats.CurrentIteration = i
 			s.mu.Unlock()
 
-			if err := mongo.RunWorkload(ctx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
+			if err := runWorkloadFn(ctx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
 				if err != context.Canceled {
 					msg := fmt.Sprintf("Workload crashed: %v", err)
 					log.Println("UI Run Error:", msg)

@@ -57,6 +57,14 @@ var InsertDocumentCache chan map[string]interface{}
 
 var operationTypes = []string{"find", "update", "delete", "insert", "insertMany", "aggregate", "transaction"}
 
+var (
+	ensureGenericShardingFn = ensureGenericSharding
+	runAllQueriesOnceFn     = runAllQueriesOnce
+	runContinuousWorkloadFn = runContinuousWorkload
+	getPrimaryFilterFieldFn = getPrimaryFilterField
+	executeQueryOnceFn      = executeQueryOnce
+)
+
 func buildRawInt64Array(ids []int64) []byte {
 	var buf bytes.Buffer
 	buf.Write(make([]byte, 4))
@@ -617,7 +625,7 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 	}
 
 	for _, col := range collections {
-		if err := ensureGenericSharding(ctx, db, col, cfg); err != nil {
+		if err := ensureGenericShardingFn(ctx, db, col, cfg); err != nil {
 			log.Printf("Sharding setup warning for %s: %v", col.Name, err)
 		}
 	}
@@ -630,7 +638,7 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 	}
 
 	if duration <= 0 {
-		return runAllQueriesOnce(ctx, db, queries, cfg.DebugMode)
+		return runAllQueriesOnceFn(ctx, db, queries, cfg.DebugMode)
 	}
 
 	findBatch := int32(cfg.FindBatchSize)
@@ -647,7 +655,7 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		qMap[q.Operation] = append(qMap[q.Operation], q)
 	}
 
-	cachedFilterField := getPrimaryFilterField(ctx, db, collections[0])
+	cachedFilterField := getPrimaryFilterFieldFn(ctx, db, collections[0])
 
 	wCfg := workloadConfig{
 		database:    db,
@@ -673,7 +681,7 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		collector:          collector,
 	}
 
-	return runContinuousWorkload(ctx, wCfg)
+	return runContinuousWorkloadFn(ctx, wCfg)
 }
 
 func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
@@ -725,24 +733,29 @@ func runAllQueriesOnce(ctx context.Context, db *mongo.Database, queries []config
 
 func queryWorkerOnce(ctx context.Context, id int, tasks <-chan *queryTask, wg *sync.WaitGroup) {
 	defer wg.Done()
-	dbOpCtx := context.Background()
 	for task := range tasks {
 		q := task.definition
-		coll := task.database.Client().Database(q.Database).Collection(q.Collection)
-		if q.Database == "" {
-			coll = task.database.Collection(q.Collection)
-		}
 		filter := cloneMap(q.Filter)
 		processRecursive(filter, task.rng)
-		switch q.Operation {
-		case "find":
-			cursor, _ := coll.Find(dbOpCtx, filter)
-			if cursor != nil {
-				cursor.Close(dbOpCtx)
-			}
-		case "updateOne":
-			coll.UpdateOne(dbOpCtx, filter, q.Update)
+		executeQueryOnceFn(ctx, task.database, q, filter)
+	}
+}
+
+func executeQueryOnce(ctx context.Context, database *mongo.Database, q config.QueryDefinition, filter map[string]interface{}) {
+	dbOpCtx := context.Background()
+	coll := database.Client().Database(q.Database).Collection(q.Collection)
+	if q.Database == "" {
+		coll = database.Collection(q.Collection)
+	}
+
+	switch q.Operation {
+	case "find":
+		cursor, _ := coll.Find(dbOpCtx, filter)
+		if cursor != nil {
+			cursor.Close(dbOpCtx)
 		}
+	case "updateOne":
+		coll.UpdateOne(dbOpCtx, filter, q.Update)
 	}
 }
 

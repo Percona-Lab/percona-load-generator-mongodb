@@ -318,14 +318,19 @@ func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 
 const monitorLayout = " %-7s | %9s | %7s | %7s | %7s | %7s | %7s | %6s | %5s\n"
 
+var monitorTickerFactory = func(d time.Duration) (<-chan time.Time, func()) {
+	t := time.NewTicker(d)
+	return t.C, t.Stop
+}
+
 func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrency int, csvEnabled bool, csvAppend bool, csvPath string, silent ...bool) {
 	isSilent := false
 	if len(silent) > 0 {
 		isSilent = silent[0]
 	}
 
-	ticker := time.NewTicker(time.Duration(refreshRateSec) * time.Second)
-	defer ticker.Stop()
+	tickerC, stopTicker := monitorTickerFactory(time.Duration(refreshRateSec) * time.Second)
+	defer stopTicker()
 
 	// --- CSV EXPORT SETUP ---
 	var csvFile *os.File
@@ -347,7 +352,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 		}
 
 		if err != nil {
-			fmt.Println(logger.RedString(fmt.Sprintf("> Warning: Failed to open CSV export file: %v", err)))
+			fmt.Println(logger.RedString("> Warning: Failed to open CSV export file: %v", err))
 		} else {
 			defer csvFile.Close()
 			csvWriter = csv.NewWriter(csvFile)
@@ -369,7 +374,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 		fmt.Println()
 		fmt.Println(logger.GreenString("> Starting Workload..."))
 		header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPSERT", "UPDATE", "DELETE", "AGG", "TRANS")
-		fmt.Print(logger.BoldString(header))
+		fmt.Print(logger.BoldString("%s", header))
 		fmt.Println(logger.CyanString(" -----------------------------------------------------------------------------------------"))
 	} else {
 		fmt.Println()
@@ -391,7 +396,7 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 		select {
 		case <-done:
 			return
-		case <-ticker.C:
+		case <-tickerC:
 			if !isSilent {
 				c.printInterval()
 			}
@@ -495,7 +500,7 @@ func (c *Collector) printInterval() {
 	elapsed := time.Since(c.startTime).Truncate(time.Second)
 	elapsedStr := fmt.Sprintf("%02d:%02d", int(elapsed.Minutes()), int(elapsed.Seconds())%60)
 
-	totalOpsFormatted := logger.BoldString(fmt.Sprintf("%9s", formatInt(int64(totalDelta))))
+	totalOpsFormatted := logger.BoldString("%9s", formatInt(int64(totalDelta)))
 
 	fmt.Printf(monitorLayout,
 		elapsedStr,
@@ -536,14 +541,14 @@ func (c *Collector) PrintFinalSummary(duration time.Duration, silent ...bool) {
 	if seconds > 0 {
 		avgRate = float64(totalOps) / seconds
 	}
-	fmt.Fprintf(w, "  Avg Rate:\t%s ops/sec\n", logger.BoldString(formatInt(int64(avgRate))))
+	fmt.Fprintf(w, "  Avg Rate:\t%s ops/sec\n", logger.BoldString("%s", formatInt(int64(avgRate))))
 	w.Flush()
 
 	fmt.Println()
 	fmt.Println(logger.BoldString("  LATENCY DISTRIBUTION (ms)"))
 	fmt.Println(logger.CyanString("  --------------------------------------------------"))
 	const layout = "  %-7s   %10s   %10s   %10s   %10s   %10s"
-	fmt.Println(logger.BoldString(fmt.Sprintf(layout, "TYPE", "AVG", "MIN", "MAX", "P95", "P99")))
+	fmt.Println(logger.BoldString("%s", fmt.Sprintf(layout, "TYPE", "AVG", "MIN", "MAX", "P95", "P99")))
 	printLatencyRow(layout, "SELECT", c.FindHist)
 	printLatencyRow(layout, "INSERT", c.InsertHist)
 	printLatencyRow(layout, "UPSERT", c.UpsertHist)
