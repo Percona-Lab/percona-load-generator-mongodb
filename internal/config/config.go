@@ -53,6 +53,15 @@ type AppConfig struct {
 	CSVExportEnabled bool   `yaml:"csv_export_enabled"`
 	CSVExportAppend  bool   `yaml:"csv_export_append"`
 	CSVExportPath    string `yaml:"csv_export_path"`
+
+	InsightsEnabled          bool    `yaml:"insights_enabled"`
+	InsightsSamplingRate     float64 `yaml:"insights_sampling_rate"`
+	InsightsSlowThresholdMs  int     `yaml:"insights_slow_threshold_ms"`
+	InsightsMaxEvents        int     `yaml:"insights_max_events"`
+	InsightsMaxGroups        int     `yaml:"insights_max_groups"`
+	InsightsExplainEnabled   bool    `yaml:"insights_explain_enabled"`
+	InsightsExplainTopN      int     `yaml:"insights_explain_top_n"`
+	InsightsExplainMaxTimeMS int     `yaml:"insights_explain_max_time_ms"`
 }
 
 type WebUIConfig struct {
@@ -150,6 +159,16 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.CSVExportEnabled = false
 	cfg.CSVExportAppend = false
 	cfg.CSVExportPath = "plgm_metrics_export.csv"
+
+	// --- INSIGHTS DEFAULTS ---
+	cfg.InsightsEnabled = true
+	cfg.InsightsSamplingRate = 0.10
+	cfg.InsightsSlowThresholdMs = 200
+	cfg.InsightsMaxEvents = 5000
+	cfg.InsightsMaxGroups = 300
+	cfg.InsightsExplainEnabled = false
+	cfg.InsightsExplainTopN = 5
+	cfg.InsightsExplainMaxTimeMS = 1000
 }
 
 // applyBaseDefaults sets low-level engine safety limits & remaining UI limits
@@ -165,6 +184,25 @@ func applyBaseDefaults(cfg *AppConfig) {
 
 	if cfg.CSVExportEnabled && cfg.CSVExportPath == "" {
 		cfg.CSVExportPath = "plgm_metrics_export.csv"
+	}
+
+	if cfg.InsightsSamplingRate <= 0 || cfg.InsightsSamplingRate > 1 {
+		cfg.InsightsSamplingRate = 0.10
+	}
+	if cfg.InsightsSlowThresholdMs <= 0 {
+		cfg.InsightsSlowThresholdMs = 200
+	}
+	if cfg.InsightsMaxEvents <= 0 {
+		cfg.InsightsMaxEvents = 5000
+	}
+	if cfg.InsightsMaxGroups <= 0 {
+		cfg.InsightsMaxGroups = 300
+	}
+	if cfg.InsightsExplainTopN <= 0 {
+		cfg.InsightsExplainTopN = 5
+	}
+	if cfg.InsightsExplainMaxTimeMS <= 0 {
+		cfg.InsightsExplainMaxTimeMS = 1000
 	}
 
 	// Web UI Port
@@ -485,6 +523,48 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_WEBUI_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.WebUI.Port = n
+		}
+	}
+
+	// --- Insights Overrides ---
+	if v := os.Getenv("PLGM_INSIGHTS_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.InsightsEnabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_SAMPLING_RATE"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f <= 1 {
+			cfg.InsightsSamplingRate = f
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_SLOW_THRESHOLD_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsSlowThresholdMs = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_MAX_EVENTS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsMaxEvents = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_MAX_GROUPS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsMaxGroups = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.InsightsExplainEnabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_TOP_N"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsExplainTopN = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsExplainMaxTimeMS = n
 		}
 	}
 

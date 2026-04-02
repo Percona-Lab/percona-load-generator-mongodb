@@ -439,6 +439,124 @@
             color: #cbd5e1;
         }
 
+        .latency-toggles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .line-style-key {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .line-style-key-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .line-style-key-swatch {
+            width: 22px;
+            height: 0;
+            border-top: 2px solid var(--p-night);
+            display: inline-block;
+        }
+
+        .line-style-key-swatch.dashed {
+            border-top-style: dashed;
+        }
+
+        .line-style-key-swatch.dash-dot {
+            border-top: none;
+            height: 2px;
+            background-image: repeating-linear-gradient(
+                to right,
+                var(--p-night) 0 8px,
+                transparent 8px 12px,
+                var(--p-night) 12px 14px,
+                transparent 14px 18px
+            );
+        }
+
+        .insights-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .insights-pill {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            border-radius: 999px;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            background: #f8fafc;
+        }
+
+        .insights-pill.pending {
+            border-color: #f59e0b;
+            color: #92400e;
+            background: #fffbeb;
+        }
+
+        .insights-pill.ready {
+            border-color: var(--p-forest);
+            color: #065f46;
+            background: #ecfdf5;
+        }
+
+        .insights-pill.empty {
+            border-color: #cbd5e1;
+            color: #475569;
+            background: #f8fafc;
+        }
+
+        .insights-pill.disabled {
+            border-color: #cbd5e1;
+            color: #64748b;
+            background: #f8fafc;
+        }
+
+        .toggle-chip {
+            border: 1px solid var(--border);
+            background: #f8fafc;
+            color: var(--text-secondary);
+            border-radius: 999px;
+            font-size: 11px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            transition: all 0.15s ease;
+        }
+
+        .toggle-chip.active {
+            background: var(--p-night);
+            color: #fff;
+            border-color: var(--p-night);
+        }
+
+        .toggle-chip.total.active { background: var(--p-night); border-color: var(--p-night); }
+        .toggle-chip.find.active { background: var(--p-sky); border-color: var(--p-sky); }
+        .toggle-chip.insert.active { background: var(--p-aqua); border-color: var(--p-aqua); }
+        .toggle-chip.update.active { background: var(--p-sunrise); border-color: var(--p-sunrise); color: #1f2937; }
+        .toggle-chip.delete.active { background: var(--p-amethyst); border-color: var(--p-amethyst); }
+        .toggle-chip.aggregate.active { background: var(--p-pink); border-color: var(--p-pink); }
+        .toggle-chip.transaction.active { background: var(--p-night); border-color: var(--p-night); }
+
         /* TIME MACHINE SCRUBBER */
         .time-machine-bar {
             display: flex;
@@ -650,6 +768,36 @@
                 </div>
             </div>
 
+            <div class="mat-card" style="height: 380px;">
+                <div class="mat-card-title">LATENCY PERCENTILE TIMELINE (MS)</div>
+                <div class="latency-toggles">
+                    <button type="button" id="toggleMetricAvg" class="toggle-chip active" onclick="toggleLatencyMetric('avg')">Avg</button>
+                    <button type="button" id="toggleMetricP95" class="toggle-chip" onclick="toggleLatencyMetric('p95')">P95</button>
+                    <button type="button" id="toggleMetricP99" class="toggle-chip active" onclick="toggleLatencyMetric('p99')">P99</button>
+                    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;"></span>
+                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('all')">All</button>
+                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('none')">None</button>
+                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('total')">Only Total</button>
+                    <div class="line-style-key">
+                        <span class="line-style-key-item"><span class="line-style-key-swatch"></span>Solid = Avg</span>
+                        <span class="line-style-key-item"><span class="line-style-key-swatch dash-dot"></span>Dash-dot = P95</span>
+                        <span class="line-style-key-item"><span class="line-style-key-swatch dashed"></span>Dashed = P99</span>
+                    </div>
+                </div>
+                <div class="latency-toggles" style="margin-bottom: 8px;">
+                    <button type="button" id="toggleOpTotal" class="toggle-chip total active" onclick="toggleLatencyOp('total')">Total</button>
+                    <button type="button" id="toggleOpFind" class="toggle-chip find" onclick="toggleLatencyOp('find')">Find</button>
+                    <button type="button" id="toggleOpInsert" class="toggle-chip insert" onclick="toggleLatencyOp('insert')">Insert</button>
+                    <button type="button" id="toggleOpUpdate" class="toggle-chip update" onclick="toggleLatencyOp('update')">Update</button>
+                    <button type="button" id="toggleOpDelete" class="toggle-chip delete" onclick="toggleLatencyOp('delete')">Delete</button>
+                    <button type="button" id="toggleOpAggregate" class="toggle-chip aggregate" onclick="toggleLatencyOp('aggregate')">Aggregate</button>
+                    <button type="button" id="toggleOpTransaction" class="toggle-chip transaction" onclick="toggleLatencyOp('transaction')">Transaction</button>
+                </div>
+                <div style="position: relative; height: 280px; width: 100%;">
+                    <canvas id="latencyTimelineChart"></canvas>
+                </div>
+            </div>
+
             <div class="mat-card" style="margin-bottom: 16px; padding: 0;">
                 <div class="mat-card-title" style="padding: 16px 20px 0 20px; margin-bottom: 12px;">Cumulative Latency
                     Distribution
@@ -732,24 +880,72 @@
                 <button type="button" class="btn btn-danger" onclick="stopWorkload()">Stop Workload</button>
             </div>
 
-            <div id="finishActions" style="display: none; text-align: right; margin-top: 8px;">
-                <button type="button" class="btn btn-secondary" onclick="downloadSummaryReport()"
-                    style="margin-right: auto; float: left;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round"
-                        style="vertical-align: text-bottom; margin-right: 4px;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download Summary
-                </button>
+            <div id="insightsPanel" class="mat-card" style="display:none; margin-top: 16px;">
+                <div class="insights-header">
+                    <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN SLOW QUERY & INDEX ANALYSIS</div>
+                    <span id="insightsPill" class="insights-pill pending">Pending</span>
+                </div>
+                <div id="insightsStatus" style="font-size:12px; color: var(--text-secondary); margin-bottom: 10px;"></div>
+                <div class="latency-toggles" style="margin-bottom: 10px;">
+                    <button type="button" id="insTabOverviewBtn" class="toggle-chip active" onclick="showInsightsTab('overview')">Overview</button>
+                    <button type="button" id="insTabIterBtn" class="toggle-chip" onclick="showInsightsTab('iteration')">Iterations</button>
+                    <button type="button" id="insTabTimelineBtn" class="toggle-chip" onclick="showInsightsTab('timeline')">Timeline</button>
+                </div>
 
-                <button type="button" class="btn btn-flat" onclick="showConfigure()"
-                    style="border: 1px solid var(--p-stone); color: var(--p-night);">Configure Settings</button>
+                <div id="insightsTabOverview">
+                    <div id="insightsTopFindings" style="margin-bottom: 12px;"></div>
+                    <div class="grid-2" style="gap: 16px;">
+                        <div>
+                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">SLOW QUERIES</div>
+                            <div id="insightsSlowQueries"></div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">AFFECTED COLLECTIONS</div>
+                            <div id="insightsCollections"></div>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="gap: 16px; margin-top: 14px;">
+                        <div>
+                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">POTENTIAL INDEX ISSUES</div>
+                            <div id="insightsIndexIssues"></div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">RECOMMENDED ACTIONS</div>
+                            <div id="insightsRecommendations"></div>
+                        </div>
+                    </div>
+                </div>
 
-                <button type="button" class="btn btn-primary" onclick="runAgain()" style="margin-left: 10px;">Run
-                    Again</button>
+                <div id="insightsTabIteration" style="display:none;">
+                    <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">PER-ITERATION OVERLAY</div>
+                    <div id="insightsPerIteration"></div>
+                </div>
+
+                <div id="insightsTabTimeline" style="display:none;">
+                    <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">TIME-SLICED DRILL-DOWN</div>
+                    <div id="insightsTimeSlices"></div>
+                </div>
+            </div>
+
+            <div id="finishActions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary" onclick="downloadSummaryReport()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round"
+                            style="vertical-align: text-bottom; margin-right: 4px;">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download Summary
+                    </button>
+
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-flat" onclick="showConfigure()"
+                            style="border: 1px solid var(--p-stone); color: var(--p-night);">Configure Settings</button>
+                        <button type="button" class="btn btn-primary" onclick="runAgain()">Run Again</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -905,6 +1101,45 @@
                     <div class="form-group" style="margin-bottom: 0;">
                         <label>CSV Export Path & Filename</label>
                         <input type="text" name="csv_export_path" placeholder="plgm_metrics_export.csv">
+                    </div>
+                </div>
+
+                <div class="grid-2" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
+                            <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true">
+                            <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling (Optional)</label>
+                        </div>
+                    </div>
+                    <div class="grid-2" style="gap: 12px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Insights Sampling Rate (0-1)</label>
+                            <input type="number" name="insights_sampling_rate" min="0.01" max="1" step="0.01" value="0.10">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Slow Threshold (ms)</label>
+                            <input type="number" name="insights_slow_threshold_ms" min="1" step="1" value="200">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Max Retained Events</label>
+                            <input type="number" name="insights_max_events" min="100" step="100" value="5000">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Max Group Entries</label>
+                            <input type="number" name="insights_max_groups" min="50" step="10" value="300">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Explain Top N Shapes</label>
+                            <input type="number" name="insights_explain_top_n" min="1" step="1" value="5">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Explain Max Time (ms)</label>
+                            <input type="number" name="insights_explain_max_time_ms" min="100" step="100" value="1000">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1077,14 +1312,126 @@
             document.getElementById('errorModal').style.display = 'none';
         }
 
+        const latencyOps = ['total', 'find', 'insert', 'update', 'delete', 'aggregate', 'transaction'];
+        const latencyOpMeta = {
+            total: { label: 'Total', color: colors.night },
+            find: { label: 'Find', color: colors.sky },
+            insert: { label: 'Insert', color: colors.aqua },
+            update: { label: 'Update', color: colors.sunrise },
+            delete: { label: 'Delete', color: colors.amethyst },
+            aggregate: { label: 'Aggregate', color: colors.pink },
+            transaction: { label: 'Transaction', color: colors.night }
+        };
+
         let histLabels = [];
         let histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
         let histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+        let histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+        let histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+        let histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+
+        let latencyMetricVisibility = { avg: true, p95: false, p99: true };
+        let latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
         let isLiveMode = true;
 
-        let throughputChart, latencyChart, donutChart;
+        let throughputChart, latencyChart, latencyTimelineChart, donutChart;
         let sparkCharts = {};
+
+        function updateLatencyToggleUI() {
+            const metricButtons = { avg: 'toggleMetricAvg', p95: 'toggleMetricP95', p99: 'toggleMetricP99' };
+            Object.keys(metricButtons).forEach(metric => {
+                const el = document.getElementById(metricButtons[metric]);
+                if (!el) return;
+                el.classList.toggle('active', !!latencyMetricVisibility[metric]);
+            });
+
+            latencyOps.forEach(op => {
+                const el = document.getElementById('toggleOp' + op.charAt(0).toUpperCase() + op.slice(1));
+                if (!el) return;
+                el.classList.toggle('active', !!latencyOpVisibility[op]);
+            });
+        }
+
+        function toggleLatencyMetric(metric) {
+            latencyMetricVisibility[metric] = !latencyMetricVisibility[metric];
+            updateLatencyToggleUI();
+            const scrubber = document.getElementById('timeScrubber');
+            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
+        }
+
+        function toggleLatencyOp(op) {
+            latencyOpVisibility[op] = !latencyOpVisibility[op];
+            updateLatencyToggleUI();
+            const scrubber = document.getElementById('timeScrubber');
+            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
+        }
+
+        function setLatencyQuickFilter(mode) {
+            if (mode === 'all') {
+                latencyOps.forEach(op => latencyOpVisibility[op] = true);
+            } else if (mode === 'none') {
+                latencyOps.forEach(op => latencyOpVisibility[op] = false);
+            } else if (mode === 'total') {
+                latencyOps.forEach(op => latencyOpVisibility[op] = (op === 'total'));
+            }
+            updateLatencyToggleUI();
+            const scrubber = document.getElementById('timeScrubber');
+            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
+        }
+
+        function buildLatencyTimelineDatasets(start, endIndex) {
+            const datasets = [];
+            const getSlice = (arr) => arr.slice(start, endIndex + 1);
+
+            latencyOps.forEach(op => {
+                if (!latencyOpVisibility[op]) return;
+                const meta = latencyOpMeta[op];
+                if (latencyMetricVisibility.avg) {
+                    datasets.push({
+                        label: `${meta.label} Avg (Solid)`,
+                        data: getSlice(histLatTimelineAvg[op]),
+                        borderColor: meta.color,
+                        backgroundColor: meta.color,
+                        borderWidth: op === 'total' ? 2.5 : 2,
+                        tension: 0.35,
+                        pointRadius: 0,
+                        hoverRadius: 4,
+                        spanGaps: true,
+                        borderDash: []
+                    });
+                }
+                if (latencyMetricVisibility.p95) {
+                    datasets.push({
+                        label: `${meta.label} P95 (Dash-dot)`,
+                        data: getSlice(histLatTimelineP95[op]),
+                        borderColor: meta.color,
+                        backgroundColor: meta.color,
+                        borderWidth: op === 'total' ? 2.5 : 2,
+                        tension: 0.35,
+                        pointRadius: 0,
+                        hoverRadius: 4,
+                        spanGaps: true,
+                        borderDash: [8, 4, 2, 4]
+                    });
+                }
+                if (latencyMetricVisibility.p99) {
+                    datasets.push({
+                        label: `${meta.label} P99 (Dashed)`,
+                        data: getSlice(histLatTimelineP99[op]),
+                        borderColor: meta.color,
+                        backgroundColor: meta.color,
+                        borderWidth: op === 'total' ? 2.5 : 2,
+                        tension: 0.35,
+                        pointRadius: 0,
+                        hoverRadius: 4,
+                        spanGaps: true,
+                        borderDash: [6, 4]
+                    });
+                }
+            });
+            return datasets;
+        }
 
         const handleCrossHover = (sourceChartId) => {
             return (e, activeEls, chart) => {
@@ -1170,6 +1517,35 @@
                 plugins: [verticalLinePlugin]
             });
 
+            latencyTimelineChart = new Chart(document.getElementById('latencyTimelineChart'), {
+                type: 'line',
+                data: {
+                    labels: Array(WINDOW_SIZE).fill(''),
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: (items) => items && items.length ? `Time: ${items[0].label}` : '',
+                                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y || 0).toFixed(2)} ms`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 11 } } },
+                        y: { beginAtZero: true, grid: { color: '#e2e8f0' }, title: { display: true, text: 'ms' } }
+                    }
+                }
+            });
+
             donutChart = new Chart(document.getElementById('donutChart'), {
                 type: 'doughnut',
                 data: {
@@ -1184,7 +1560,7 @@
             });
 
             const clearHovers = () => {
-                [throughputChart, latencyChart].forEach(c => {
+                [throughputChart, latencyChart, latencyTimelineChart].forEach(c => {
                     if (c) {
                         c.setActiveElements([]);
                         c.tooltip.setActiveElements([], { x: 0, y: 0 });
@@ -1194,6 +1570,8 @@
             };
             document.getElementById('throughputChart').addEventListener('mouseleave', clearHovers);
             document.getElementById('latencyChart').addEventListener('mouseleave', clearHovers);
+            document.getElementById('latencyTimelineChart').addEventListener('mouseleave', clearHovers);
+            updateLatencyToggleUI();
         }
 
         function renderChartsAt(endIndex) {
@@ -1228,6 +1606,10 @@
                 latencyChart.data.datasets[4].data = getSlice(histLats.delete);
                 latencyChart.data.datasets[5].data = getSlice(histLats.aggregate);
                 latencyChart.update();
+
+                latencyTimelineChart.data.labels = labelsSlice;
+                latencyTimelineChart.data.datasets = buildLatencyTimelineDatasets(start, endIndex);
+                latencyTimelineChart.update();
 
                 sparkCharts.total.data.datasets[0].data = getSlice(histRates.total); sparkCharts.total.update();
                 sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
@@ -1304,6 +1686,7 @@
             aggregate: { sum: 0, count: 0 }
         };
         let finalReportData = null;
+        let finalInsightsData = null;
 
         function parseDuration(str) {
             if (!str) return 60;
@@ -1392,6 +1775,14 @@
                 document.getElementById('csvExport').checked = cfg.CSVExportEnabled || false;
                 document.getElementById('csvAppend').checked = cfg.CSVExportAppend || false;
                 document.querySelector('[name="csv_export_path"]').value = cfg.CSVExportPath || 'plgm_metrics_export.csv';
+                document.getElementById('insightsEnabled').checked = (cfg.InsightsEnabled !== undefined) ? !!cfg.InsightsEnabled : true;
+                document.querySelector('[name="insights_sampling_rate"]').value = cfg.InsightsSamplingRate || 0.10;
+                document.querySelector('[name="insights_slow_threshold_ms"]').value = cfg.InsightsSlowThresholdMs || 200;
+                document.querySelector('[name="insights_max_events"]').value = cfg.InsightsMaxEvents || 5000;
+                document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
+                document.getElementById('insightsExplainEnabled').checked = !!cfg.InsightsExplainEnabled;
+                document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
+                document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
 
                 if (cfg.RawInjector) {
                     document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
@@ -1434,6 +1825,144 @@
 
         function runAgain() { if (lastFormData) launchWorkload(lastFormData); }
 
+        function escHtml(v) {
+            return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        function showInsightsTab(tab) {
+            const tabs = ['overview', 'iteration', 'timeline'];
+            tabs.forEach(t => {
+                const tabEl = document.getElementById(`insightsTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const btnEl = document.getElementById(`insTab${t === 'overview' ? 'Overview' : (t === 'iteration' ? 'Iter' : 'Timeline')}Btn`);
+                if (tabEl) tabEl.style.display = (t === tab) ? 'block' : 'none';
+                if (btnEl) btnEl.classList.toggle('active', t === tab);
+            });
+        }
+
+        function renderInsightsRows(containerId, rows, formatter) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            if (!rows || rows.length === 0) {
+                el.innerHTML = `<div style="font-size:12px;color:var(--text-secondary);">No strong signals detected.</div>`;
+                return;
+            }
+            el.innerHTML = rows.map(formatter).join('');
+        }
+
+        function renderFinalInsights(rep) {
+            const panel = document.getElementById('insightsPanel');
+            const status = document.getElementById('insightsStatus');
+            const pill = document.getElementById('insightsPill');
+            if (!panel || !status || !pill) return;
+
+            const setPill = (state, label) => {
+                pill.className = `insights-pill ${state}`;
+                pill.textContent = label;
+            };
+
+            if (!rep || !rep.metadata || rep.metadata.status === 'pending' || rep.metadata.status === 'inactive') {
+                panel.style.display = 'block';
+                setPill('pending', 'Pending');
+                status.textContent = 'Insights are collecting in the background and will populate automatically when all iterations finish.';
+                showInsightsTab('overview');
+                return;
+            }
+
+            panel.style.display = 'block';
+            showInsightsTab('overview');
+            const md = rep.metadata || {};
+            const summary = rep.summary || {};
+            const ratioPct = ((summary.slow_sampled_ratio || 0) * 100).toFixed(1);
+            const mdStatus = (md.status || 'ready').toLowerCase();
+            if (mdStatus === 'ready') {
+                setPill('ready', 'Ready');
+            } else if (mdStatus === 'empty') {
+                setPill('empty', 'No Data');
+            } else if (mdStatus === 'disabled') {
+                setPill('disabled', 'Disabled');
+            } else {
+                setPill('pending', 'Pending');
+            }
+            status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | evidence: ${md.evidence_level || 'heuristic'}`;
+
+            const top = [];
+            if (rep.slow_queries && rep.slow_queries[0]) {
+                const s = rep.slow_queries[0];
+                top.push(`Top slow group: ${s.operation} on ${s.collection} (p99 ${Number(s.p99_ms || 0).toFixed(2)}ms, count ${s.count || 0}, severity ${s.severity || 'low'})`);
+            }
+            if (rep.potential_index_issues && rep.potential_index_issues[0]) {
+                const i = rep.potential_index_issues[0];
+                top.push(`Top index signal: ${i.collection} ${i.operation} (${i.confidence || 'low'} confidence, ${i.evidence_level || 'heuristic'})`);
+            }
+            if (top.length === 0) {
+                top.push('No critical slow-query or index hotspot detected in sampled events.');
+            }
+            document.getElementById('insightsTopFindings').innerHTML = top.slice(0, 3).map(t => `<div style="font-size:12px;margin-bottom:4px;color:var(--text);">• ${escHtml(t)}</div>`).join('');
+
+            renderInsightsRows('insightsSlowQueries', (rep.slow_queries || []).slice(0, 8), s =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">${escHtml(s.shape_summary || s.shape_key || '')}</div>
+                    <div style="font-size:11px;margin-top:4px;">avg ${Number(s.avg_ms || 0).toFixed(2)}ms | p95 ${Number(s.p95_ms || 0).toFixed(2)}ms | p99 ${Number(s.p99_ms || 0).toFixed(2)}ms | max ${Number(s.max_ms || 0).toFixed(2)}ms | count ${s.count || 0} | severity ${escHtml(s.severity || 'low')}</div>
+                    <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;">shape id: ${escHtml(s.shape_id || '')}${s.trend ? ` | trend: ${escHtml(s.trend.direction || 'flat')} (${Number(s.trend.delta_p95_ms || 0).toFixed(2)}ms p95)` : ''}</div>
+                </div>`
+            );
+
+            renderInsightsRows('insightsCollections', (rep.affected_collections || []).slice(0, 8), c =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">${escHtml(c.collection || '')}</div>
+                    <div style="font-size:11px;">slow ratio ${(Number(c.slow_ratio || 0) * 100).toFixed(1)}% | p95 ${Number(c.p95_ms || 0).toFixed(2)}ms | p99 ${Number(c.p99_ms || 0).toFixed(2)}ms | count ${c.count || 0}</div>
+                </div>`
+            );
+
+            renderInsightsRows('insightsIndexIssues', (rep.potential_index_issues || []).slice(0, 8), i =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">confidence: ${escHtml(i.confidence || 'low')} | evidence: ${escHtml(i.evidence_level || 'heuristic')}</div>
+                    <div style="font-size:11px;margin-top:4px;">${escHtml(i.message || '')}</div>
+                    <div style="font-size:11px;margin-top:4px;"><strong>Action:</strong> ${escHtml(i.recommendation || '')}</div>
+                </div>`
+            );
+
+            renderInsightsRows('insightsRecommendations', (rep.recommendations || []).slice(0, 8), r =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">#${r.rank || '-'} ${escHtml(r.title || '')}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">priority: ${escHtml(r.priority || 'low')} | confidence: ${escHtml(r.confidence || 'low')}</div>
+                    <div style="font-size:11px;margin-top:4px;">${escHtml(r.details || '')}</div>
+                </div>`
+            );
+
+            renderInsightsRows('insightsPerIteration', (rep.per_iteration || []).slice(0, 20), it =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">Iteration ${it.iteration}</div>
+                    <div style="font-size:11px;">count ${it.count || 0} | slow ratio ${(Number(it.slow_ratio || 0) * 100).toFixed(1)}% | avg ${Number(it.avg_ms || 0).toFixed(2)}ms | p95 ${Number(it.p95_ms || 0).toFixed(2)}ms | p99 ${Number(it.p99_ms || 0).toFixed(2)}ms</div>
+                </div>`
+            );
+
+            renderInsightsRows('insightsTimeSlices', (rep.time_slices || []).slice(0, 60), ts =>
+                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
+                    <div style="font-size:12px;font-weight:700;">${escHtml(ts.bucket_label || '')}</div>
+                    <div style="font-size:11px;">count ${ts.count || 0} | slow ${ts.slow_count || 0} | avg ${Number(ts.avg_ms || 0).toFixed(2)}ms | p95 ${Number(ts.p95_ms || 0).toFixed(2)}ms | p99 ${Number(ts.p99_ms || 0).toFixed(2)}ms</div>
+                </div>`
+            );
+        }
+
+        function fetchFinalInsights() {
+            return fetch('/api/insights')
+                .then(r => r.json())
+                .then(rep => {
+                    finalInsightsData = rep || null;
+                    renderFinalInsights(finalInsightsData);
+                    if (finalReportData) {
+                        finalReportData.insights = finalInsightsData;
+                    }
+                })
+                .catch(() => {
+                    finalInsightsData = null;
+                    renderFinalInsights({ metadata: { status: 'empty' }, summary: {} });
+                });
+        }
+
         function launchWorkload(formData) {
             lastFormData = formData;
             fetch('/api/start', { method: 'POST', body: formData })
@@ -1451,7 +1980,11 @@
                         document.getElementById('dashboardControls').style.display = 'flex';
                         document.getElementById('activeActions').style.display = 'block';
                         document.getElementById('finishActions').style.display = 'none';
+                        document.getElementById('insightsPanel').style.display = 'block';
+                        showInsightsTab('overview');
                         document.getElementById('progressBar').style.width = "0%";
+                        finalInsightsData = null;
+                        renderFinalInsights({ metadata: { status: 'pending' }, summary: {} });
 
                         const durSecs = parseDuration(formData.get('duration'));
                         const iters = parseInt(formData.get('iterations')) || 1;
@@ -1462,6 +1995,12 @@
                         histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
                         histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
                         histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+                        histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+                        histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+                        histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+                        latencyMetricVisibility = { avg: true, p95: false, p99: true };
+                        latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
+                        updateLatencyToggleUI();
                         lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
                         lastLat = {
                             total: { sum: 0, count: 0 },
@@ -1559,7 +2098,7 @@
                             const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
                             const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
 
-                            const calcIntervalAvg = (current, last) => {
+                            const calcIntervalAvgFallback = (current, last) => {
                                 if (!current) return 0;
                                 const diffCount = (current.count || 0) - last.count;
                                 const diffSum = (current.sum || 0) - last.sum;
@@ -1568,21 +2107,77 @@
                                 return diffCount > 0 ? diffSum / diffCount : 0;
                             };
 
-                            const intTotalLat = calcIntervalAvg(stats.distTotal, lastLat.total);
-                            const intFindLat = calcIntervalAvg(stats.distFind, lastLat.find);
-                            const intInsertLat = calcIntervalAvg(stats.distInsert, lastLat.insert);
+                            const intervalLatency = stats.intervalLatency || {};
+                            const getIntervalMetric = (op, metric, fallbackFn) => {
+                                const bucket = intervalLatency[op];
+                                if (bucket && bucket.count > 0 && bucket[metric] !== undefined && bucket[metric] !== null) {
+                                    return Number(bucket[metric]);
+                                }
+                                if (fallbackFn) return fallbackFn();
+                                return null;
+                            };
 
-                            // Update and Upsert are combined in the UI ops, so combine their sums/counts
-                            const curUpdateSum = (stats.distUpdate?.sum || 0) + (stats.distUpsert?.sum || 0);
-                            const curUpdateCount = (stats.distUpdate?.count || 0) + (stats.distUpsert?.count || 0);
-                            const diffUpdateCount = curUpdateCount - lastLat.update.count;
-                            const diffUpdateSum = curUpdateSum - lastLat.update.sum;
-                            lastLat.update.count = curUpdateCount;
-                            lastLat.update.sum = curUpdateSum;
-                            const intUpdateLat = diffUpdateCount > 0 ? diffUpdateSum / diffUpdateCount : 0;
+                            const fallbackUpdateAvg = () => {
+                                const curUpdateSum = (stats.distUpdate?.sum || 0) + (stats.distUpsert?.sum || 0);
+                                const curUpdateCount = (stats.distUpdate?.count || 0) + (stats.distUpsert?.count || 0);
+                                const diffUpdateCount = curUpdateCount - lastLat.update.count;
+                                const diffUpdateSum = curUpdateSum - lastLat.update.sum;
+                                lastLat.update.count = curUpdateCount;
+                                lastLat.update.sum = curUpdateSum;
+                                return diffUpdateCount > 0 ? diffUpdateSum / diffUpdateCount : 0;
+                            };
 
-                            const intDeleteLat = calcIntervalAvg(stats.distDelete, lastLat.delete);
-                            const intAggLat = calcIntervalAvg(stats.distAgg, lastLat.aggregate);
+                            let intTotalLat = getIntervalMetric('total', 'avg', () => calcIntervalAvgFallback(stats.distTotal, lastLat.total));
+                            let intFindLat = getIntervalMetric('find', 'avg', () => calcIntervalAvgFallback(stats.distFind, lastLat.find));
+                            let intInsertLat = getIntervalMetric('insert', 'avg', () => calcIntervalAvgFallback(stats.distInsert, lastLat.insert));
+                            let intUpdateLat = getIntervalMetric('update', 'avg', fallbackUpdateAvg);
+                            let intDeleteLat = getIntervalMetric('delete', 'avg', () => calcIntervalAvgFallback(stats.distDelete, lastLat.delete));
+                            let intAggLat = getIntervalMetric('aggregate', 'avg', () => calcIntervalAvgFallback(stats.distAgg, lastLat.aggregate));
+                            let intTransLat = getIntervalMetric('transaction', 'avg', null);
+
+                            let p99TotalLat = getIntervalMetric('total', 'p99', null);
+                            let p99FindLat = getIntervalMetric('find', 'p99', null);
+                            let p99InsertLat = getIntervalMetric('insert', 'p99', null);
+                            let p99UpdateLat = getIntervalMetric('update', 'p99', null);
+                            let p99DeleteLat = getIntervalMetric('delete', 'p99', null);
+                            let p99AggLat = getIntervalMetric('aggregate', 'p99', null);
+                            let p99TransLat = getIntervalMetric('transaction', 'p99', null);
+
+                            let p95TotalLat = getIntervalMetric('total', 'p95', null);
+                            let p95FindLat = getIntervalMetric('find', 'p95', null);
+                            let p95InsertLat = getIntervalMetric('insert', 'p95', null);
+                            let p95UpdateLat = getIntervalMetric('update', 'p95', null);
+                            let p95DeleteLat = getIntervalMetric('delete', 'p95', null);
+                            let p95AggLat = getIntervalMetric('aggregate', 'p95', null);
+                            let p95TransLat = getIntervalMetric('transaction', 'p95', null);
+
+                            // During configured inter-iteration wait windows, workload is intentionally idle.
+                            // Force explicit zero points so the latency timeline reflects idle state.
+                            if (stats.isWaiting) {
+                                intTotalLat = 0;
+                                intFindLat = 0;
+                                intInsertLat = 0;
+                                intUpdateLat = 0;
+                                intDeleteLat = 0;
+                                intAggLat = 0;
+                                intTransLat = 0;
+
+                                p99TotalLat = 0;
+                                p99FindLat = 0;
+                                p99InsertLat = 0;
+                                p99UpdateLat = 0;
+                                p99DeleteLat = 0;
+                                p99AggLat = 0;
+                                p99TransLat = 0;
+
+                                p95TotalLat = 0;
+                                p95FindLat = 0;
+                                p95InsertLat = 0;
+                                p95UpdateLat = 0;
+                                p95DeleteLat = 0;
+                                p95AggLat = 0;
+                                p95TransLat = 0;
+                            }
 
                             lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
 
@@ -1618,6 +2213,30 @@
                             histLats.update.push(intUpdateLat);
                             histLats.delete.push(intDeleteLat);
                             histLats.aggregate.push(intAggLat);
+
+                            histLatTimelineAvg.total.push(intTotalLat);
+                            histLatTimelineAvg.find.push(intFindLat);
+                            histLatTimelineAvg.insert.push(intInsertLat);
+                            histLatTimelineAvg.update.push(intUpdateLat);
+                            histLatTimelineAvg.delete.push(intDeleteLat);
+                            histLatTimelineAvg.aggregate.push(intAggLat);
+                            histLatTimelineAvg.transaction.push(intTransLat);
+
+                            histLatTimelineP95.total.push(p95TotalLat);
+                            histLatTimelineP95.find.push(p95FindLat);
+                            histLatTimelineP95.insert.push(p95InsertLat);
+                            histLatTimelineP95.update.push(p95UpdateLat);
+                            histLatTimelineP95.delete.push(p95DeleteLat);
+                            histLatTimelineP95.aggregate.push(p95AggLat);
+                            histLatTimelineP95.transaction.push(p95TransLat);
+
+                            histLatTimelineP99.total.push(p99TotalLat);
+                            histLatTimelineP99.find.push(p99FindLat);
+                            histLatTimelineP99.insert.push(p99InsertLat);
+                            histLatTimelineP99.update.push(p99UpdateLat);
+                            histLatTimelineP99.delete.push(p99DeleteLat);
+                            histLatTimelineP99.aggregate.push(p99AggLat);
+                            histLatTimelineP99.transaction.push(p99TransLat);
 
                             const maxIdx = histRates.find.length - 1;
                             const scrubber = document.getElementById('timeScrubber');
@@ -1671,6 +2290,30 @@
                             histLats.delete.push(0);
                             histLats.aggregate.push(0);
 
+                            histLatTimelineAvg.total.push(null);
+                            histLatTimelineAvg.find.push(null);
+                            histLatTimelineAvg.insert.push(null);
+                            histLatTimelineAvg.update.push(null);
+                            histLatTimelineAvg.delete.push(null);
+                            histLatTimelineAvg.aggregate.push(null);
+                            histLatTimelineAvg.transaction.push(null);
+
+                            histLatTimelineP95.total.push(null);
+                            histLatTimelineP95.find.push(null);
+                            histLatTimelineP95.insert.push(null);
+                            histLatTimelineP95.update.push(null);
+                            histLatTimelineP95.delete.push(null);
+                            histLatTimelineP95.aggregate.push(null);
+                            histLatTimelineP95.transaction.push(null);
+
+                            histLatTimelineP99.total.push(null);
+                            histLatTimelineP99.find.push(null);
+                            histLatTimelineP99.insert.push(null);
+                            histLatTimelineP99.update.push(null);
+                            histLatTimelineP99.delete.push(null);
+                            histLatTimelineP99.aggregate.push(null);
+                            histLatTimelineP99.transaction.push(null);
+
                             globalMarkers.push({ text: "Finished", color: colors.forest });
 
                             const finalMaxIdx = histRates.find.length - 1;
@@ -1714,11 +2357,14 @@
                                     aggregate: stats.distAgg || {},
                                     transaction: stats.distTrans || {}
                                 },
+                                insights: finalInsightsData,
                                 configuration: lastFormData ? Object.fromEntries(lastFormData.entries()) : {}
                             };
                             if (finalReportData.configuration.password) {
                                 finalReportData.configuration.password = "********";
                             }
+
+                            fetchFinalInsights();
 
                             clearInterval(pollInterval);
                             return;
@@ -1782,8 +2428,12 @@
                 });
         }
 
-        function downloadSummaryReport() {
+        async function downloadSummaryReport() {
             if (!finalReportData) return;
+            if (!finalInsightsData || !finalInsightsData.metadata || finalInsightsData.metadata.status === 'pending') {
+                await fetchFinalInsights();
+            }
+            finalReportData.insights = finalInsightsData;
 
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalReportData, null, 4));
 

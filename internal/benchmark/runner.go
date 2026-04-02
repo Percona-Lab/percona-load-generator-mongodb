@@ -99,6 +99,7 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 	} else {
 		collector = stats.NewCollector()
 	}
+	collector.ConfigureInsights(cfg)
 
 	monitorDone := make(chan struct{})
 

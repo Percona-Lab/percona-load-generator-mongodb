@@ -382,7 +382,9 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 		return nil, nil
 	})
 	if err == nil {
-		wCfg.collector.Track("transaction", time.Since(start))
+		dur := time.Since(start)
+		wCfg.collector.Track("transaction", dur)
+		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil)
 	}
 }
 
@@ -445,9 +447,13 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				if wCfg.debug {
 					log.Printf("[Worker %d] FastInsert error: %v", id, err)
 				}
-				wCfg.collector.Add("insert", 1, time.Since(start))
+				dur := time.Since(start)
+				wCfg.collector.Add("insert", 1, dur)
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, nil)
 			} else {
-				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), time.Since(start)/time.Duration(wCfg.appConfig.InsertBatchSize))
+				dur := time.Since(start)
+				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), dur/time.Duration(wCfg.appConfig.InsertBatchSize))
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil)
 			}
 			continue
 		}
@@ -480,9 +486,13 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				if wCfg.debug {
 					log.Printf("[Worker %d] FastFind error: %v", id, err)
 				}
-				wCfg.collector.Add("find", 1, time.Since(start))
+				dur := time.Since(start)
+				wCfg.collector.Add("find", 1, dur)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil)
 			} else {
-				wCfg.collector.Add("find", 1, time.Since(start))
+				dur := time.Since(start)
+				wCfg.collector.Add("find", 1, dur)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil)
 			}
 			continue
 		}
@@ -524,6 +534,7 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			processRecursive(filter, rng)
 		}
 
+		success := true
 		switch opType {
 		case "find":
 			limit := q.Limit
@@ -543,6 +554,8 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				for cursor.Next(dbOpCtx) {
 				}
 				_ = cursor.Close(dbOpCtx)
+			} else {
+				success = false
 			}
 		case "aggregate":
 			cursor, err := coll.Aggregate(dbOpCtx, pipeline)
@@ -550,24 +563,40 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				for cursor.Next(dbOpCtx) {
 				}
 				_ = cursor.Close(dbOpCtx)
+			} else {
+				success = false
 			}
 		case "updateOne":
 			opts := options.UpdateOne().SetUpsert(q.Upsert)
-			coll.UpdateOne(dbOpCtx, filter, q.Update, opts)
+			if _, err := coll.UpdateOne(dbOpCtx, filter, q.Update, opts); err != nil {
+				success = false
+			}
 		case "updateMany":
 			opts := options.UpdateMany().SetUpsert(q.Upsert)
-			coll.UpdateMany(dbOpCtx, filter, q.Update, opts)
+			if _, err := coll.UpdateMany(dbOpCtx, filter, q.Update, opts); err != nil {
+				success = false
+			}
 		case "deleteOne":
-			coll.DeleteOne(dbOpCtx, filter)
+			if _, err := coll.DeleteOne(dbOpCtx, filter); err != nil {
+				success = false
+			}
 		case "deleteMany":
-			coll.DeleteMany(dbOpCtx, filter)
+			if _, err := coll.DeleteMany(dbOpCtx, filter); err != nil {
+				success = false
+			}
 		case "insert":
-			coll.InsertOne(dbOpCtx, q.Filter)
+			if _, err := coll.InsertOne(dbOpCtx, q.Filter); err != nil {
+				success = false
+			}
 		case "insertMany":
-			coll.InsertMany(dbOpCtx, insertManyDocs)
+			if _, err := coll.InsertMany(dbOpCtx, insertManyDocs); err != nil {
+				success = false
+			}
 		}
-
-		wCfg.collector.Track(opType, time.Since(start))
+		dur := time.Since(start)
+		wCfg.collector.Track(opType, dur)
+		shapeKey, shapeSummary, fields := buildOperationShape(opType, filter, pipeline)
+		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, filter, pipeline)
 	}
 }
 
@@ -595,6 +624,141 @@ func cloneMap(m map[string]interface{}) map[string]interface{} {
 		return res
 	}
 	return nil
+}
+
+func sortUniqueStrings(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func renderShape(v interface{}) string {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%s:%s", k, renderShape(t[k])))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	case []interface{}:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			parts = append(parts, renderShape(item))
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	case string:
+		switch t {
+		case "<int>", "<string>":
+			return t
+		default:
+			return "<str>"
+		}
+	case int, int32, int64, uint, uint32, uint64, float32, float64:
+		return "<num>"
+	case bool:
+		return "<bool>"
+	case nil:
+		return "<nil>"
+	default:
+		return "<val>"
+	}
+}
+
+func collectFilterFields(v interface{}, prefix string, out *[]string) {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			next := k
+			if prefix != "" {
+				next = prefix + "." + k
+			}
+			if strings.HasPrefix(k, "$") {
+				collectFilterFields(t[k], prefix, out)
+				continue
+			}
+			*out = append(*out, next)
+			collectFilterFields(t[k], next, out)
+		}
+	case []interface{}:
+		for _, item := range t {
+			collectFilterFields(item, prefix, out)
+		}
+	}
+}
+
+func collectPipelineFields(pipeline []interface{}) []string {
+	fields := make([]string, 0, 8)
+	for _, stageRaw := range pipeline {
+		stage, ok := stageRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if matchRaw, ok := stage["$match"]; ok {
+			collectFilterFields(matchRaw, "", &fields)
+		}
+	}
+	return sortUniqueStrings(fields)
+}
+
+func buildOperationShape(opType string, filter map[string]interface{}, pipeline []interface{}) (string, string, []string) {
+	const maxShapeLen = 512
+	trim := func(v string) string {
+		if len(v) <= maxShapeLen {
+			return v
+		}
+		return v[:maxShapeLen] + "...(truncated)"
+	}
+
+	switch opType {
+	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
+		if len(filter) == 0 {
+			return opType + "|{}", opType + " empty filter", nil
+		}
+		fields := make([]string, 0, 8)
+		collectFilterFields(filter, "", &fields)
+		fields = sortUniqueStrings(fields)
+		shape := trim(renderShape(filter))
+		return trim(opType + "|" + shape), trim(fmt.Sprintf("%s on fields: %s", opType, strings.Join(fields, ", "))), fields
+	case "aggregate":
+		if len(pipeline) == 0 {
+			return "aggregate|[]", "aggregate empty pipeline", nil
+		}
+		fields := collectPipelineFields(pipeline)
+		shape := trim(renderShape(pipeline))
+		return trim("aggregate|" + shape), trim(fmt.Sprintf("aggregate match fields: %s", strings.Join(fields, ", "))), fields
+	case "insert":
+		return "insert|generated_doc", "insert generated document", nil
+	case "insertMany":
+		return "insertMany|generated_docs", "insertMany generated documents", nil
+	case "transaction":
+		return "transaction|batch", "transaction batch", nil
+	default:
+		return opType + "|(unknown)", opType, nil
+	}
 }
 
 func processRecursive(v interface{}, rng *rand.Rand) {
@@ -636,6 +800,8 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 	} else {
 		collector = stats.NewCollector()
 	}
+	collector.ConfigureInsights(cfg)
+	collector.SetCollectionsForInsights(collections)
 
 	if duration <= 0 {
 		return runAllQueriesOnceFn(ctx, db, queries, cfg.DebugMode)

@@ -209,6 +209,14 @@ type Collector struct {
 	IntervalAggHist    *LatencyHistogram
 	IntervalTransHist  *LatencyHistogram
 	IntervalTotalHist  *LatencyHistogram
+	UIFindHist         *LatencyHistogram
+	UIInsertHist       *LatencyHistogram
+	UIUpsertHist       *LatencyHistogram
+	UIUpdateHist       *LatencyHistogram
+	UIDeleteHist       *LatencyHistogram
+	UIAggHist          *LatencyHistogram
+	UITransHist        *LatencyHistogram
+	UITotalHist        *LatencyHistogram
 
 	CurrentIteration int
 
@@ -220,10 +228,20 @@ type Collector struct {
 	prevDelete uint64
 	prevAgg    uint64
 	prevTrans  uint64
+
+	insightsMu        sync.Mutex
+	insightsCfg       insightsSettings
+	collectionIndexes map[string]collectionIndexInfo
+	insightEvents     []OperationEvent
+	insightWrite      int
+	insightCount      int
+	insightEligible   uint64
+	insightSampledIn  uint64
+	finalInsights     *InsightsReport
 }
 
 func NewCollector() *Collector {
-	return &Collector{
+	c := &Collector{
 		FindHist:           &LatencyHistogram{Min: math.MaxFloat64},
 		InsertHist:         &LatencyHistogram{Min: math.MaxFloat64},
 		UpsertHist:         &LatencyHistogram{Min: math.MaxFloat64},
@@ -240,43 +258,61 @@ func NewCollector() *Collector {
 		IntervalAggHist:    &LatencyHistogram{Min: math.MaxFloat64},
 		IntervalTransHist:  &LatencyHistogram{Min: math.MaxFloat64},
 		IntervalTotalHist:  &LatencyHistogram{Min: math.MaxFloat64},
+		UIFindHist:         &LatencyHistogram{Min: math.MaxFloat64},
+		UIInsertHist:       &LatencyHistogram{Min: math.MaxFloat64},
+		UIUpsertHist:       &LatencyHistogram{Min: math.MaxFloat64},
+		UIUpdateHist:       &LatencyHistogram{Min: math.MaxFloat64},
+		UIDeleteHist:       &LatencyHistogram{Min: math.MaxFloat64},
+		UIAggHist:          &LatencyHistogram{Min: math.MaxFloat64},
+		UITransHist:        &LatencyHistogram{Min: math.MaxFloat64},
+		UITotalHist:        &LatencyHistogram{Min: math.MaxFloat64},
 		startTime:          time.Now(),
 	}
+	c.configureInsights(nil)
+	return c
 }
 
 func (c *Collector) Track(opType string, duration time.Duration) {
 	ms := float64(duration.Nanoseconds()) / 1e6
 	c.TotalHist.Record(ms)
 	c.IntervalTotalHist.Record(ms)
+	c.UITotalHist.Record(ms)
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, 1)
 		c.FindHist.Record(ms)
 		c.IntervalFindHist.Record(ms)
+		c.UIFindHist.Record(ms)
 	case "insert":
 		atomic.AddUint64(&c.InsertOps, 1)
 		c.InsertHist.Record(ms)
 		c.IntervalInsertHist.Record(ms)
+		c.UIInsertHist.Record(ms)
 	case "upsert":
 		atomic.AddUint64(&c.UpsertOps, 1)
 		c.UpsertHist.Record(ms)
 		c.IntervalUpsertHist.Record(ms)
+		c.UIUpsertHist.Record(ms)
 	case "update", "updateOne", "updateMany":
 		atomic.AddUint64(&c.UpdateOps, 1)
 		c.UpdateHist.Record(ms)
 		c.IntervalUpdateHist.Record(ms)
+		c.UIUpdateHist.Record(ms)
 	case "delete", "deleteOne", "deleteMany":
 		atomic.AddUint64(&c.DeleteOps, 1)
 		c.DeleteHist.Record(ms)
 		c.IntervalDeleteHist.Record(ms)
+		c.UIDeleteHist.Record(ms)
 	case "aggregate":
 		atomic.AddUint64(&c.AggOps, 1)
 		c.AggHist.Record(ms)
 		c.IntervalAggHist.Record(ms)
+		c.UIAggHist.Record(ms)
 	case "transaction":
 		atomic.AddUint64(&c.TransOps, 1)
 		c.TransHist.Record(ms)
 		c.IntervalTransHist.Record(ms)
+		c.UITransHist.Record(ms)
 	}
 }
 
@@ -284,36 +320,61 @@ func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 	ms := float64(duration.Nanoseconds()) / 1e6
 	c.TotalHist.RecordBatch(ms, count)
 	c.IntervalTotalHist.RecordBatch(ms, count)
+	c.UITotalHist.RecordBatch(ms, count)
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, uint64(count))
 		c.FindHist.RecordBatch(ms, count)
 		c.IntervalFindHist.RecordBatch(ms, count)
+		c.UIFindHist.RecordBatch(ms, count)
 	case "insert":
 		atomic.AddUint64(&c.InsertOps, uint64(count))
 		c.InsertHist.RecordBatch(ms, count)
 		c.IntervalInsertHist.RecordBatch(ms, count)
+		c.UIInsertHist.RecordBatch(ms, count)
 	case "upsert":
 		atomic.AddUint64(&c.UpsertOps, uint64(count))
 		c.UpsertHist.RecordBatch(ms, count)
 		c.IntervalUpsertHist.RecordBatch(ms, count)
+		c.UIUpsertHist.RecordBatch(ms, count)
 	case "update", "updateOne", "updateMany":
 		atomic.AddUint64(&c.UpdateOps, uint64(count))
 		c.UpdateHist.RecordBatch(ms, count)
 		c.IntervalUpdateHist.RecordBatch(ms, count)
+		c.UIUpdateHist.RecordBatch(ms, count)
 	case "delete", "deleteOne", "deleteMany":
 		atomic.AddUint64(&c.DeleteOps, uint64(count))
 		c.DeleteHist.RecordBatch(ms, count)
 		c.IntervalDeleteHist.RecordBatch(ms, count)
+		c.UIDeleteHist.RecordBatch(ms, count)
 	case "aggregate":
 		atomic.AddUint64(&c.AggOps, uint64(count))
 		c.AggHist.RecordBatch(ms, count)
 		c.IntervalAggHist.RecordBatch(ms, count)
+		c.UIAggHist.RecordBatch(ms, count)
 	case "transaction":
 		atomic.AddUint64(&c.TransOps, uint64(count))
 		c.TransHist.RecordBatch(ms, count)
 		c.IntervalTransHist.RecordBatch(ms, count)
+		c.UITransHist.RecordBatch(ms, count)
 	}
+}
+
+func (c *Collector) GetUILatencyTimelineAndReset() map[string]map[string]float64 {
+	return map[string]map[string]float64{
+		"total":       c.UITotalHist.GetStatsAndReset(),
+		"find":        c.UIFindHist.GetStatsAndReset(),
+		"insert":      c.UIInsertHist.GetStatsAndReset(),
+		"upsert":      c.UIUpsertHist.GetStatsAndReset(),
+		"update":      c.UIUpdateHist.GetStatsAndReset(),
+		"delete":      c.UIDeleteHist.GetStatsAndReset(),
+		"aggregate":   c.UIAggHist.GetStatsAndReset(),
+		"transaction": c.UITransHist.GetStatsAndReset(),
+	}
+}
+
+func (c *Collector) ConfigureInsights(cfg *config.AppConfig) {
+	c.configureInsights(cfg)
 }
 
 const monitorLayout = " %-7s | %9s | %7s | %7s | %7s | %7s | %7s | %6s | %5s\n"

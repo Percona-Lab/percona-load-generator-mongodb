@@ -87,6 +87,15 @@ Download the [`config.yaml`](./config.yaml) and make the necessary adjustments.
 
 For unit and integration test instructions (including Docker-based MongoDB setup), see [`TESTING.md`](./TESTING.md).
 
+### 5. Post-Run Insights (Shortcut)
+
+PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Advanced tab).
+
+Quick access:
+* Full guide: [`INSIGHTS.md`](./INSIGHTS.md)
+* Web UI path: `Advanced -> Insights Analysis`
+* Output: Dashboard insights panel + `Download Summary` JSON (`insights` section)
+
 ## The Interactive UI
 
 `plgm` features a completely embedded Web UI. It allows you to configure your database connection, upload custom workload schemas, adjust operation ratios, and monitor real-time throughput and latency without ever touching a YAML file. It has the same functionality as the CLI version, but with an awesome UI.
@@ -133,6 +142,7 @@ When running `plgm` with the `--webui` flag, you get access to a rich, browser-b
 * **Live Telemetry & Dashboard:** Watch operations per second (Find, Insert, Update, Delete) and latencies update in real-time with sub-second precision.
 * **The "Time Machine" Scrubber:** Pause the live feed and scrub backward through the benchmark timeline to investigate specific latency spikes or throughput drops.
 * **Real-Time CSV Export:** Configure and stream metrics to a local CSV file directly from the Advanced tab. Use the "Append" feature to stitch multiple benchmark runs into a single dataset.
+* **Post-Run Insights Analysis:** Review slow-query groups, affected collections, potential index issues, and recommendations after all iterations complete.
 * **Graceful Shutdown:** Click the **EXIT** button in the header to safely terminate close the application directly from the browser, ensuring all background workers are cleaned up properly.
 
 ### 3. Configuration
@@ -603,7 +613,7 @@ Once the csv is exported, you can script your own method to plot its data. We ha
 ## Post-Run JSON Summary Report
 If you forget to enable the real-time CSV export, or if you just want a clean summary of your final results, PLGM provides a Download Summary Report button in the Web UI that appears the moment a workload finishes.
 
-This generates a downloadable JSON summary report that captures both the final performance metrics (total ops, average latencies, and throughput per operation type) alongside the exact configuration parameters used to achieve those results. Passwords are automatically redacted from this file for safe sharing.
+This generates a downloadable JSON summary report that captures both the final performance metrics (total ops, average latencies, and throughput per operation type), post-run insights analysis, and the exact configuration parameters used to achieve those results. Passwords are automatically redacted from this file for safe sharing.
 
 Example Summary Snippet:
 
@@ -621,6 +631,7 @@ Example Summary Snippet:
     },
     "operations": { ... },
     "average_latencies_ms": { ... },
+    "insights": { ... },
     "configuration": {
         "concurrency": "4",
         "find_batch_size": "10",
@@ -690,6 +701,15 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `csv_export_enabled` ||Continuously stream workload throughput metrics to a CSV file| `false` |
 | `csv_export_append` ||If true, appends to the file. If false, overwrites it.| `false` |
 | `csv_export_path` ||Path and metrics file name| `/tmp/plgm_metrics_export.csv` |
+| **Post-Run Insights** | | | |
+| `insights_enabled` | `PLGM_INSIGHTS_ENABLED` | Enable post-run slow-query/index analysis | `true` |
+| `insights_sampling_rate` | `PLGM_INSIGHTS_SAMPLING_RATE` | Sample rate for captured operation events (`0.01`-`1.0`) | `0.10` |
+| `insights_slow_threshold_ms` | `PLGM_INSIGHTS_SLOW_THRESHOLD_MS` | Latency threshold used to classify operations as slow | `200` |
+| `insights_max_events` | `PLGM_INSIGHTS_MAX_EVENTS` | Max retained sampled events in memory | `5000` |
+| `insights_max_groups` | `PLGM_INSIGHTS_MAX_GROUPS` | Max aggregated slow-shape groups | `300` |
+| `insights_explain_enabled` | `PLGM_INSIGHTS_EXPLAIN_ENABLED` | Enable optional post-run explain sampling | `false` |
+| `insights_explain_top_n` | `PLGM_INSIGHTS_EXPLAIN_TOP_N` | Number of top slow shapes to attempt explain on | `5` |
+| `insights_explain_max_time_ms` | `PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS` | Max server time per explain command | `1000` |
 | **Workload Control** | | | |
 | `concurrency` | `PLGM_CONCURRENCY` | Number of active worker goroutines | `50` |
 | `duration` | `PLGM_DURATION` | Test duration (Go duration string) | `5m`, `60s` |

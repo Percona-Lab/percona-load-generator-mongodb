@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,6 +32,9 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 //go:embed static
@@ -47,6 +51,9 @@ type WebServer struct {
 	TotalIterations  int
 	IsWaiting        bool
 	IntervalStr      string
+	RunID            int64
+	InsightsCache    *stats.InsightsReport
+	ShapeTrendBase   map[string]float64
 }
 
 var (
@@ -63,7 +70,8 @@ var (
 
 func NewServer(cfg *config.AppConfig) *WebServer {
 	return &WebServer{
-		AppConfig: cfg,
+		AppConfig:      cfg,
+		ShapeTrendBase: make(map[string]float64),
 	}
 }
 
@@ -98,6 +106,7 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/start", s.handleStart)
 	mux.HandleFunc("/api/stop", s.handleStop)
 	mux.HandleFunc("/api/stats", s.handleStats)
+	mux.HandleFunc("/api/insights", s.handleInsights)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 
 	cert, err := generateSelfSignedCert()
@@ -140,6 +149,17 @@ func parseInt(val string, defaultVal int) int {
 	return parsed
 }
 
+func parseFloat(val string, defaultVal float64) float64 {
+	if val == "" {
+		return defaultVal
+	}
+	parsed, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return parsed
+}
+
 func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -153,6 +173,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.IsRunning = true
+	s.RunID++
+	s.InsightsCache = nil
 
 	baseCfg := *s.AppConfig
 	s.mu.Unlock()
@@ -198,6 +220,14 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if v := r.FormValue("csv_export_path"); v != "" {
 		cfg.CSVExportPath = v
 	}
+	cfg.InsightsEnabled = r.FormValue("insights_enabled") == "true" || r.FormValue("insights_enabled") == "on"
+	cfg.InsightsSamplingRate = parseFloat(r.FormValue("insights_sampling_rate"), cfg.InsightsSamplingRate)
+	cfg.InsightsSlowThresholdMs = parseInt(r.FormValue("insights_slow_threshold_ms"), cfg.InsightsSlowThresholdMs)
+	cfg.InsightsMaxEvents = parseInt(r.FormValue("insights_max_events"), cfg.InsightsMaxEvents)
+	cfg.InsightsMaxGroups = parseInt(r.FormValue("insights_max_groups"), cfg.InsightsMaxGroups)
+	cfg.InsightsExplainEnabled = r.FormValue("insights_explain_enabled") == "true" || r.FormValue("insights_explain_enabled") == "on"
+	cfg.InsightsExplainTopN = parseInt(r.FormValue("insights_explain_top_n"), cfg.InsightsExplainTopN)
+	cfg.InsightsExplainMaxTimeMS = parseInt(r.FormValue("insights_explain_max_time_ms"), cfg.InsightsExplainMaxTimeMS)
 
 	cfg.ConnectionParams.ConnectionTimeout = parseInt(r.FormValue("connection_timeout"), cfg.ConnectionParams.ConnectionTimeout)
 	cfg.ConnectionParams.ServerSelectionTimeout = parseInt(r.FormValue("server_selection_timeout"), cfg.ConnectionParams.ServerSelectionTimeout)
@@ -348,6 +378,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 		s.mu.Lock()
 		s.CurrentStats = stats.NewCollector()
+		s.CurrentStats.ConfigureInsights(cfg)
 		s.AppConfig = cfg
 		s.ActiveCancel = cancel
 		s.LastError = ""
@@ -474,6 +505,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.CurrentStats = stats.NewCollector()
+	s.CurrentStats.ConfigureInsights(cfg)
+	s.CurrentStats.SetCollectionsForInsights(collectionsCfg.Collections)
 	s.AppConfig = cfg
 	s.ActiveCancel = cancel
 	s.LastError = ""
@@ -631,16 +664,253 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"deleteLatAvg": collector.DeleteHist.GetAverage(),
 		"aggLatAvg":    collector.AggHist.GetAverage(),
 
-		"distFind":   collector.FindHist.GetStats(),
-		"distInsert": collector.InsertHist.GetStats(),
-		"distUpsert": collector.UpsertHist.GetStats(),
-		"distUpdate": collector.UpdateHist.GetStats(),
-		"distDelete": collector.DeleteHist.GetStats(),
-		"distAgg":    collector.AggHist.GetStats(),
-		"distTrans":  collector.TransHist.GetStats(),
-		"distTotal":  collector.TotalHist.GetStats(),
+		"distFind":        collector.FindHist.GetStats(),
+		"distInsert":      collector.InsertHist.GetStats(),
+		"distUpsert":      collector.UpsertHist.GetStats(),
+		"distUpdate":      collector.UpdateHist.GetStats(),
+		"distDelete":      collector.DeleteHist.GetStats(),
+		"distAgg":         collector.AggHist.GetStats(),
+		"distTrans":       collector.TransHist.GetStats(),
+		"distTotal":       collector.TotalHist.GetStats(),
+		"intervalLatency": collector.GetUILatencyTimelineAndReset(),
 	}
 	json.NewEncoder(w).Encode(statsResp)
+}
+
+func (s *WebServer) handleInsights(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	collector := s.CurrentStats
+	running := s.IsRunning
+	runID := s.RunID
+	cached := s.InsightsCache
+	appCfg := s.AppConfig
+	baseTrends := make(map[string]float64, len(s.ShapeTrendBase))
+	for k, v := range s.ShapeTrendBase {
+		baseTrends[k] = v
+	}
+	s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if collector == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"metadata": map[string]interface{}{"status": "inactive"},
+		})
+		return
+	}
+	if running {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"metadata": map[string]interface{}{"status": "pending"},
+		})
+		return
+	}
+	if cached != nil {
+		json.NewEncoder(w).Encode(cached)
+		return
+	}
+
+	rep := collector.GetFinalInsights()
+	events := collector.SnapshotOperationEvents()
+	explainEnabled, explainTopN, explainMaxMs := collector.GetExplainSettings()
+	if explainEnabled {
+		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs)
+	}
+	applyTrends(&rep, baseTrends)
+
+	s.mu.Lock()
+	if !s.IsRunning && s.RunID == runID {
+		s.InsightsCache = &rep
+		updateTrendBase(&s.ShapeTrendBase, rep)
+	}
+	s.mu.Unlock()
+
+	json.NewEncoder(w).Encode(rep)
+}
+
+func applyTrends(rep *stats.InsightsReport, base map[string]float64) {
+	for i := range rep.SlowQueries {
+		cur := rep.SlowQueries[i]
+		prev, ok := base[cur.ShapeID]
+		if !ok {
+			continue
+		}
+		delta := cur.P95Ms - prev
+		dir := "flat"
+		if delta > 1 {
+			dir = "worse"
+		} else if delta < -1 {
+			dir = "improved"
+		}
+		rep.SlowQueries[i].Trend = &stats.ShapeTrend{
+			PreviousP95Ms: prev,
+			CurrentP95Ms:  cur.P95Ms,
+			DeltaP95Ms:    delta,
+			Direction:     dir,
+		}
+	}
+}
+
+func updateTrendBase(base *map[string]float64, rep stats.InsightsReport) {
+	if *base == nil {
+		*base = make(map[string]float64)
+	}
+	for _, s := range rep.SlowQueries {
+		(*base)[s.ShapeID] = s.P95Ms
+	}
+}
+
+type explainEvidence struct {
+	collscan bool
+	ixscan   bool
+	err      string
+}
+
+func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int) {
+	if status != "ready" || cfg == nil || topN <= 0 || len(rep.SlowQueries) == 0 {
+		return
+	}
+
+	candidates := make(map[string]stats.OperationEvent, topN)
+	for _, sq := range rep.SlowQueries {
+		if len(candidates) >= topN {
+			break
+		}
+		for _, ev := range events {
+			if stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey) != sq.ShapeID {
+				continue
+			}
+			if len(ev.FilterSample) == 0 && len(ev.PipelineSample) == 0 {
+				continue
+			}
+			candidates[sq.ShapeID] = ev
+			break
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
+
+	rep.Metadata.EvidenceLevel = "heuristic_plus_explain_samples"
+	conns := make(map[string]*db.Connection)
+	defer func() {
+		for _, c := range conns {
+			disconnectFn(c, context.Background())
+		}
+	}()
+
+	results := make(map[string]explainEvidence, len(candidates))
+	for shapeID, ev := range candidates {
+		dbName := ev.Database
+		if dbName == "" {
+			dbName = "admin"
+		}
+		conn, ok := conns[dbName]
+		if !ok {
+			ctxConn, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			newConn, err := connectFn(ctxConn, cfg, dbName)
+			cancel()
+			if err != nil {
+				results[shapeID] = explainEvidence{err: err.Error()}
+				continue
+			}
+			conn = newConn
+			conns[dbName] = conn
+		}
+		evidence := runExplainForEvent(conn.Database, ev, maxTimeMs)
+		results[shapeID] = evidence
+	}
+
+	for i := range rep.PotentialIndexIssues {
+		issue := &rep.PotentialIndexIssues[i]
+		ev, ok := results[issue.ShapeID]
+		if !ok {
+			continue
+		}
+		if ev.collscan {
+			issue.EvidenceLevel = "explain_collscan_observed"
+			issue.Confidence = "high"
+			issue.Message = "Representative explain sample showed COLLSCAN. This is strong evidence for index investigation."
+			issue.Recommendation = "Create and test a candidate index for these filter fields, then compare explain and latency before rollout."
+			continue
+		}
+		if ev.ixscan {
+			issue.EvidenceLevel = "explain_index_scan_observed"
+			issue.Confidence = "low"
+			issue.Message = "Representative explain sample used an index scan. Index presence was observed, but query/index fit may still be suboptimal."
+			issue.Recommendation = "Review index key order/selectivity and validate with additional representative explain samples."
+			continue
+		}
+		if ev.err != "" {
+			issue.EvidenceLevel = "explain_unavailable"
+			issue.Message = "Explain sampling was enabled, but this shape could not be explained automatically. Keeping heuristic guidance."
+		}
+	}
+}
+
+func runExplainForEvent(database *mongodrv.Database, ev stats.OperationEvent, maxTimeMs int) explainEvidence {
+	coll := database.Collection(ev.Collection)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var cmd bson.D
+	switch ev.Operation {
+	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
+		if len(ev.FilterSample) == 0 {
+			return explainEvidence{err: "missing_filter_sample"}
+		}
+		inner := bson.D{{Key: "find", Value: coll.Name()}, {Key: "filter", Value: ev.FilterSample}, {Key: "limit", Value: 1}}
+		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
+	case "aggregate":
+		if len(ev.PipelineSample) == 0 {
+			return explainEvidence{err: "missing_pipeline_sample"}
+		}
+		inner := bson.D{{Key: "aggregate", Value: coll.Name()}, {Key: "pipeline", Value: ev.PipelineSample}, {Key: "cursor", Value: bson.M{}}}
+		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
+	default:
+		return explainEvidence{err: "unsupported_operation"}
+	}
+
+	var out bson.M
+	if err := database.RunCommand(ctx, cmd, options.RunCmd()).Decode(&out); err != nil {
+		return explainEvidence{err: err.Error()}
+	}
+	return explainEvidence{
+		collscan: containsStage(out, "COLLSCAN"),
+		ixscan:   containsStage(out, "IXSCAN"),
+	}
+}
+
+func containsStage(v interface{}, stage string) bool {
+	switch t := v.(type) {
+	case bson.M:
+		for k, val := range t {
+			if strings.EqualFold(k, "stage") {
+				if s, ok := val.(string); ok && strings.EqualFold(s, stage) {
+					return true
+				}
+			}
+			if containsStage(val, stage) {
+				return true
+			}
+		}
+	case map[string]interface{}:
+		for k, val := range t {
+			if strings.EqualFold(k, "stage") {
+				if s, ok := val.(string); ok && strings.EqualFold(s, stage) {
+					return true
+				}
+			}
+			if containsStage(val, stage) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range t {
+			if containsStage(item, stage) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {
