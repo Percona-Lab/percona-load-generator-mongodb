@@ -108,49 +108,173 @@
         }
 
         /* Tabs & Forms */
+        .settings-console {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            min-height: 640px;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+        }
+
+        .settings-sidebar {
+            border-right: 1px solid var(--border);
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 16px 14px;
+        }
+
+        .settings-sidebar-title {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
         .tabs {
             display: flex;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            overflow-x: auto;
+            flex-direction: column;
+            gap: 8px;
         }
 
         .tab-btn {
-            flex: 1;
-            padding: 16px;
-            border: none;
-            background: none;
-            font-weight: 500;
-            font-size: 14px;
+            width: 100%;
+            text-align: left;
+            padding: 10px 12px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            font-weight: 600;
+            font-size: 12px;
             cursor: pointer;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            transition: 0.3s;
+            color: var(--p-night);
+            transition: 0.2s ease;
             position: relative;
+            text-transform: none;
+            letter-spacing: 0.2px;
         }
 
         .tab-btn:hover {
-            background: rgba(0, 0, 0, 0.02);
-            color: var(--p-sky);
+            background: rgba(20, 134, 255, 0.08);
+            border-color: rgba(20, 134, 255, 0.2);
         }
 
         .tab-btn.active {
+            background: #fff;
             color: var(--p-sky);
+            border-color: rgba(20, 134, 255, 0.35);
+            box-shadow: var(--elevation-1);
         }
 
         .tab-btn.active::after {
             content: '';
             position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
+            left: -14px;
+            top: 8px;
+            bottom: 8px;
+            width: 3px;
+            border-radius: 3px;
             background: var(--p-sky);
+        }
+
+        .settings-sidebar-note {
+            margin-top: 16px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+
+        .settings-content {
+            background: #f8fafc;
+            padding: 18px;
+        }
+
+        .settings-topbar {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .settings-topbar h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--p-night);
+            letter-spacing: 0.2px;
+        }
+
+        .settings-topbar p {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .settings-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .settings-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 4px 8px;
+            background: #fff;
+            color: var(--text-secondary);
+        }
+
+        .settings-badge.recommended {
+            border-color: rgba(5, 150, 105, 0.35);
+            color: #065f46;
+            background: #ecfdf5;
+        }
+
+        .settings-inline-error {
+            display: none;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            background: #fef2f2;
+            color: #991b1b;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .settings-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .settings-card h4 {
+            margin: 0 0 4px 0;
+            font-size: 13px;
+            color: var(--p-night);
+            letter-spacing: 0.2px;
+        }
+
+        .settings-help {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            line-height: 1.4;
         }
 
         .tab-content {
             display: none;
-            padding: 32px 24px;
+            padding: 0;
         }
 
         .tab-content.active {
@@ -170,7 +294,7 @@
         }
 
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 14px;
         }
 
         label {
@@ -234,10 +358,39 @@
         }
 
         .footer {
-            padding: 16px 24px;
-            background: #f8fafc;
+            padding: 14px 18px;
+            background: #fff;
             border-top: 1px solid var(--border);
             text-align: right;
+        }
+
+        @media (max-width: 1050px) {
+            .settings-console {
+                grid-template-columns: 1fr;
+            }
+
+            .settings-sidebar {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .tabs {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+
+            .tab-btn {
+                width: auto;
+            }
+
+            .tab-btn.active::after {
+                left: 8px;
+                right: 8px;
+                top: auto;
+                bottom: -8px;
+                width: auto;
+                height: 3px;
+            }
         }
 
         /* Buttons */
@@ -530,6 +683,184 @@
             background: #f8fafc;
         }
 
+        .insights-guide {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .insights-guide summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 10px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--p-night);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .insights-guide summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .insights-guide summary .guide-hint {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .insights-guide summary::after {
+            content: "Show";
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+
+        .insights-guide[open] summary::after {
+            content: "Hide";
+        }
+
+        .insights-guide-body {
+            border-top: 1px solid var(--border);
+            background: #fff;
+            padding: 10px 12px;
+            font-size: 11px;
+            color: var(--text);
+            line-height: 1.45;
+        }
+
+        .insights-guide-list {
+            margin: 0;
+            padding-left: 16px;
+        }
+
+        .insights-guide-list li {
+            margin-bottom: 5px;
+        }
+
+        .insights-status-line {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 8px 10px;
+        }
+
+        .insights-top-list {
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .insights-top-item {
+            font-size: 12px;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .insights-top-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .insights-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--p-night);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.35px;
+        }
+
+        .insights-section-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .insights-row {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 6px;
+            background: #fff;
+        }
+
+        .insights-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .insights-row-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .insights-row-subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .insights-row-metrics {
+            font-size: 11px;
+            margin-top: 4px;
+            color: var(--text);
+        }
+
+        .insights-row-footnote {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 3px;
+        }
+
+        .insight-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.25px;
+            background: #f8fafc;
+            color: var(--text-secondary);
+        }
+
+        .insight-badge.severity-critical { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+        .insight-badge.severity-high { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
+        .insight-badge.severity-medium { background: #fef9c3; border-color: #fde68a; color: #854d0e; }
+        .insight-badge.severity-low { background: #ecfdf5; border-color: #86efac; color: #166534; }
+
+        .insight-badge.conf-high { background: #dcfce7; border-color: #86efac; color: #166534; }
+        .insight-badge.conf-medium { background: #fef9c3; border-color: #fde68a; color: #854d0e; }
+        .insight-badge.conf-low { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+
+        .insight-badge.status-explained { background: #dcfce7; border-color: #86efac; color: #166534; }
+        .insight-badge.status-timed_out { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
+        .insight-badge.status-execution_failed { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+        .insight-badge.status-insufficient_metadata { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+        .insight-badge.status-not_supported { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+        .insight-badge.status-explain_unavailable { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+
         .toggle-chip {
             border: 1px solid var(--border);
             background: #f8fafc;
@@ -556,6 +887,31 @@
         .toggle-chip.delete.active { background: var(--p-amethyst); border-color: var(--p-amethyst); }
         .toggle-chip.aggregate.active { background: var(--p-pink); border-color: var(--p-pink); }
         .toggle-chip.transaction.active { background: var(--p-night); border-color: var(--p-night); }
+
+        .adv-layout {
+            display: grid;
+            gap: 14px;
+        }
+
+        .settings-note {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .expert-toggle {
+            margin-top: 10px;
+            border-top: 1px dashed var(--border);
+            padding-top: 8px;
+        }
+
+        .expert-toggle summary {
+            cursor: pointer;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            user-select: none;
+        }
 
         /* TIME MACHINE SCRUBBER */
         .time-machine-bar {
@@ -885,7 +1241,22 @@
                     <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN SLOW QUERY & INDEX ANALYSIS</div>
                     <span id="insightsPill" class="insights-pill pending">Pending</span>
                 </div>
-                <div id="insightsStatus" style="font-size:12px; color: var(--text-secondary); margin-bottom: 10px;"></div>
+                <div id="insightsStatus" class="insights-status-line"></div>
+                <details id="insightsGuide" class="insights-guide">
+                    <summary>
+                        <span>Insights Quick Guide</span>
+                        <span class="guide-hint">How To Read This Panel</span>
+                    </summary>
+                    <div class="insights-guide-body">
+                        <ol class="insights-guide-list">
+                            <li>Start with <strong>Top Findings</strong> to identify the highest-impact slow shape.</li>
+                            <li>Open <strong>Slow Queries</strong> and prioritize high <code>p95/p99</code> with high count.</li>
+                            <li>Check <strong>Explain</strong> status and reason to see if guidance is explain-backed or heuristic.</li>
+                            <li>Use <strong>Potential Index Issues</strong> confidence and evidence level to rank remediation work.</li>
+                            <li>Use <strong>Affected Collections</strong>, <strong>Iterations</strong>, and <strong>Timeline</strong> for scope and drift context.</li>
+                        </ol>
+                    </div>
+                </details>
                 <div class="latency-toggles" style="margin-bottom: 10px;">
                     <button type="button" id="insTabOverviewBtn" class="toggle-chip active" onclick="showInsightsTab('overview')">Overview</button>
                     <button type="button" id="insTabIterBtn" class="toggle-chip" onclick="showInsightsTab('iteration')">Iterations</button>
@@ -893,36 +1264,36 @@
                 </div>
 
                 <div id="insightsTabOverview">
-                    <div id="insightsTopFindings" style="margin-bottom: 12px;"></div>
+                    <div id="insightsTopFindings" class="insights-top-list"></div>
                     <div class="grid-2" style="gap: 16px;">
-                        <div>
-                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">SLOW QUERIES</div>
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Slow Queries</div>
                             <div id="insightsSlowQueries"></div>
                         </div>
-                        <div>
-                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">AFFECTED COLLECTIONS</div>
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Affected Collections</div>
                             <div id="insightsCollections"></div>
                         </div>
                     </div>
                     <div class="grid-2" style="gap: 16px; margin-top: 14px;">
-                        <div>
-                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">POTENTIAL INDEX ISSUES</div>
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Potential Index Issues</div>
                             <div id="insightsIndexIssues"></div>
                         </div>
-                        <div>
-                            <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">RECOMMENDED ACTIONS</div>
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Recommended Actions</div>
                             <div id="insightsRecommendations"></div>
                         </div>
                     </div>
                 </div>
 
                 <div id="insightsTabIteration" style="display:none;">
-                    <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">PER-ITERATION OVERLAY</div>
+                    <div class="insights-section-title">Per-Iteration Overlay</div>
                     <div id="insightsPerIteration"></div>
                 </div>
 
                 <div id="insightsTabTimeline" style="display:none;">
-                    <div style="font-size:12px;font-weight:700;color:var(--p-night);margin-bottom:6px;">TIME-SLICED DRILL-DOWN</div>
+                    <div class="insights-section-title">Time-Sliced Drill-Down</div>
                     <div id="insightsTimeSlices"></div>
                 </div>
             </div>
@@ -950,236 +1321,320 @@
         </div>
 
         <form id="configForm" enctype="multipart/form-data">
-            <div class="tabs">
-                <button type="button" class="tab-btn active" onclick="showTab('tab-conn')">Connection</button>
-                <button type="button" class="tab-btn" onclick="showTab('tab-workload')">Workload</button>
-                <button type="button" class="tab-btn" onclick="showTab('tab-mix')">Mix</button>
-                <button type="button" class="tab-btn" onclick="showTab('tab-adv')">Advanced</button>
-                <button type="button" class="tab-btn" onclick="showTab('tab-raw')">Raw Injector</button>
-            </div>
+            <div class="settings-console">
+                <aside class="settings-sidebar">
+                    <div class="settings-sidebar-title">Settings Navigation</div>
+                    <div class="tabs">
+                        <button type="button" class="tab-btn active" onclick="showTab('tab-conn', this)">Execution / Runtime</button>
+                        <button type="button" class="tab-btn" onclick="showTab('tab-workload', this)">Workload Configuration</button>
+                        <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
+                        <button type="button" class="tab-btn" onclick="showTab('tab-adv', this)">Metrics & Insights</button>
+                        <button type="button" class="tab-btn" onclick="showTab('tab-raw', this)">Expert / Raw Injector</button>
+                    </div>
+                    <div class="settings-sidebar-note">
+                        Configure workload safely with structured sections. Changes apply when you launch a new run.
+                    </div>
+                </aside>
+                <section class="settings-content">
+                    <div class="settings-topbar">
+                        <div>
+                            <h3>Benchmark Settings Console</h3>
+                            <p>Professional configuration workspace for DBAs/SREs. Use recommended defaults first, then tune targeted sections only when needed.</p>
+                        </div>
+                        <div class="settings-badges">
+                            <span class="settings-badge recommended">Safe Defaults</span>
+                            <span class="settings-badge">Post-Run Insights</span>
+                            <span class="settings-badge">Power User Ready</span>
+                        </div>
+                    </div>
+                    <div id="configInlineError" class="settings-inline-error"></div>
 
             <div id="tab-conn" class="tab-content active">
-                <div class="form-group"><label>MongoDB URI</label><input type="text" name="uri"
-                        placeholder="mongodb://localhost:27017/" required></div>
-                <div class="grid-2">
-                    <div class="form-group"><label>Username (Optional)</label><input type="text" name="username"></div>
-                    <div class="form-group"><label>Password (Optional)</label><input type="password" id="uiPassword"
-                            name="password" placeholder="Stored in session"></div>
-                    <div class="form-group"><label>Auth Source</label><input type="text" name="auth_source"
-                            value="admin"></div>
-                    <div class="form-group"><label>ReplicaSet Name (Optional)</label><input type="text"
-                            name="replicaset_name"></div>
-                    <div class="form-group">
-                        <label>Read Preference</label>
-                        <select name="read_preference">
-                            <option value="nearest">Nearest</option>
-                            <option value="primary">Primary</option>
-                            <option value="secondary">Secondary</option>
-                        </select>
+                <section class="settings-card">
+                    <h4>Target Connection</h4>
+                    <div class="settings-help">Set the MongoDB target and authentication details used for execution.</div>
+                    <div class="form-group"><label>MongoDB URI</label><input type="text" name="uri"
+                            placeholder="mongodb://localhost:27017/" required></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Username (Optional)</label><input type="text" name="username"></div>
+                        <div class="form-group"><label>Password (Optional)</label><input type="password" id="uiPassword"
+                                name="password" placeholder="Stored in session"></div>
+                        <div class="form-group"><label>Auth Source</label><input type="text" name="auth_source"
+                                value="admin"></div>
+                        <div class="form-group"><label>ReplicaSet Name (Optional)</label><input type="text"
+                                name="replicaset_name"></div>
+                        <div class="form-group">
+                            <label>Read Preference</label>
+                            <select name="read_preference">
+                                <option value="nearest">Nearest</option>
+                                <option value="primary">Primary</option>
+                                <option value="secondary">Secondary</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
-                <div class="grid-3">
-                    <div class="form-group"><label>Max Pool Size</label><input type="number" name="max_pool_size"
-                            value="200"></div>
-                    <div class="form-group"><label>Min Pool Size</label><input type="number" name="min_pool_size"
-                            value="10"></div>
-                    <div class="form-group"><label>Max Idle Time (m)</label><input type="number" name="max_idle_time"
-                            value="30"></div>
-                </div>
-                <div class="grid-2">
-                    <div class="checkbox-group"><input type="checkbox" id="directConn" name="direct_connection"
-                            value="true"><label for="directConn">Direct Connection (Bypass Topology)</label></div>
-                    <div class="checkbox-group"><input type="checkbox" id="debugLogs" name="debug" value="true"><label
-                            for="debugLogs">Enable Driver Debug Logs</label></div>
-                </div>
+                </section>
+                <section class="settings-card">
+                    <h4>Runtime Transport & Pooling</h4>
+                    <div class="settings-help">Connection pool values should align with concurrency and target cluster capacity.</div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Max Pool Size</label><input type="number" name="max_pool_size"
+                                value="200"></div>
+                        <div class="form-group"><label>Min Pool Size</label><input type="number" name="min_pool_size"
+                                value="10"></div>
+                        <div class="form-group"><label>Max Idle Time (m)</label><input type="number" name="max_idle_time"
+                                value="30"></div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="checkbox-group"><input type="checkbox" id="directConn" name="direct_connection"
+                                value="true"><label for="directConn">Direct Connection (Bypass Topology)</label></div>
+                        <div class="checkbox-group"><input type="checkbox" id="debugLogs" name="debug" value="true"><label
+                                for="debugLogs">Enable Driver Debug Logs</label></div>
+                    </div>
+                </section>
             </div>
 
             <div id="tab-workload" class="tab-content">
-                <div class="grid-2">
-                    <div class="form-group"><label>Concurrency (Active Workers)</label><input type="number"
-                            name="concurrency" value="16" required></div>
-                    <div class="form-group"><label>Duration (e.g. 60s, 5m)</label><input type="text" name="duration"
-                            value="60s" required></div>
-                </div>
-
-                <div class="grid-2">
-                    <div class="form-group">
-                        <label>Iterations (Run Count)</label>
-                        <input type="number" name="iterations" value="1" min="1" required>
+                <section class="settings-card">
+                    <h4>Workload Control</h4>
+                    <div class="settings-help">Primary execution controls for run length, iteration strategy, and worker pressure.</div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Concurrency (Active Workers)</label><input type="number"
+                                name="concurrency" value="16" required></div>
+                        <div class="form-group"><label>Duration (e.g. 60s, 5m)</label><input type="text" name="duration"
+                                value="60s" required></div>
                     </div>
-                    <div class="form-group">
-                        <label>Interval Delay (e.g. 5s, 1m)</label>
-                        <input type="text" name="interval_delay" value="0s" required>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Iterations (Run Count)</label>
+                            <input type="number" name="iterations" value="1" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Interval Delay (e.g. 5s, 1m)</label>
+                            <input type="text" name="interval_delay" value="0s" required>
+                        </div>
                     </div>
-                </div>
+                </section>
 
-                <div class="form-group checkbox-group" style="margin-bottom: 24px;">
-                    <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
-                        onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default
-                        Workload</label>
-                </div>
-                <div id="customFilesSection" class="grid-2" style="display: none; margin-bottom: 24px;">
-                    <div class="file-upload-box"><label>Custom Collections JSON</label><input type="file"
-                            name="collections_file" accept=".json"></div>
-                    <div class="file-upload-box"><label>Custom Queries JSON</label><input type="file"
-                            name="queries_file" accept=".json"></div>
-                </div>
-                <div class="grid-2">
-                    <div class="form-group"><label>Seed Document Count</label><input type="number"
-                            name="documents_count" value="100000"></div>
-                    <div class="form-group"><label>Max Transaction Ops</label><input type="number"
-                            name="max_transaction_ops" value="5"></div>
-                </div>
-                <div class="grid-3">
-                    <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
-                            value="true"><label for="dropColl">Drop Collections First</label></div>
-                    <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
-                            value="true"><label for="skipSeed">Skip Seed Phase</label></div>
-                    <div class="checkbox-group"><input type="checkbox" id="useTx" name="use_transactions"
-                            value="true"><label for="useTx">Use Transactions</label></div>
-                </div>
+                <section class="settings-card">
+                    <h4>Data / Query Configuration</h4>
+                    <div class="settings-help">Choose built-in defaults or upload custom collection/query definitions.</div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
+                            onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default Workload</label>
+                    </div>
+                    <div id="customFilesSection" class="grid-2" style="display: none; margin-top: 14px;">
+                        <div class="file-upload-box"><label>Custom Collections JSON</label><input type="file"
+                                name="collections_file" accept=".json"></div>
+                        <div class="file-upload-box"><label>Custom Queries JSON</label><input type="file"
+                                name="queries_file" accept=".json"></div>
+                    </div>
+                    <div class="grid-2" style="margin-top: 14px;">
+                        <div class="form-group"><label>Seed Document Count</label><input type="number"
+                                name="documents_count" value="100000"></div>
+                        <div class="form-group"><label>Max Transaction Ops</label><input type="number"
+                                name="max_transaction_ops" value="5"></div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
+                                value="true"><label for="dropColl">Drop Collections First</label></div>
+                        <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
+                                value="true"><label for="skipSeed">Skip Seed Phase</label></div>
+                        <div class="checkbox-group"><input type="checkbox" id="useTx" name="use_transactions"
+                                value="true"><label for="useTx">Use Transactions</label></div>
+                    </div>
+                </section>
             </div>
 
             <div id="tab-mix" class="tab-content">
-                <div class="grid-3">
-                    <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="50">
+                <section class="settings-card">
+                    <h4>Operation Mix Allocation</h4>
+                    <div class="settings-help">Define workload composition by operation percentage. Backend normalizes totals to 100%.</div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="50"></div>
+                        <div class="form-group"><label>Update (%)</label><input type="number" name="update_percent" value="20"></div>
+                        <div class="form-group"><label>Delete (%)</label><input type="number" name="delete_percent" value="10"></div>
+                        <div class="form-group"><label>Insert (%)</label><input type="number" name="insert_percent" value="5"></div>
+                        <div class="form-group"><label>Bulk Insert (%)</label><input type="number" name="bulk_insert_percent" value="5"></div>
+                        <div class="form-group"><label>Aggregate (%)</label><input type="number" name="aggregate_percent" value="5"></div>
+                        <div class="form-group"><label>Transaction (%)</label><input type="number" name="transaction_percent" value="5"></div>
                     </div>
-                    <div class="form-group"><label>Update (%)</label><input type="number" name="update_percent"
-                            value="20"></div>
-                    <div class="form-group"><label>Delete (%)</label><input type="number" name="delete_percent"
-                            value="10"></div>
-                    <div class="form-group"><label>Insert (%)</label><input type="number" name="insert_percent"
-                            value="5"></div>
-                    <div class="form-group"><label>Bulk Insert (%)</label><input type="number"
-                            name="bulk_insert_percent" value="5"></div>
-                    <div class="form-group"><label>Aggregate (%)</label><input type="number" name="aggregate_percent"
-                            value="5"></div>
-                    <div class="form-group"><label>Transaction (%)</label><input type="number"
-                            name="transaction_percent" value="5"></div>
-                </div>
+                    <div class="settings-note">Tip: keep uncommon operations low initially, then increase selectively when investigating specific behaviors.</div>
+                </section>
             </div>
 
             <div id="tab-adv" class="tab-content">
-                <div class="grid-3">
-                    <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size"
-                            value="10">
-                    </div>
-                    <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5">
-                    </div>
-                    <div class="form-group"><label>Insert Batch Size</label><input type="number"
-                            name="insert_batch_size" value="10"></div>
-                    <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size"
-                            value="1000">
-                    </div>
-                    <div class="form-group"><label>Insert Cache Size</label><input type="number"
-                            name="insert_cache_size" value="1000"></div>
-                    <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms"
-                            value="500">
-                    </div>
-                    <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts"
-                            value="2"></div>
-                    <div class="form-group"><label>Retry Backoff (ms)</label><input type="number"
-                            name="retry_backoff_ms" value="5">
-                    </div>
-                </div>
-                <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="useFindOne"
-                        name="use_findone_for_limit_one" value="true" checked><label for="useFindOne">Optimization: Use
-                        FindOne for
-                        limit 1</label></div>
+                <div class="adv-layout">
+                    <section class="settings-card">
+                        <h4>Execution / Runtime Tuning</h4>
+                        <div class="settings-help">Low-level runtime controls for request shaping and operation timeout behavior.</div>
+                        <div class="grid-3">
+                            <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size" value="10"></div>
+                            <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
+                            <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size" value="10"></div>
+                            <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000"></div>
+                            <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size" value="1000"></div>
+                            <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500"></div>
+                        </div>
+                        <div class="checkbox-group" style="margin-top:4px; width:max-content;">
+                            <input type="checkbox" id="useFindOne" name="use_findone_for_limit_one" value="true" checked>
+                            <label for="useFindOne">Use <code>FindOne</code> when limit is 1 (recommended)</label>
+                        </div>
+                    </section>
 
-                <div class="grid-2" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="csvExport" name="csv_export_enabled" value="true">
-                            <label for="csvExport">Enable Real-Time CSV Metrics Export</label>
+                    <section class="settings-card">
+                        <h4>Export & Reporting</h4>
+                        <div class="settings-help">Stream real-time metrics to CSV during workload execution.</div>
+                        <div class="grid-2">
+                            <div style="display:flex; flex-direction:column; gap:12px;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="csvExport" name="csv_export_enabled" value="true">
+                                    <label for="csvExport">Enable Real-Time CSV Metrics Export</label>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="csvAppend" name="csv_export_append" value="true">
+                                    <label for="csvAppend">Append to existing file (do not overwrite)</label>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>CSV Export Path & Filename</label>
+                                <input type="text" name="csv_export_path" placeholder="plgm_metrics_export.csv">
+                                <div class="settings-note">Example: <code>/tmp/plgm_metrics_export.csv</code></div>
+                            </div>
                         </div>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="csvAppend" name="csv_export_append" value="true">
-                            <label for="csvAppend">Append to existing file (do not overwrite)</label>
-                        </div>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label>CSV Export Path & Filename</label>
-                        <input type="text" name="csv_export_path" placeholder="plgm_metrics_export.csv">
-                    </div>
-                </div>
+                    </section>
 
-                <div class="grid-2" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
-                            <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
+                    <section class="settings-card">
+                        <h4>Retention & Sampling</h4>
+                        <div class="settings-help">Controls for post-run insights data volume and signal quality.</div>
+                        <div class="grid-2">
+                            <div style="display:flex; flex-direction:column; gap:12px;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
+                                    <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
+                                </div>
+                            </div>
+                            <div class="grid-2" style="gap:12px;">
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Insights Sampling Rate (0-1)</label>
+                                    <input type="number" name="insights_sampling_rate" min="0.01" max="1" step="0.01" value="0.10">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Slow Threshold (ms)</label>
+                                    <input type="number" name="insights_slow_threshold_ms" min="1" step="1" value="200">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Max Retained Events</label>
+                                    <input type="number" name="insights_max_events" min="100" step="100" value="5000">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Max Group Entries</label>
+                                    <input type="number" name="insights_max_groups" min="50" step="10" value="300">
+                                </div>
+                            </div>
                         </div>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true">
-                            <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling (Optional)</label>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Explain Analysis</h4>
+                        <div class="settings-help">Post-run explain enrichment for top candidate shapes. Disabled by default to minimize cluster pressure.</div>
+                        <div class="grid-2">
+                            <div style="display:flex; flex-direction:column; gap:12px;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true">
+                                    <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling</label>
+                                </div>
+                                <div class="settings-note">Explain is post-run only and does not execute during measured workload runtime.</div>
+                            </div>
+                            <div class="grid-2" style="gap:12px;">
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Top N Shapes</label>
+                                    <input type="number" name="insights_explain_top_n" min="1" step="1" value="5">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Severity Mode</label>
+                                    <select name="insights_explain_severity_mode">
+                                        <option value="high_only" selected>High Only (Recommended)</option>
+                                        <option value="medium_only">Medium + High + Critical</option>
+                                        <option value="critical_only">Critical Only</option>
+                                        <option value="high_and_low">High + Low</option>
+                                    </select>
+                                    <div class="settings-note">Default keeps explain focused on high-severity slow groups to reduce low-value attempts and timeout pressure.</div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Max Time (ms)</label>
+                                    <input type="number" name="insights_explain_max_time_ms" min="100" step="100" value="1000">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Workers (Post-Run)</label>
+                                    <input type="number" name="insights_explain_workers" min="1" step="1" value="1">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Timeout Retries</label>
+                                    <input type="number" name="insights_explain_retries" min="0" step="1" value="1">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Retry Backoff (ms)</label>
+                                    <input type="number" name="insights_explain_backoff_ms" min="0" step="50" value="150">
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="grid-2" style="gap: 12px;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Insights Sampling Rate (0-1)</label>
-                            <input type="number" name="insights_sampling_rate" min="0.01" max="1" step="0.01" value="0.10">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Slow Threshold (ms)</label>
-                            <input type="number" name="insights_slow_threshold_ms" min="1" step="1" value="200">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Max Retained Events</label>
-                            <input type="number" name="insights_max_events" min="100" step="100" value="5000">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Max Group Entries</label>
-                            <input type="number" name="insights_max_groups" min="50" step="10" value="300">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Explain Top N Shapes</label>
-                            <input type="number" name="insights_explain_top_n" min="1" step="1" value="5">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>Explain Max Time (ms)</label>
-                            <input type="number" name="insights_explain_max_time_ms" min="100" step="100" value="1000">
-                        </div>
-                    </div>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Debug / Experimental</h4>
+                        <div class="settings-help">Advanced retry controls for workload operations. Adjust only when debugging transient driver/server behavior.</div>
+                        <details class="expert-toggle">
+                            <summary>Show Expert Retry Controls</summary>
+                            <div class="grid-3" style="margin-top: 10px;">
+                                <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts" value="2"></div>
+                                <div class="form-group"><label>Retry Backoff (ms)</label><input type="number" name="retry_backoff_ms" value="5"></div>
+                            </div>
+                        </details>
+                    </section>
                 </div>
             </div>
 
             <div id="tab-raw" class="tab-content">
-                <div class="checkbox-group" style="margin-bottom: 24px;">
-                    <input type="checkbox" id="rawEnable" name="raw_injector_enabled" value="true"><label
-                        for="rawEnable" style="color: var(--p-night); font-weight: 500;">Enable Raw Injector Mode
-                        (Overrides Standard Workload)</label>
-                </div>
-                <div class="grid-3">
-                    <div class="form-group">
-                        <label>Operation Type</label>
-                        <select name="raw_injector_type">
-                            <option value="insert">Insert</option>
-                            <option value="upsert">Upsert</option>
-                            <option value="update">Update</option>
-                            <option value="find">Find</option>
-                            <option value="delete">Delete</option>
-                            <option value="mixed">Mixed</option>
-                        </select>
+                <section class="settings-card">
+                    <h4>Expert / Experimental Execution</h4>
+                    <div class="settings-help">Raw Injector bypasses standard workload flow for high-throughput hardware and driver stress tests.</div>
+                    <div class="checkbox-group" style="margin-bottom: 14px;">
+                        <input type="checkbox" id="rawEnable" name="raw_injector_enabled" value="true"><label
+                            for="rawEnable" style="color: var(--p-night); font-weight: 500;">Enable Raw Injector Mode (Overrides Standard Workload)</label>
                     </div>
-                    <div class="form-group"><label>Document Size (bytes)</label><input type="number"
-                            name="raw_injector_doc_size" value="1024"></div>
-                    <div class="form-group"><label>Batch Size</label><input type="number" name="raw_injector_batch_size"
-                            value="1000"></div>
-                    <div class="form-group"><label>Max Documents</label><input type="number"
-                            name="raw_injector_max_docs" value="10000000"></div>
-                    <div class="form-group"><label>Database Name</label><input type="text" name="raw_injector_db"
-                            value="plgm_injector"></div>
-                    <div class="form-group"><label>Collection Name</label><input type="text" name="raw_injector_coll"
-                            value="injector_data"></div>
-                </div>
-                <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="rawDrop"
-                        name="raw_injector_drop" value="true"><label for="rawDrop">Drop Collection on Start</label>
-                </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Operation Type</label>
+                            <select name="raw_injector_type">
+                                <option value="insert">Insert</option>
+                                <option value="upsert">Upsert</option>
+                                <option value="update">Update</option>
+                                <option value="find">Find</option>
+                                <option value="delete">Delete</option>
+                                <option value="mixed">Mixed</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Document Size (bytes)</label><input type="number"
+                                name="raw_injector_doc_size" value="1024"></div>
+                        <div class="form-group"><label>Batch Size</label><input type="number" name="raw_injector_batch_size"
+                                value="1000"></div>
+                        <div class="form-group"><label>Max Documents</label><input type="number"
+                                name="raw_injector_max_docs" value="10000000"></div>
+                        <div class="form-group"><label>Database Name</label><input type="text" name="raw_injector_db"
+                                value="plgm_injector"></div>
+                        <div class="form-group"><label>Collection Name</label><input type="text" name="raw_injector_coll"
+                                value="injector_data"></div>
+                    </div>
+                    <div class="checkbox-group" style="width: max-content;"><input type="checkbox" id="rawDrop"
+                            name="raw_injector_drop" value="true"><label for="rawDrop">Drop Collection on Start</label>
+                    </div>
+                </section>
             </div>
 
             <div class="footer" id="formFooter">
                 <button type="submit" class="btn btn-primary" id="startBtn">Launch Workload</button>
+            </div>
+                </section>
             </div>
         </form>
 
@@ -1294,11 +1749,12 @@
             }
         };
 
-        function showTab(tabId) {
+        function showTab(tabId, btnEl) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
+            const activeBtn = btnEl || event?.currentTarget;
+            if (activeBtn) activeBtn.classList.add('active');
         }
         function toggleCustomFiles() {
             document.getElementById('customFilesSection').style.display = document.getElementById('defaultWorkload').checked ? 'none' : 'grid';
@@ -1307,6 +1763,67 @@
         function showError(msg) {
             document.getElementById('errorMessage').textContent = msg;
             document.getElementById('errorModal').style.display = 'flex';
+        }
+        function showConfigInlineError(msg) {
+            const el = document.getElementById('configInlineError');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.display = 'block';
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        function clearConfigInlineError() {
+            const el = document.getElementById('configInlineError');
+            if (!el) return;
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+        function validateConfigForm() {
+            const num = (name) => Number(document.querySelector(`[name="${name}"]`)?.value || 0);
+            const uri = (document.querySelector('[name="uri"]')?.value || '').trim();
+            if (!uri) {
+                showConfigInlineError('MongoDB URI is required.');
+                showTab('tab-conn', document.querySelector('.tab-btn'));
+                return false;
+            }
+            const maxPool = num('max_pool_size');
+            const minPool = num('min_pool_size');
+            if (maxPool > 0 && minPool > 0 && maxPool < minPool) {
+                showConfigInlineError('Max Pool Size must be greater than or equal to Min Pool Size.');
+                showTab('tab-conn', document.querySelectorAll('.tab-btn')[0]);
+                return false;
+            }
+
+            const insightsSampling = Number(document.querySelector('[name="insights_sampling_rate"]')?.value || 0);
+            if (insightsSampling <= 0 || insightsSampling > 1) {
+                showConfigInlineError('Insights Sampling Rate must be between 0.01 and 1.');
+                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                return false;
+            }
+            const explainTopN = num('insights_explain_top_n');
+            const explainMaxTime = num('insights_explain_max_time_ms');
+            const explainWorkers = num('insights_explain_workers');
+            const explainRetries = num('insights_explain_retries');
+            const explainBackoff = num('insights_explain_backoff_ms');
+            if (explainTopN < 1 || explainMaxTime < 100 || explainWorkers < 1 || explainRetries < 0 || explainBackoff < 0) {
+                showConfigInlineError('Explain settings are invalid. Check top-N, max time, workers, retries, and backoff values.');
+                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                return false;
+            }
+
+            const mixTotal =
+                num('find_percent') +
+                num('update_percent') +
+                num('delete_percent') +
+                num('insert_percent') +
+                num('bulk_insert_percent') +
+                num('aggregate_percent') +
+                num('transaction_percent');
+            if (mixTotal <= 0) {
+                showConfigInlineError('Operation mix must have at least one percentage greater than zero.');
+                showTab('tab-mix', document.querySelectorAll('.tab-btn')[2]);
+                return false;
+            }
+            return true;
         }
         function closeErrorModal() {
             document.getElementById('errorModal').style.display = 'none';
@@ -1716,6 +2233,7 @@
             document.getElementById('dashboard').style.display = 'none';
             document.getElementById('configForm').style.display = 'block';
             document.getElementById('dashboardControls').style.display = 'none';
+            clearConfigInlineError();
             const badge = document.getElementById('statusIndicator');
             badge.textContent = "STOPPED"; badge.style.background = "rgba(255,255,255,0.2)"; badge.style.color = "white";
         }
@@ -1782,7 +2300,11 @@
                 document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
                 document.getElementById('insightsExplainEnabled').checked = !!cfg.InsightsExplainEnabled;
                 document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
+                document.querySelector('[name="insights_explain_severity_mode"]').value = cfg.InsightsExplainSeverityMode || 'high_only';
                 document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
+                document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
+                document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
+                document.querySelector('[name="insights_explain_backoff_ms"]').value = (cfg.InsightsExplainBackoffMS !== undefined) ? cfg.InsightsExplainBackoffMS : 150;
 
                 if (cfg.RawInjector) {
                     document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
@@ -1799,6 +2321,10 @@
 
         document.getElementById('configForm').addEventListener('submit', function (e) {
             e.preventDefault();
+            clearConfigInlineError();
+            if (!validateConfigForm()) {
+                return;
+            }
             const username = document.querySelector('[name="username"]').value;
             const password = document.querySelector('[name="password"]').value;
             if (username !== "" && password === "") {
@@ -1817,6 +2343,11 @@
                 showError("Password is required.");
                 return;
             }
+            clearConfigInlineError();
+            if (!validateConfigForm()) {
+                closeModal();
+                return;
+            }
             document.querySelector('[name="password"]').value = modalPass;
             sessionStorage.setItem('plgm_password', modalPass);
             closeModal();
@@ -1827,6 +2358,75 @@
 
         function escHtml(v) {
             return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        function explainStatusText(code) {
+            const map = {
+                explained: 'Explained',
+                explain_unavailable: 'Explain Unavailable',
+                not_supported: 'Not Supported',
+                insufficient_metadata: 'Insufficient Metadata',
+                timed_out: 'Timed Out',
+                execution_failed: 'Execution Failed'
+            };
+            return map[code] || code || 'Explain Unavailable';
+        }
+
+        function explainReasonText(code) {
+            const map = {
+                explain_disabled: 'Explain mode is disabled.',
+                explain_not_attempted_yet: 'Explain was enabled but not run yet.',
+                candidate_selected_explain_pending: 'Candidate selected for explain processing.',
+                not_selected_top_n_1: 'Not selected because top-N explain limit is 1.',
+                shape_not_in_top_slow_queries: 'This shape was not among top slow queries selected for explain.',
+                shape_not_in_explain_results: 'This shape had no explain result in the selected sample set.',
+                shape_event_not_retained: 'No sampled event was retained for this shape.',
+                missing_filter_sample: 'Sampled filter metadata was not available.',
+                missing_pipeline_sample: 'Sampled pipeline metadata was not available.',
+                collscan_observed: 'Explain observed a collection scan (COLLSCAN).',
+                ixscan_observed: 'Explain observed an index scan (IXSCAN).',
+                no_scan_stage_detected: 'Explain succeeded without a clear COLLSCAN/IXSCAN stage signal.',
+                not_authorized: 'Explain command failed due to authorization limits.',
+                namespace_not_found: 'Collection/namespace was not found at explain time.',
+                command_not_found: 'Explain command was not available on the target server.',
+                max_time_exceeded: 'Explain command exceeded maxTimeMS.',
+                client_deadline_exceeded: 'Client-side explain timeout was reached.',
+                client_context_canceled: 'Explain context was canceled before completion.',
+                low_value_shape_filtered: 'Shape was filtered from explain because it is low-value for index analysis.',
+                connect_failed: 'Connection failed while preparing explain.',
+                run_command_failed: 'Explain command failed at runtime.'
+            };
+            if (!code) return 'No explain reason available.';
+            if (map[code]) return map[code];
+            const topNMatch = /^not_selected_top_n_(\d+)$/.exec(code);
+            if (topNMatch) return `Not selected because top-N explain limit is ${topNMatch[1]}.`;
+            return code.replaceAll('_', ' ');
+        }
+
+        function explainImpactText(code) {
+            const map = {
+                none: 'none',
+                post_run_only_does_not_affect_measured_workload_window: 'post-run only (does not affect measured workload window)'
+            };
+            return map[code] || code || 'none';
+        }
+
+        function explainModeText(code) {
+            const map = {
+                disabled: 'disabled',
+                post_run_only: 'post-run only'
+            };
+            return map[code] || code || 'disabled';
+        }
+
+        function explainSeverityModeText(code) {
+            const map = {
+                high_only: 'high only',
+                medium_only: 'medium+',
+                critical_only: 'critical only',
+                high_and_low: 'high + low'
+            };
+            return map[code] || 'high only';
         }
 
         function showInsightsTab(tab) {
@@ -1843,10 +2443,41 @@
             const el = document.getElementById(containerId);
             if (!el) return;
             if (!rows || rows.length === 0) {
-                el.innerHTML = `<div style="font-size:12px;color:var(--text-secondary);">No strong signals detected.</div>`;
+                el.innerHTML = `<div class="insights-row-subtitle">No strong signals detected.</div>`;
                 return;
             }
             el.innerHTML = rows.map(formatter).join('');
+        }
+
+        function insightSeverityBadge(severity) {
+            const sev = (severity || 'low').toLowerCase();
+            return `<span class="insight-badge severity-${escHtml(sev)}">${escHtml(sev)}</span>`;
+        }
+
+        function insightConfidenceBadge(conf) {
+            const c = (conf || 'low').toLowerCase();
+            return `<span class="insight-badge conf-${escHtml(c)}">${escHtml(c)} confidence</span>`;
+        }
+
+        function insightExplainStatusBadge(status) {
+            const st = (status || 'explain_unavailable').toLowerCase();
+            return `<span class="insight-badge status-${escHtml(st)}">${escHtml(explainStatusText(st))}</span>`;
+        }
+
+        function clearInsightsContentForPending() {
+            const ids = [
+                'insightsTopFindings',
+                'insightsSlowQueries',
+                'insightsCollections',
+                'insightsIndexIssues',
+                'insightsRecommendations',
+                'insightsPerIteration',
+                'insightsTimeSlices'
+            ];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '';
+            });
         }
 
         function renderFinalInsights(rep) {
@@ -1864,6 +2495,11 @@
                 panel.style.display = 'block';
                 setPill('pending', 'Pending');
                 status.textContent = 'Insights are collecting in the background and will populate automatically when all iterations finish.';
+                clearInsightsContentForPending();
+                const topFindings = document.getElementById('insightsTopFindings');
+                if (topFindings) {
+                    topFindings.innerHTML = `<div class="insights-top-item">Insights will appear here after this run completes.</div>`;
+                }
                 showInsightsTab('overview');
                 return;
             }
@@ -1883,7 +2519,14 @@
             } else {
                 setPill('pending', 'Pending');
             }
-            status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | evidence: ${md.evidence_level || 'heuristic'}`;
+            const explainMode = explainModeText(md.explain_mode);
+            const explainSeverityMode = explainSeverityModeText(md.explain_severity_mode);
+            const explainWorkers = md.explain_workers || 1;
+            const explainRetries = (md.explain_retries !== undefined) ? md.explain_retries : 0;
+            const explainImpact = explainImpactText(md.explain_impact);
+            const filteredThreshold = md.filtered_by_threshold || 0;
+            const filteredSeverity = md.filtered_by_severity || 0;
+            status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | filtered(threshold/severity): ${filteredThreshold}/${filteredSeverity} | evidence: ${md.evidence_level || 'heuristic'} | explain: ${explainMode} (${explainSeverityMode}, workers ${explainWorkers}, retries ${explainRetries}) | impact: ${explainImpact}`;
 
             const top = [];
             if (rep.slow_queries && rep.slow_queries[0]) {
@@ -1892,57 +2535,58 @@
             }
             if (rep.potential_index_issues && rep.potential_index_issues[0]) {
                 const i = rep.potential_index_issues[0];
-                top.push(`Top index signal: ${i.collection} ${i.operation} (${i.confidence || 'low'} confidence, ${i.evidence_level || 'heuristic'})`);
+                top.push(`Top index signal: ${i.collection} ${i.operation} (${i.confidence || 'low'} confidence, ${i.evidence_level || 'heuristic'}, ${explainStatusText(i.explain_status)})`);
             }
             if (top.length === 0) {
                 top.push('No critical slow-query or index hotspot detected in sampled events.');
             }
-            document.getElementById('insightsTopFindings').innerHTML = top.slice(0, 3).map(t => `<div style="font-size:12px;margin-bottom:4px;color:var(--text);">• ${escHtml(t)}</div>`).join('');
+            document.getElementById('insightsTopFindings').innerHTML = top.slice(0, 3).map(t => `<div class="insights-top-item">• ${escHtml(t)}</div>`).join('');
 
             renderInsightsRows('insightsSlowQueries', (rep.slow_queries || []).slice(0, 8), s =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);">${escHtml(s.shape_summary || s.shape_key || '')}</div>
-                    <div style="font-size:11px;margin-top:4px;">avg ${Number(s.avg_ms || 0).toFixed(2)}ms | p95 ${Number(s.p95_ms || 0).toFixed(2)}ms | p99 ${Number(s.p99_ms || 0).toFixed(2)}ms | max ${Number(s.max_ms || 0).toFixed(2)}ms | count ${s.count || 0} | severity ${escHtml(s.severity || 'low')}</div>
-                    <div style="font-size:10px;color:var(--text-secondary);margin-top:3px;">shape id: ${escHtml(s.shape_id || '')}${s.trend ? ` | trend: ${escHtml(s.trend.direction || 'flat')} (${Number(s.trend.delta_p95_ms || 0).toFixed(2)}ms p95)` : ''}</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')} ${insightSeverityBadge(s.severity)} ${insightExplainStatusBadge(s.explain_status)}</div>
+                    <div class="insights-row-subtitle">${escHtml(s.shape_summary || s.shape_key || '')}</div>
+                    <div class="insights-row-metrics">avg ${Number(s.avg_ms || 0).toFixed(2)}ms | p95 ${Number(s.p95_ms || 0).toFixed(2)}ms | p99 ${Number(s.p99_ms || 0).toFixed(2)}ms | max ${Number(s.max_ms || 0).toFixed(2)}ms | count ${s.count || 0}</div>
+                    <div class="insights-row-footnote">explain: ${escHtml(explainReasonText(s.explain_reason))}</div>
+                    <div class="insights-row-footnote">shape id: ${escHtml(s.shape_id || '')}${s.trend ? ` | trend: ${escHtml(s.trend.direction || 'flat')} (${Number(s.trend.delta_p95_ms || 0).toFixed(2)}ms p95)` : ''}</div>
                 </div>`
             );
 
             renderInsightsRows('insightsCollections', (rep.affected_collections || []).slice(0, 8), c =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">${escHtml(c.collection || '')}</div>
-                    <div style="font-size:11px;">slow ratio ${(Number(c.slow_ratio || 0) * 100).toFixed(1)}% | p95 ${Number(c.p95_ms || 0).toFixed(2)}ms | p99 ${Number(c.p99_ms || 0).toFixed(2)}ms | count ${c.count || 0}</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">${escHtml(c.collection || '')}</div>
+                    <div class="insights-row-metrics">slow ratio ${(Number(c.slow_ratio || 0) * 100).toFixed(1)}% | p95 ${Number(c.p95_ms || 0).toFixed(2)}ms | p99 ${Number(c.p99_ms || 0).toFixed(2)}ms | count ${c.count || 0}</div>
                 </div>`
             );
 
             renderInsightsRows('insightsIndexIssues', (rep.potential_index_issues || []).slice(0, 8), i =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);">confidence: ${escHtml(i.confidence || 'low')} | evidence: ${escHtml(i.evidence_level || 'heuristic')}</div>
-                    <div style="font-size:11px;margin-top:4px;">${escHtml(i.message || '')}</div>
-                    <div style="font-size:11px;margin-top:4px;"><strong>Action:</strong> ${escHtml(i.recommendation || '')}</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')} ${insightConfidenceBadge(i.confidence)} ${insightExplainStatusBadge(i.explain_status)}</div>
+                    <div class="insights-row-subtitle">evidence: ${escHtml(i.evidence_level || 'heuristic')} | explain: ${escHtml(explainReasonText(i.explain_reason))}</div>
+                    <div class="insights-row-metrics">${escHtml(i.message || '')}</div>
+                    <div class="insights-row-metrics"><strong>Action:</strong> ${escHtml(i.recommendation || '')}</div>
                 </div>`
             );
 
             renderInsightsRows('insightsRecommendations', (rep.recommendations || []).slice(0, 8), r =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">#${r.rank || '-'} ${escHtml(r.title || '')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);">priority: ${escHtml(r.priority || 'low')} | confidence: ${escHtml(r.confidence || 'low')}</div>
-                    <div style="font-size:11px;margin-top:4px;">${escHtml(r.details || '')}</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">#${r.rank || '-'} ${escHtml(r.title || '')} ${insightConfidenceBadge(r.confidence)}</div>
+                    <div class="insights-row-subtitle">priority: ${escHtml(r.priority || 'low')}</div>
+                    <div class="insights-row-metrics">${escHtml(r.details || '')}</div>
                 </div>`
             );
 
             renderInsightsRows('insightsPerIteration', (rep.per_iteration || []).slice(0, 20), it =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">Iteration ${it.iteration}</div>
-                    <div style="font-size:11px;">count ${it.count || 0} | slow ratio ${(Number(it.slow_ratio || 0) * 100).toFixed(1)}% | avg ${Number(it.avg_ms || 0).toFixed(2)}ms | p95 ${Number(it.p95_ms || 0).toFixed(2)}ms | p99 ${Number(it.p99_ms || 0).toFixed(2)}ms</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">Iteration ${it.iteration}</div>
+                    <div class="insights-row-metrics">count ${it.count || 0} | slow ratio ${(Number(it.slow_ratio || 0) * 100).toFixed(1)}% | avg ${Number(it.avg_ms || 0).toFixed(2)}ms | p95 ${Number(it.p95_ms || 0).toFixed(2)}ms | p99 ${Number(it.p99_ms || 0).toFixed(2)}ms</div>
                 </div>`
             );
 
             renderInsightsRows('insightsTimeSlices', (rep.time_slices || []).slice(0, 60), ts =>
-                `<div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">
-                    <div style="font-size:12px;font-weight:700;">${escHtml(ts.bucket_label || '')}</div>
-                    <div style="font-size:11px;">count ${ts.count || 0} | slow ${ts.slow_count || 0} | avg ${Number(ts.avg_ms || 0).toFixed(2)}ms | p95 ${Number(ts.p95_ms || 0).toFixed(2)}ms | p99 ${Number(ts.p99_ms || 0).toFixed(2)}ms</div>
+                `<div class="insights-row">
+                    <div class="insights-row-title">${escHtml(ts.bucket_label || '')}</div>
+                    <div class="insights-row-metrics">count ${ts.count || 0} | slow ${ts.slow_count || 0} | avg ${Number(ts.avg_ms || 0).toFixed(2)}ms | p95 ${Number(ts.p95_ms || 0).toFixed(2)}ms | p99 ${Number(ts.p99_ms || 0).toFixed(2)}ms</div>
                 </div>`
             );
         }

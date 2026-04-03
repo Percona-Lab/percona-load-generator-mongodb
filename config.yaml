@@ -60,6 +60,25 @@ csv_export_append: false # If true, appends to the file. If false, overwrites it
 csv_export_path: "/tmp/plgm_metrics_export.csv"
 
 # ==============================================================================
+# Post-Run Insights (Slow Query / Index Analysis)
+# ==============================================================================
+# Insights are generated after workload completion.
+# Explain mode is post-run only and does not execute during the measured workload window.
+insights_enabled: true
+insights_sampling_rate: 0.10
+insights_slow_threshold_ms: 200
+insights_max_events: 5000
+insights_max_groups: 300
+insights_explain_enabled: false
+insights_explain_top_n: 5
+insights_explain_max_time_ms: 1000
+# Modes: high_only (default), medium_only, critical_only, high_and_low
+insights_explain_severity_mode: "high_only"
+insights_explain_workers: 1
+insights_explain_retries: 1
+insights_explain_backoff_ms: 150
+
+# ==============================================================================
 # Workload Definition
 # ==============================================================================
 

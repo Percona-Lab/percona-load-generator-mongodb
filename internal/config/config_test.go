@@ -28,6 +28,9 @@ func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	if cfg.FindPercent+cfg.UpdatePercent+cfg.DeletePercent+cfg.InsertPercent+cfg.AggregatePercent+cfg.TransactionPercent+cfg.BulkInsertPercent != 100 {
 		t.Fatalf("expected normalized percentages to total 100")
 	}
+	if cfg.InsightsExplainWorkers != 1 || cfg.InsightsExplainRetries != 1 || cfg.InsightsExplainBackoffMS != 150 || cfg.InsightsExplainSeverityMode != "high_only" {
+		t.Fatalf("expected explain defaults workers=1 retries=1 backoff=150 mode=high_only, got workers=%d retries=%d backoff=%d mode=%q", cfg.InsightsExplainWorkers, cfg.InsightsExplainRetries, cfg.InsightsExplainBackoffMS, cfg.InsightsExplainSeverityMode)
+	}
 }
 
 func TestLoadAppConfigWithYAMLAndEnvOverrides(t *testing.T) {
@@ -131,5 +134,37 @@ func TestApplyBaseDefaultsPreservesExplicitValues(t *testing.T) {
 	}
 	if cfg.CSVExportPath == "" {
 		t.Fatalf("expected csv path default when export enabled")
+	}
+}
+
+func TestApplyEnvOverridesInsightsExplainRuntimeSettings(t *testing.T) {
+	cfg := &AppConfig{}
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_WORKERS", "3")
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_RETRIES", "2")
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS", "250")
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE", "medium_only")
+
+	_ = applyEnvOverrides(cfg)
+	applyBaseDefaults(cfg)
+
+	if cfg.InsightsExplainWorkers != 3 {
+		t.Fatalf("expected explain workers override 3, got %d", cfg.InsightsExplainWorkers)
+	}
+	if cfg.InsightsExplainRetries != 2 {
+		t.Fatalf("expected explain retries override 2, got %d", cfg.InsightsExplainRetries)
+	}
+	if cfg.InsightsExplainBackoffMS != 250 {
+		t.Fatalf("expected explain backoff override 250, got %d", cfg.InsightsExplainBackoffMS)
+	}
+	if cfg.InsightsExplainSeverityMode != "medium_only" {
+		t.Fatalf("expected explain severity mode override medium_only, got %q", cfg.InsightsExplainSeverityMode)
+	}
+}
+
+func TestApplyBaseDefaultsNormalizesUnknownExplainSeverityMode(t *testing.T) {
+	cfg := &AppConfig{InsightsExplainSeverityMode: "unexpected_mode"}
+	applyBaseDefaults(cfg)
+	if cfg.InsightsExplainSeverityMode != "high_only" {
+		t.Fatalf("expected invalid explain severity mode to normalize to high_only, got %q", cfg.InsightsExplainSeverityMode)
 	}
 }

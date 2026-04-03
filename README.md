@@ -95,6 +95,7 @@ Quick access:
 * Full guide: [`INSIGHTS.md`](./INSIGHTS.md)
 * Web UI path: `Advanced -> Insights Analysis`
 * Output: Dashboard insights panel + `Download Summary` JSON (`insights` section)
+* Includes explain support matrix, status/reason glossary, confidence model, troubleshooting, and limitations
 
 ## The Interactive UI
 

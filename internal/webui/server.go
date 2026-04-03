@@ -11,6 +11,7 @@ import (
 	"embed"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -228,6 +230,17 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainEnabled = r.FormValue("insights_explain_enabled") == "true" || r.FormValue("insights_explain_enabled") == "on"
 	cfg.InsightsExplainTopN = parseInt(r.FormValue("insights_explain_top_n"), cfg.InsightsExplainTopN)
 	cfg.InsightsExplainMaxTimeMS = parseInt(r.FormValue("insights_explain_max_time_ms"), cfg.InsightsExplainMaxTimeMS)
+	if mode := r.FormValue("insights_explain_severity_mode"); mode != "" {
+		cfg.InsightsExplainSeverityMode = mode
+	}
+	switch cfg.InsightsExplainSeverityMode {
+	case "high_and_low", "medium_only", "critical_only", "high_only":
+	default:
+		cfg.InsightsExplainSeverityMode = "high_only"
+	}
+	cfg.InsightsExplainWorkers = parseInt(r.FormValue("insights_explain_workers"), cfg.InsightsExplainWorkers)
+	cfg.InsightsExplainRetries = parseInt(r.FormValue("insights_explain_retries"), cfg.InsightsExplainRetries)
+	cfg.InsightsExplainBackoffMS = parseInt(r.FormValue("insights_explain_backoff_ms"), cfg.InsightsExplainBackoffMS)
 
 	cfg.ConnectionParams.ConnectionTimeout = parseInt(r.FormValue("connection_timeout"), cfg.ConnectionParams.ConnectionTimeout)
 	cfg.ConnectionParams.ServerSelectionTimeout = parseInt(r.FormValue("server_selection_timeout"), cfg.ConnectionParams.ServerSelectionTimeout)
@@ -710,9 +723,9 @@ func (s *WebServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 
 	rep := collector.GetFinalInsights()
 	events := collector.SnapshotOperationEvents()
-	explainEnabled, explainTopN, explainMaxMs := collector.GetExplainSettings()
+	explainEnabled, explainTopN, explainMaxMs, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
 	if explainEnabled {
-		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs)
+		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs)
 	}
 	applyTrends(&rep, baseTrends)
 
@@ -761,70 +774,107 @@ func updateTrendBase(base *map[string]float64, rep stats.InsightsReport) {
 type explainEvidence struct {
 	collscan bool
 	ixscan   bool
-	err      string
+	status   string
+	reason   string
 }
 
-func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int) {
+func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int, explainSeverityMode string, workers int, retries int, backoffMs int) {
 	if status != "ready" || cfg == nil || topN <= 0 || len(rep.SlowQueries) == 0 {
 		return
 	}
+	if workers <= 0 {
+		workers = 1
+	}
+	if retries < 0 {
+		retries = 0
+	}
+	if backoffMs < 0 {
+		backoffMs = 0
+	}
+	rep.Metadata.ExplainWorkers = workers
+	rep.Metadata.ExplainRetries = retries
+	rep.Metadata.ExplainBackoffMS = backoffMs
 
+	indexIssueShapes := make(map[string]struct{}, len(rep.PotentialIndexIssues))
+	for _, issue := range rep.PotentialIndexIssues {
+		indexIssueShapes[issue.ShapeID] = struct{}{}
+	}
+
+	results := make(map[string]explainEvidence, len(rep.SlowQueries))
 	candidates := make(map[string]stats.OperationEvent, topN)
 	for _, sq := range rep.SlowQueries {
+		if !supportsExplainOperation(sq.Operation) {
+			results[sq.ShapeID] = explainEvidence{
+				status: "not_supported",
+				reason: fmt.Sprintf("operation_%s_not_supported", sq.Operation),
+			}
+			continue
+		}
+		if !isExplainCandidatePriorityShape(sq, indexIssueShapes, rep.Metadata.SlowThresholdMs, explainSeverityMode) {
+			results[sq.ShapeID] = explainEvidence{
+				status: "explain_unavailable",
+				reason: "low_value_shape_filtered",
+			}
+			continue
+		}
+
 		if len(candidates) >= topN {
-			break
-		}
-		for _, ev := range events {
-			if stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey) != sq.ShapeID {
-				continue
+			results[sq.ShapeID] = explainEvidence{
+				status: "explain_unavailable",
+				reason: fmt.Sprintf("not_selected_top_n_%d", topN),
 			}
-			if len(ev.FilterSample) == 0 && len(ev.PipelineSample) == 0 {
-				continue
-			}
-			candidates[sq.ShapeID] = ev
-			break
+			continue
 		}
-	}
-	if len(candidates) == 0 {
-		return
-	}
 
-	rep.Metadata.EvidenceLevel = "heuristic_plus_explain_samples"
-	conns := make(map[string]*db.Connection)
-	defer func() {
-		for _, c := range conns {
-			disconnectFn(c, context.Background())
-		}
-	}()
-
-	results := make(map[string]explainEvidence, len(candidates))
-	for shapeID, ev := range candidates {
-		dbName := ev.Database
-		if dbName == "" {
-			dbName = "admin"
-		}
-		conn, ok := conns[dbName]
+		candidate, reason, ok := findExplainCandidate(events, sq)
 		if !ok {
-			ctxConn, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			newConn, err := connectFn(ctxConn, cfg, dbName)
-			cancel()
-			if err != nil {
-				results[shapeID] = explainEvidence{err: err.Error()}
-				continue
+			results[sq.ShapeID] = explainEvidence{
+				status: "insufficient_metadata",
+				reason: reason,
 			}
-			conn = newConn
-			conns[dbName] = conn
+			continue
 		}
-		evidence := runExplainForEvent(conn.Database, ev, maxTimeMs)
-		results[shapeID] = evidence
+
+		candidates[sq.ShapeID] = candidate
+		results[sq.ShapeID] = explainEvidence{
+			status: "explain_unavailable",
+			reason: "candidate_selected_explain_pending",
+		}
 	}
+
+	shapeIDs := make([]string, 0, len(candidates))
+	for shapeID := range candidates {
+		shapeIDs = append(shapeIDs, shapeID)
+	}
+	sort.Strings(shapeIDs)
+	applyExplainCandidatesConcurrently(results, candidates, shapeIDs, workers, cfg, maxTimeMs, retries, backoffMs)
+
+	appliedExplain := false
+	for _, ev := range results {
+		if ev.status == "explained" {
+			appliedExplain = true
+			break
+		}
+	}
+	if appliedExplain {
+		rep.Metadata.EvidenceLevel = "heuristic_plus_explain_samples"
+	}
+
+	applyExplainToSlowQueries(rep, results)
 
 	for i := range rep.PotentialIndexIssues {
 		issue := &rep.PotentialIndexIssues[i]
 		ev, ok := results[issue.ShapeID]
 		if !ok {
+			issue.ExplainStatus = "explain_unavailable"
+			issue.ExplainReason = "shape_not_in_top_slow_queries"
+			issue.EvidenceLevel = "heuristic_explain_unavailable"
+			issue.Confidence = "low"
+			issue.Message = "No representative explain sample was available for this shape. Keeping heuristic guidance."
 			continue
 		}
+		issue.ExplainStatus = ev.status
+		issue.ExplainReason = ev.reason
 		if ev.collscan {
 			issue.EvidenceLevel = "explain_collscan_observed"
 			issue.Confidence = "high"
@@ -834,48 +884,338 @@ func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events 
 		}
 		if ev.ixscan {
 			issue.EvidenceLevel = "explain_index_scan_observed"
-			issue.Confidence = "low"
+			issue.Confidence = "medium"
 			issue.Message = "Representative explain sample used an index scan. Index presence was observed, but query/index fit may still be suboptimal."
 			issue.Recommendation = "Review index key order/selectivity and validate with additional representative explain samples."
 			continue
 		}
-		if ev.err != "" {
-			issue.EvidenceLevel = "explain_unavailable"
-			issue.Message = "Explain sampling was enabled, but this shape could not be explained automatically. Keeping heuristic guidance."
+		switch ev.status {
+		case "explained":
+			issue.EvidenceLevel = "explain_no_strong_index_signal"
+			issue.Confidence = "low"
+			issue.Message = "Explain succeeded but did not show a clear COLLSCAN/IXSCAN signal. Keep heuristic guidance and sample additional shapes if needed."
+		case "not_supported":
+			issue.EvidenceLevel = "heuristic_not_supported"
+			issue.Confidence = "low"
+			issue.Message = "This operation type is not currently explain-supported in post-run analysis. Keeping heuristic guidance."
+		case "insufficient_metadata":
+			issue.EvidenceLevel = "heuristic_insufficient_metadata"
+			issue.Confidence = "low"
+			issue.Message = "Explain could not run because required sampled filter/pipeline metadata was unavailable."
+		case "timed_out":
+			issue.EvidenceLevel = "heuristic_explain_timed_out"
+			issue.Confidence = "low"
+			issue.Message = "Explain timed out for this representative shape. Guidance remains heuristic unless a higher explain budget succeeds."
+		case "execution_failed":
+			issue.EvidenceLevel = "heuristic_explain_execution_failed"
+			issue.Confidence = "low"
+			issue.Message = "Explain execution failed for this representative shape; guidance remains heuristic."
+		default:
+			issue.EvidenceLevel = "heuristic_explain_unavailable"
+			issue.Confidence = "low"
+			issue.Message = "Explain sampling was enabled, but this shape was not selected for explain in this run. Keeping heuristic guidance."
 		}
 	}
 }
 
+func isExplainCandidatePriorityShape(sq stats.SlowQueryInsight, indexIssueShapes map[string]struct{}, slowThresholdMs float64, explainSeverityMode string) bool {
+	switch explainSeverityMode {
+	case "high_and_low":
+	case "medium_only":
+		switch sq.Severity {
+		case "critical", "high", "medium":
+		default:
+			return false
+		}
+	case "critical_only":
+		if sq.Severity != "critical" {
+			return false
+		}
+	default: // high_only
+		switch sq.Severity {
+		case "critical", "high":
+		default:
+			return false
+		}
+	}
+	if _, ok := indexIssueShapes[sq.ShapeID]; ok {
+		return true
+	}
+	if sq.P95Ms >= slowThresholdMs || sq.P99Ms >= slowThresholdMs {
+		return true
+	}
+	switch sq.Severity {
+	case "critical", "high":
+		return true
+	default:
+		return false
+	}
+}
+
+func applyExplainCandidatesConcurrently(
+	results map[string]explainEvidence,
+	candidates map[string]stats.OperationEvent,
+	shapeIDs []string,
+	workers int,
+	cfg *config.AppConfig,
+	maxTimeMs int,
+	retries int,
+	backoffMs int,
+) {
+	type job struct {
+		shapeID string
+		event   stats.OperationEvent
+	}
+	type out struct {
+		shapeID  string
+		evidence explainEvidence
+	}
+
+	jobs := make(chan job)
+	outs := make(chan out, len(shapeIDs))
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			conns := make(map[string]*db.Connection)
+			defer func() {
+				for _, c := range conns {
+					disconnectFn(c, context.Background())
+				}
+			}()
+
+			for j := range jobs {
+				dbName := j.event.Database
+				if dbName == "" {
+					dbName = "admin"
+				}
+				conn, ok := conns[dbName]
+				if !ok {
+					ctxConn, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					newConn, err := connectFn(ctxConn, cfg, dbName)
+					cancel()
+					if err != nil {
+						outs <- out{
+							shapeID: j.shapeID,
+							evidence: explainEvidence{
+								status: "execution_failed",
+								reason: "connect_failed",
+							},
+						}
+						continue
+					}
+					conn = newConn
+					conns[dbName] = conn
+				}
+				evidence := runExplainForEventWithRetry(conn.Database, j.event, maxTimeMs, retries, backoffMs)
+				outs <- out{shapeID: j.shapeID, evidence: evidence}
+			}
+		}()
+	}
+
+	go func() {
+		for _, shapeID := range shapeIDs {
+			jobs <- job{shapeID: shapeID, event: candidates[shapeID]}
+		}
+		close(jobs)
+		wg.Wait()
+		close(outs)
+	}()
+
+	for o := range outs {
+		results[o.shapeID] = o.evidence
+	}
+}
+
+func runExplainForEventWithRetry(database *mongodrv.Database, ev stats.OperationEvent, baseMaxTimeMs int, retries int, backoffMs int) explainEvidence {
+	return retryExplainEvidence(baseMaxTimeMs, retries, backoffMs, func(maxTimeMs int) explainEvidence {
+		return runExplainForEvent(database, ev, maxTimeMs)
+	})
+}
+
+func retryExplainEvidence(baseMaxTimeMs int, retries int, backoffMs int, run func(maxTimeMs int) explainEvidence) explainEvidence {
+	if baseMaxTimeMs <= 0 {
+		baseMaxTimeMs = 1000
+	}
+	if retries < 0 {
+		retries = 0
+	}
+	maxTime := baseMaxTimeMs
+	var last explainEvidence
+	for attempt := 0; attempt <= retries; attempt++ {
+		last = run(maxTime)
+		if last.status != "timed_out" {
+			return last
+		}
+		if attempt == retries {
+			return last
+		}
+		if backoffMs > 0 {
+			time.Sleep(time.Duration(backoffMs*(attempt+1)) * time.Millisecond)
+		}
+		if maxTime < 60000 {
+			maxTime *= 2
+			if maxTime > 60000 {
+				maxTime = 60000
+			}
+		}
+	}
+	return last
+}
+
 func runExplainForEvent(database *mongodrv.Database, ev stats.OperationEvent, maxTimeMs int) explainEvidence {
 	coll := database.Collection(ev.Collection)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	timeoutMs := maxTimeMs + 2000
+	if timeoutMs < 3000 {
+		timeoutMs = 3000
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
 	var cmd bson.D
 	switch ev.Operation {
 	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
 		if len(ev.FilterSample) == 0 {
-			return explainEvidence{err: "missing_filter_sample"}
+			return explainEvidence{status: "insufficient_metadata", reason: "missing_filter_sample"}
 		}
 		inner := bson.D{{Key: "find", Value: coll.Name()}, {Key: "filter", Value: ev.FilterSample}, {Key: "limit", Value: 1}}
 		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
 	case "aggregate":
 		if len(ev.PipelineSample) == 0 {
-			return explainEvidence{err: "missing_pipeline_sample"}
+			return explainEvidence{status: "insufficient_metadata", reason: "missing_pipeline_sample"}
 		}
 		inner := bson.D{{Key: "aggregate", Value: coll.Name()}, {Key: "pipeline", Value: ev.PipelineSample}, {Key: "cursor", Value: bson.M{}}}
 		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
 	default:
-		return explainEvidence{err: "unsupported_operation"}
+		return explainEvidence{status: "not_supported", reason: "unsupported_operation"}
 	}
 
 	var out bson.M
 	if err := database.RunCommand(ctx, cmd, options.RunCmd()).Decode(&out); err != nil {
-		return explainEvidence{err: err.Error()}
+		reason := classifyExplainCommandError(err)
+		if reason == "max_time_exceeded" || reason == "client_deadline_exceeded" {
+			return explainEvidence{
+				status: "timed_out",
+				reason: reason,
+			}
+		}
+		return explainEvidence{
+			status: "execution_failed",
+			reason: reason,
+		}
+	}
+	reason := "no_scan_stage_detected"
+	if containsStage(out, "COLLSCAN") {
+		reason = "collscan_observed"
+	} else if containsStage(out, "IXSCAN") {
+		reason = "ixscan_observed"
 	}
 	return explainEvidence{
 		collscan: containsStage(out, "COLLSCAN"),
 		ixscan:   containsStage(out, "IXSCAN"),
+		status:   "explained",
+		reason:   reason,
+	}
+}
+
+func classifyExplainCommandError(err error) string {
+	if err == nil {
+		return "run_command_failed"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "client_deadline_exceeded"
+	}
+	if errors.Is(err, context.Canceled) {
+		return "client_context_canceled"
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "not authorized"):
+		return "not_authorized"
+	case strings.Contains(msg, "ns does not exist"), strings.Contains(msg, "namespace does not exist"):
+		return "namespace_not_found"
+	case strings.Contains(msg, "command not found"), strings.Contains(msg, "commandnotfound"):
+		return "command_not_found"
+	case strings.Contains(msg, "max time ms expired"), strings.Contains(msg, "maxtimems"):
+		return "max_time_exceeded"
+	default:
+		return "run_command_failed"
+	}
+}
+
+func supportsExplainOperation(op string) bool {
+	switch op {
+	case "find", "aggregate", "updateOne", "updateMany", "deleteOne", "deleteMany":
+		return true
+	default:
+		return false
+	}
+}
+
+func findExplainCandidate(events []stats.OperationEvent, sq stats.SlowQueryInsight) (stats.OperationEvent, string, bool) {
+	shapeSeen := false
+	for _, ev := range events {
+		if stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey) != sq.ShapeID {
+			continue
+		}
+		shapeSeen = true
+		switch sq.Operation {
+		case "aggregate":
+			if len(ev.PipelineSample) > 0 {
+				return ev, "", true
+			}
+		case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
+			if len(ev.FilterSample) > 0 {
+				return ev, "", true
+			}
+		}
+	}
+	if !shapeSeen {
+		return stats.OperationEvent{}, "shape_event_not_retained", false
+	}
+	if sq.Operation == "aggregate" {
+		return stats.OperationEvent{}, "missing_pipeline_sample", false
+	}
+	return stats.OperationEvent{}, "missing_filter_sample", false
+}
+
+func applyExplainToSlowQueries(rep *stats.InsightsReport, results map[string]explainEvidence) {
+	for i := range rep.SlowQueries {
+		s := &rep.SlowQueries[i]
+		if ev, ok := results[s.ShapeID]; ok {
+			s.ExplainStatus = ev.status
+			s.ExplainReason = ev.reason
+			continue
+		}
+		if supportsExplainOperation(s.Operation) {
+			s.ExplainStatus = "explain_unavailable"
+			s.ExplainReason = "shape_not_in_explain_results"
+		} else {
+			s.ExplainStatus = "not_supported"
+			s.ExplainReason = fmt.Sprintf("operation_%s_not_supported", s.Operation)
+		}
+	}
+
+	byShape := make(map[string]explainEvidence, len(results))
+	for k, v := range results {
+		byShape[k] = v
+	}
+	for i := range rep.QueryShapes {
+		s := &rep.QueryShapes[i]
+		if ev, ok := byShape[s.ShapeID]; ok {
+			s.ExplainStatus = ev.status
+			s.ExplainReason = ev.reason
+			continue
+		}
+		if supportsExplainOperation(s.Operation) {
+			s.ExplainStatus = "explain_unavailable"
+			s.ExplainReason = "shape_not_in_explain_results"
+		} else {
+			s.ExplainStatus = "not_supported"
+			s.ExplainReason = fmt.Sprintf("operation_%s_not_supported", s.Operation)
+		}
 	}
 }
 

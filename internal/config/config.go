@@ -54,14 +54,18 @@ type AppConfig struct {
 	CSVExportAppend  bool   `yaml:"csv_export_append"`
 	CSVExportPath    string `yaml:"csv_export_path"`
 
-	InsightsEnabled          bool    `yaml:"insights_enabled"`
-	InsightsSamplingRate     float64 `yaml:"insights_sampling_rate"`
-	InsightsSlowThresholdMs  int     `yaml:"insights_slow_threshold_ms"`
-	InsightsMaxEvents        int     `yaml:"insights_max_events"`
-	InsightsMaxGroups        int     `yaml:"insights_max_groups"`
-	InsightsExplainEnabled   bool    `yaml:"insights_explain_enabled"`
-	InsightsExplainTopN      int     `yaml:"insights_explain_top_n"`
-	InsightsExplainMaxTimeMS int     `yaml:"insights_explain_max_time_ms"`
+	InsightsEnabled             bool    `yaml:"insights_enabled"`
+	InsightsSamplingRate        float64 `yaml:"insights_sampling_rate"`
+	InsightsSlowThresholdMs     int     `yaml:"insights_slow_threshold_ms"`
+	InsightsMaxEvents           int     `yaml:"insights_max_events"`
+	InsightsMaxGroups           int     `yaml:"insights_max_groups"`
+	InsightsExplainEnabled      bool    `yaml:"insights_explain_enabled"`
+	InsightsExplainTopN         int     `yaml:"insights_explain_top_n"`
+	InsightsExplainMaxTimeMS    int     `yaml:"insights_explain_max_time_ms"`
+	InsightsExplainSeverityMode string  `yaml:"insights_explain_severity_mode"`
+	InsightsExplainWorkers      int     `yaml:"insights_explain_workers"`
+	InsightsExplainRetries      int     `yaml:"insights_explain_retries"`
+	InsightsExplainBackoffMS    int     `yaml:"insights_explain_backoff_ms"`
 }
 
 type WebUIConfig struct {
@@ -169,6 +173,10 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.InsightsExplainEnabled = false
 	cfg.InsightsExplainTopN = 5
 	cfg.InsightsExplainMaxTimeMS = 1000
+	cfg.InsightsExplainSeverityMode = "high_only"
+	cfg.InsightsExplainWorkers = 1
+	cfg.InsightsExplainRetries = 1
+	cfg.InsightsExplainBackoffMS = 150
 }
 
 // applyBaseDefaults sets low-level engine safety limits & remaining UI limits
@@ -203,6 +211,20 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	if cfg.InsightsExplainMaxTimeMS <= 0 {
 		cfg.InsightsExplainMaxTimeMS = 1000
+	}
+	switch cfg.InsightsExplainSeverityMode {
+	case "high_and_low", "medium_only", "critical_only", "high_only":
+	default:
+		cfg.InsightsExplainSeverityMode = "high_only"
+	}
+	if cfg.InsightsExplainWorkers <= 0 {
+		cfg.InsightsExplainWorkers = 1
+	}
+	if cfg.InsightsExplainRetries < 0 {
+		cfg.InsightsExplainRetries = 0
+	}
+	if cfg.InsightsExplainBackoffMS < 0 {
+		cfg.InsightsExplainBackoffMS = 0
 	}
 
 	// Web UI Port
@@ -565,6 +587,24 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.InsightsExplainMaxTimeMS = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE"); v != "" {
+		cfg.InsightsExplainSeverityMode = v
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.InsightsExplainWorkers = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_RETRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.InsightsExplainRetries = n
+		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.InsightsExplainBackoffMS = n
 		}
 	}
 

@@ -42,9 +42,16 @@ type InsightsMetadata struct {
 	EligibleEvents      uint64  `json:"eligible_events"`
 	SampledInEvents     uint64  `json:"sampled_in_events"`
 	DroppedGroupEntries int     `json:"dropped_group_entries"`
+	FilteredByThreshold int     `json:"filtered_by_threshold"`
+	FilteredBySeverity  int     `json:"filtered_by_severity"`
 	EvidenceLevel       string  `json:"evidence_level"`
 	ExplainEnabled      bool    `json:"explain_enabled"`
 	ExplainMode         string  `json:"explain_mode"`
+	ExplainSeverityMode string  `json:"explain_severity_mode"`
+	ExplainWorkers      int     `json:"explain_workers"`
+	ExplainRetries      int     `json:"explain_retries"`
+	ExplainBackoffMS    int     `json:"explain_backoff_ms"`
+	ExplainImpact       string  `json:"explain_impact"`
 }
 
 type InsightsSummary struct {
@@ -55,23 +62,25 @@ type InsightsSummary struct {
 }
 
 type SlowQueryInsight struct {
-	Rank         int         `json:"rank"`
-	ShapeID      string      `json:"shape_id"`
-	Operation    string      `json:"operation"`
-	Collection   string      `json:"collection"`
-	ShapeKey     string      `json:"shape_key"`
-	ShapeSummary string      `json:"shape_summary"`
-	FilterFields []string    `json:"filter_fields,omitempty"`
-	Count        int         `json:"count"`
-	ErrorCount   int         `json:"error_count"`
-	SlowCount    int         `json:"slow_count"`
-	SlowRatio    float64     `json:"slow_ratio"`
-	AvgMs        float64     `json:"avg_ms"`
-	P95Ms        float64     `json:"p95_ms"`
-	P99Ms        float64     `json:"p99_ms"`
-	MaxMs        float64     `json:"max_ms"`
-	Severity     string      `json:"severity"`
-	Trend        *ShapeTrend `json:"trend,omitempty"`
+	Rank          int         `json:"rank"`
+	ShapeID       string      `json:"shape_id"`
+	Operation     string      `json:"operation"`
+	Collection    string      `json:"collection"`
+	ShapeKey      string      `json:"shape_key"`
+	ShapeSummary  string      `json:"shape_summary"`
+	FilterFields  []string    `json:"filter_fields,omitempty"`
+	Count         int         `json:"count"`
+	ErrorCount    int         `json:"error_count"`
+	SlowCount     int         `json:"slow_count"`
+	SlowRatio     float64     `json:"slow_ratio"`
+	AvgMs         float64     `json:"avg_ms"`
+	P95Ms         float64     `json:"p95_ms"`
+	P99Ms         float64     `json:"p99_ms"`
+	MaxMs         float64     `json:"max_ms"`
+	Severity      string      `json:"severity"`
+	ExplainStatus string      `json:"explain_status,omitempty"`
+	ExplainReason string      `json:"explain_reason,omitempty"`
+	Trend         *ShapeTrend `json:"trend,omitempty"`
 }
 
 type CollectionInsight struct {
@@ -119,6 +128,8 @@ type IndexIssue struct {
 	MaxMs          float64  `json:"max_ms"`
 	EvidenceLevel  string   `json:"evidence_level"`
 	Confidence     string   `json:"confidence"`
+	ExplainStatus  string   `json:"explain_status,omitempty"`
+	ExplainReason  string   `json:"explain_reason,omitempty"`
 	Message        string   `json:"message"`
 	Recommendation string   `json:"recommendation"`
 }
@@ -153,6 +164,10 @@ type insightsSettings struct {
 	explainEnabled  bool
 	explainTopN     int
 	explainMaxMs    int
+	explainSeverity string
+	explainWorkers  int
+	explainRetries  int
+	explainBackoff  int
 }
 
 type collectionIndexInfo struct {
@@ -184,6 +199,10 @@ func defaultInsightsSettings() insightsSettings {
 		explainEnabled:  false,
 		explainTopN:     5,
 		explainMaxMs:    1000,
+		explainSeverity: "high_only",
+		explainWorkers:  1,
+		explainRetries:  1,
+		explainBackoff:  150,
 	}
 }
 
@@ -226,6 +245,16 @@ func (c *Collector) configureInsights(cfg *config.AppConfig) {
 		}
 		if cfg.InsightsExplainMaxTimeMS > 0 {
 			s.explainMaxMs = cfg.InsightsExplainMaxTimeMS
+		}
+		s.explainSeverity = normalizeExplainSeverityMode(cfg.InsightsExplainSeverityMode)
+		if cfg.InsightsExplainWorkers > 0 {
+			s.explainWorkers = cfg.InsightsExplainWorkers
+		}
+		if cfg.InsightsExplainRetries >= 0 {
+			s.explainRetries = cfg.InsightsExplainRetries
+		}
+		if cfg.InsightsExplainBackoffMS >= 0 {
+			s.explainBackoff = cfg.InsightsExplainBackoffMS
 		}
 	}
 
@@ -338,12 +367,17 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 	if !c.insightsCfg.enabled {
 		return InsightsReport{
 			Metadata: InsightsMetadata{
-				Status:          "disabled",
-				EvidenceLevel:   "none",
-				SamplingRate:    c.insightsCfg.sampleRate,
-				SlowThresholdMs: c.insightsCfg.slowThresholdMs,
-				ExplainEnabled:  c.insightsCfg.explainEnabled,
-				ExplainMode:     "disabled",
+				Status:              "disabled",
+				EvidenceLevel:       "none",
+				SamplingRate:        c.insightsCfg.sampleRate,
+				SlowThresholdMs:     c.insightsCfg.slowThresholdMs,
+				ExplainEnabled:      c.insightsCfg.explainEnabled,
+				ExplainMode:         "disabled",
+				ExplainSeverityMode: c.insightsCfg.explainSeverity,
+				ExplainWorkers:      c.insightsCfg.explainWorkers,
+				ExplainRetries:      c.insightsCfg.explainRetries,
+				ExplainBackoffMS:    c.insightsCfg.explainBackoff,
+				ExplainImpact:       "none",
 			},
 		}
 	}
@@ -362,15 +396,19 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 		c.insightEligible,
 		c.insightSampledIn,
 		c.insightsCfg.explainEnabled,
+		c.insightsCfg.explainSeverity,
+		c.insightsCfg.explainWorkers,
+		c.insightsCfg.explainRetries,
+		c.insightsCfg.explainBackoff,
 	)
 	c.finalInsights = &report
 	return report
 }
 
-func (c *Collector) GetExplainSettings() (enabled bool, topN int, maxTimeMs int) {
+func (c *Collector) GetExplainSettings() (enabled bool, topN int, maxTimeMs int, severityMode string, workers int, retries int, backoffMs int) {
 	c.insightsMu.Lock()
 	defer c.insightsMu.Unlock()
-	return c.insightsCfg.explainEnabled, c.insightsCfg.explainTopN, c.insightsCfg.explainMaxMs
+	return c.insightsCfg.explainEnabled, c.insightsCfg.explainTopN, c.insightsCfg.explainMaxMs, c.insightsCfg.explainSeverity, c.insightsCfg.explainWorkers, c.insightsCfg.explainRetries, c.insightsCfg.explainBackoff
 }
 
 func (c *Collector) SnapshotOperationEvents() []OperationEvent {
@@ -404,19 +442,29 @@ func buildInsightsReport(
 	eligible uint64,
 	sampledIn uint64,
 	explainEnabled bool,
+	explainSeverity string,
+	explainWorkers int,
+	explainRetries int,
+	explainBackoff int,
 ) InsightsReport {
+	explainSeverity = normalizeExplainSeverityMode(explainSeverity)
 	rep := InsightsReport{
 		Metadata: InsightsMetadata{
-			Status:          "ready",
-			GeneratedAt:     time.Now().UTC().Format(time.RFC3339),
-			SlowThresholdMs: slowThresholdMs,
-			SamplingRate:    samplingRate,
-			EligibleEvents:  eligible,
-			SampledInEvents: sampledIn,
-			RetainedEvents:  len(events),
-			EvidenceLevel:   "heuristic",
-			ExplainEnabled:  explainEnabled,
-			ExplainMode:     boolToMode(explainEnabled),
+			Status:              "ready",
+			GeneratedAt:         time.Now().UTC().Format(time.RFC3339),
+			SlowThresholdMs:     slowThresholdMs,
+			SamplingRate:        samplingRate,
+			EligibleEvents:      eligible,
+			SampledInEvents:     sampledIn,
+			RetainedEvents:      len(events),
+			EvidenceLevel:       "heuristic",
+			ExplainEnabled:      explainEnabled,
+			ExplainMode:         boolToMode(explainEnabled),
+			ExplainSeverityMode: explainSeverity,
+			ExplainWorkers:      explainWorkers,
+			ExplainRetries:      explainRetries,
+			ExplainBackoffMS:    explainBackoff,
+			ExplainImpact:       explainImpact(explainEnabled),
 		},
 	}
 
@@ -494,31 +542,50 @@ func buildInsightsReport(
 	rep.Summary.SlowSampledEvents = slowTotal
 	rep.Summary.SlowSampledRatio = ratio(slowTotal, len(events))
 
-	slowGroups := make([]SlowQueryInsight, 0, len(groups))
+	slowGroupsAll := make([]SlowQueryInsight, 0, len(groups))
 	for _, g := range groups {
-		slowGroups = append(slowGroups, toSlowInsight(g))
+		slowGroupsAll = append(slowGroupsAll, toSlowInsight(g))
 	}
-	sort.SliceStable(slowGroups, func(i, j int) bool {
-		if slowGroups[i].Severity != slowGroups[j].Severity {
-			return severityScore(slowGroups[i].Severity) > severityScore(slowGroups[j].Severity)
+	filteredGroups := make([]SlowQueryInsight, 0, len(slowGroupsAll))
+	filteredByThreshold := 0
+	filteredBySeverity := 0
+	for _, g := range slowGroupsAll {
+		// Keep only groups that actually crossed slow-threshold at least once.
+		if g.SlowCount <= 0 {
+			filteredByThreshold++
+			continue
 		}
-		if slowGroups[i].P99Ms != slowGroups[j].P99Ms {
-			return slowGroups[i].P99Ms > slowGroups[j].P99Ms
+		if !isSeverityExplainEligible(g.Severity, explainSeverity) {
+			filteredBySeverity++
+			continue
 		}
-		return slowGroups[i].Count > slowGroups[j].Count
+		filteredGroups = append(filteredGroups, g)
+	}
+	rep.Metadata.FilteredByThreshold = filteredByThreshold
+	rep.Metadata.FilteredBySeverity = filteredBySeverity
+
+	sort.SliceStable(filteredGroups, func(i, j int) bool {
+		if filteredGroups[i].Severity != filteredGroups[j].Severity {
+			return severityScore(filteredGroups[i].Severity) > severityScore(filteredGroups[j].Severity)
+		}
+		if filteredGroups[i].P99Ms != filteredGroups[j].P99Ms {
+			return filteredGroups[i].P99Ms > filteredGroups[j].P99Ms
+		}
+		return filteredGroups[i].Count > filteredGroups[j].Count
 	})
-	for i := range slowGroups {
-		slowGroups[i].Rank = i + 1
+	for i := range filteredGroups {
+		filteredGroups[i].Rank = i + 1
 	}
 
 	limitSlow := 20
-	if len(slowGroups) < limitSlow {
-		limitSlow = len(slowGroups)
+	if len(filteredGroups) < limitSlow {
+		limitSlow = len(filteredGroups)
 	}
-	rep.SlowQueries = slowGroups[:limitSlow]
+	rep.SlowQueries = filteredGroups[:limitSlow]
+	applyDefaultExplainStatus(rep.SlowQueries, explainEnabled)
 
-	shapeView := make([]SlowQueryInsight, len(slowGroups))
-	copy(shapeView, slowGroups)
+	shapeView := make([]SlowQueryInsight, len(filteredGroups))
+	copy(shapeView, filteredGroups)
 	sort.SliceStable(shapeView, func(i, j int) bool {
 		if shapeView[i].P95Ms != shapeView[j].P95Ms {
 			return shapeView[i].P95Ms > shapeView[j].P95Ms
@@ -529,9 +596,20 @@ func buildInsightsReport(
 		shapeView = shapeView[:15]
 	}
 	rep.QueryShapes = shapeView
+	applyDefaultExplainStatus(rep.QueryShapes, explainEnabled)
 
+	allowedCollections := make(map[string]struct{}, len(filteredGroups))
+	for _, g := range filteredGroups {
+		allowedCollections[g.Collection] = struct{}{}
+	}
 	colls := make([]CollectionInsight, 0, len(byCollection))
 	for _, g := range byCollection {
+		if g.SlowCount <= 0 {
+			continue
+		}
+		if _, ok := allowedCollections[g.Collection]; !ok {
+			continue
+		}
 		colls = append(colls, CollectionInsight{
 			Collection: g.Collection,
 			Count:      g.Count,
@@ -556,7 +634,8 @@ func buildInsightsReport(
 
 	rep.PerIteration = buildPerIteration(byIteration)
 	rep.TimeSlices = buildTimeSlices(byTimeSlice)
-	rep.PotentialIndexIssues = buildIndexIssues(slowGroups, indexes, slowThresholdMs)
+	rep.PotentialIndexIssues = buildIndexIssues(filteredGroups, indexes, slowThresholdMs)
+	applyDefaultIndexExplainStatus(rep.PotentialIndexIssues, explainEnabled)
 	rep.Recommendations = buildRecommendations(rep)
 	rep.Summary.TopSeverity = "none"
 	if len(rep.SlowQueries) > 0 {
@@ -906,6 +985,38 @@ func severityScore(s string) int {
 	}
 }
 
+func isSeverityExplainEligible(severity, mode string) bool {
+	switch normalizeExplainSeverityMode(mode) {
+	case "high_and_low":
+		return true
+	case "medium_only":
+		switch severity {
+		case "critical", "high", "medium":
+			return true
+		default:
+			return false
+		}
+	case "critical_only":
+		return severity == "critical"
+	default: // high_only
+		switch severity {
+		case "critical", "high":
+			return true
+		default:
+			return false
+		}
+	}
+}
+
+func normalizeExplainSeverityMode(mode string) string {
+	switch mode {
+	case "high_and_low", "medium_only", "critical_only":
+		return mode
+	default:
+		return "high_only"
+	}
+}
+
 func confidenceScore(s string) int {
 	switch strings.ToLower(s) {
 	case "high":
@@ -919,9 +1030,45 @@ func confidenceScore(s string) int {
 
 func boolToMode(enabled bool) string {
 	if enabled {
-		return "optional_post_run"
+		return "post_run_only"
 	}
 	return "disabled"
+}
+
+func explainImpact(enabled bool) string {
+	if !enabled {
+		return "none"
+	}
+	return "post_run_only_does_not_affect_measured_workload_window"
+}
+
+func applyDefaultExplainStatus(in []SlowQueryInsight, explainEnabled bool) {
+	status := "explain_unavailable"
+	reason := "explain_disabled"
+	if explainEnabled {
+		reason = "explain_not_attempted_yet"
+	}
+	for i := range in {
+		if !isIndexSensitiveOp(in[i].Operation) {
+			in[i].ExplainStatus = "not_supported"
+			in[i].ExplainReason = fmt.Sprintf("operation_%s_not_supported", in[i].Operation)
+			continue
+		}
+		in[i].ExplainStatus = status
+		in[i].ExplainReason = reason
+	}
+}
+
+func applyDefaultIndexExplainStatus(in []IndexIssue, explainEnabled bool) {
+	status := "explain_unavailable"
+	reason := "explain_disabled"
+	if explainEnabled {
+		reason = "explain_not_attempted_yet"
+	}
+	for i := range in {
+		in[i].ExplainStatus = status
+		in[i].ExplainReason = reason
+	}
 }
 
 func cloneMapDeep(in map[string]interface{}) map[string]interface{} {
