@@ -1,152 +1,158 @@
 # Post-Run Insights: Slow Query and Index Analysis
 
-This guide explains exactly how PLGM's post-run insights work, what they can and cannot tell you, and how to configure them safely.
+This guide explains how PLGM's post-run insights work, how to configure them, and what outcomes to expect.
 
-The insights feature is a **post-run analytics layer** that helps you identify:
-- repeated slow operation groups
-- affected collections
-- normalized query-shape hotspots
-- possible index-related issues with confidence-aware wording
-- next actions for investigation
+## What This Feature Does
 
-It is intentionally designed to avoid runtime disruption during active benchmarking.
+After a workload fully finishes, PLGM analyzes sampled operation events and produces:
+- ranked slow query groups
+- affected collections and shape hotspots
+- potential index issues with confidence labels
+- explain-backed diagnostics (optional)
+- recommended next actions
 
-## How to Read Insights in 60 Seconds
+Insights are available in three places:
+- Dashboard panel: `POST-RUN SLOW QUERY & INDEX ANALYSIS`
+- API: `GET /api/insights`
+- `Download Summary` export JSON: `insights` section
 
-Use this quick sequence after each completed run:
-
-1. Check `metadata.status`
-- If `pending`, wait for run completion.
-- If `ready`, continue.
-- If `empty`, increase sampling rate or run duration and retry.
-
-2. Read the first entry in `slow_queries`
-- Start with highest-ranked shape (`rank = 1`).
-- Focus on `p95_ms`, `p99_ms`, `count`, and `severity`.
-
-3. Check explain fields for that shape
-- `explain_status` tells you whether evidence is explain-backed or heuristic.
-- `explain_reason` tells you why explain did or did not run.
-
-4. Review top `potential_index_issues`
-- Prioritize entries with higher confidence first.
-- Treat `high` confidence as strongest action signal (typically explain `COLLSCAN` observed).
-
-5. Use `affected_collections` for blast radius
-- Confirm whether one collection dominates slow behavior.
-
-6. Execute next action
-- Validate index/action in staging.
-- Re-run workload and compare shape metrics/trends.
-
-### Quick Example
-
-If you see:
-- `slow_queries[0]`: `find` on `orders`, `p99_ms=1850`, `severity=high`
-- `explain_status=explained`, `explain_reason=collscan_observed`
-- `potential_index_issues[0].confidence=high`
-
-Interpretation:
-- This is a high-priority, repeated slow shape with strong explain evidence of scan risk.
-
-Recommended next step:
-- Propose candidate index for reported filter fields.
-- Validate with explain + replay.
-- Re-run benchmark and confirm lower p95/p99 for same `shape_id`.
-
-## Quick Expectations
-
-Before you use this feature, expect the following behavior:
-- Insights are not final while workload iterations are still running.
-- Insights become final only when all iterations complete.
-- The panel is visible during run with pending status, then fills in automatically after completion.
-- Results are sampled and bounded, not a full trace of every operation.
-- Index suggestions are cautious and evidence-weighted.
-
-## Where Insights Are Available
-
-After a run completes, insights are available in:
-- Web UI panel: `POST-RUN SLOW QUERY & INDEX ANALYSIS`
-- API endpoint: `GET /api/insights`
-- `Download Summary` export JSON under `insights`
-
-All three surfaces come from the same backend report model.
+All three use the same backend report model.
 
 ## Lifecycle and States
 
-`GET /api/insights` uses these states:
-- `inactive`: no active collector/run context exists
-- `pending`: run is still executing
-- `ready`: final report available
-- `empty`: run finished but no sampled events were retained
-- `disabled`: insights disabled by configuration
+Insights are post-run by design.
 
-Important:
-- No final slow-query/index conclusions are shown during `pending`.
-- Final insights are cached per completed run for consistent UI/export parity.
+`metadata.status` values:
+- `inactive`: no collector/run context
+- `pending`: workload still running
+- `ready`: final report is available
+- `empty`: run completed but no sampled events survived filters
+- `disabled`: insights disabled by config
 
-## Data Collection Model
+Expected behavior:
+- During `pending`, the panel stays visible with a clear waiting message.
+- Final findings are shown only when status becomes `ready`.
+- Starting a new run clears the previous run's insights cache.
 
-During workload execution, PLGM stores sampled operation events in a bounded in-memory ring buffer.
+## Defaults and Recommended Starting Point
 
-Each sampled event may include:
-- operation type
-- database and collection
-- normalized shape key and shape summary
-- extracted filter fields (when available)
-- duration in milliseconds
-- success/failure
-- iteration number
-- timestamp
-- optional explain replay metadata (filter/pipeline samples) when explain mode is enabled
+Current defaults:
+- `insights_enabled: true`
+- `insights_sampling_rate: 0.10`
+- `insights_slow_threshold_ms: 200`
+- `insights_max_events: 5000`
+- `insights_max_groups: 300`
+- `insights_explain_enabled: false`
+- `insights_explain_top_n: 5`
+- `insights_explain_max_time_ms: 1000`
+- `insights_explain_verbosity: executionStats`
+- `insights_explain_severity_mode: high_only`
+- `insights_explain_workers: 1`
+- `insights_explain_retries: 1`
+- `insights_explain_backoff_ms: 150`
 
-Boundaries:
-- sampling is controlled by `insights_sampling_rate`
-- total retained events are capped by `insights_max_events`
-- aggregation cardinality is capped by `insights_max_groups`
+Recommended baseline for most users:
+- Keep explain disabled for pure benchmark fidelity runs.
+- Enable explain only when doing troubleshooting.
+- Keep explain workers low (`1`) and top-N small (`3-5`).
 
-This keeps memory use predictable and avoids unbounded retention.
+## Configuration Reference
 
-## What the Final Report Contains
+Web UI path:
+- `Metrics & Insights -> Explain Analysis`
 
-Top-level report fields:
-- `summary`
-- `slow_queries`
-- `affected_collections`
-- `query_shapes`
-- `potential_index_issues`
-- `recommendations`
-- `per_iteration`
-- `time_slices`
-- `metadata`
+YAML keys and environment variables:
 
-## Shape Identity and Trends
+| YAML key | Environment variable | Purpose |
+| :--- | :--- | :--- |
+| `insights_enabled` | `PLGM_INSIGHTS_ENABLED` | Enable post-run insights report |
+| `insights_sampling_rate` | `PLGM_INSIGHTS_SAMPLING_RATE` | Event sampling rate (`0.01-1.0`) |
+| `insights_slow_threshold_ms` | `PLGM_INSIGHTS_SLOW_THRESHOLD_MS` | Slow cutoff used for filtering |
+| `insights_max_events` | `PLGM_INSIGHTS_MAX_EVENTS` | Max sampled events retained in memory |
+| `insights_max_groups` | `PLGM_INSIGHTS_MAX_GROUPS` | Max aggregated groups retained |
+| `insights_explain_enabled` | `PLGM_INSIGHTS_EXPLAIN_ENABLED` | Enable post-run explain enrichment |
+| `insights_explain_top_n` | `PLGM_INSIGHTS_EXPLAIN_TOP_N` | Max top groups eligible for explain |
+| `insights_explain_max_time_ms` | `PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS` | Server `maxTimeMS` for explain command |
+| `insights_explain_verbosity` | `PLGM_INSIGHTS_EXPLAIN_VERBOSITY` | `executionStats` (default) or `queryPlanner` |
+| `insights_explain_severity_mode` | `PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE` | Explain eligibility by severity |
+| `insights_explain_workers` | `PLGM_INSIGHTS_EXPLAIN_WORKERS` | Post-run explain worker count |
+| `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retries for explain timeout/failure |
+| `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Retry backoff between explain attempts |
 
-Each shape gets a stable `shape_id` built from:
-- operation
-- collection
-- normalized shape key
+`insights_explain_severity_mode` accepted values:
+- `high_only` (default): explain only `high` + `critical`
+- `medium_only`: explain `medium` + `high` + `critical`
+- `critical_only`: explain only `critical`
+- `high_and_low`: explain all severities
 
-This allows shape-level continuity across runs.
+## Filtering Rules (Very Important)
 
-Trend hints (`improved`, `worse`, `flat`) are based on in-memory baseline from prior run(s) in the same process. They do not persist across process restarts.
+To keep output actionable and reduce noise:
+- Items below `insights_slow_threshold_ms` are filtered out.
+- Filtered-out items are not shown in dashboard findings.
+- Filtered-out items are not included in exported insights.
+- Explain candidate selection runs after filtering.
+- Severity eligibility is applied before explain selection.
 
-## Explain Mode (Optional, Off by Default)
+Transparency counters are exposed in metadata and shown in UI status line:
+- `filtered_by_threshold`
+- `filtered_by_severity`
 
-Explain mode is post-run only and optional.
+## Retention/Sampling vs Explain: How They Interact
 
-Design:
-- disabled by default
-- executed only after run completion
-- limited to top-N slow shapes
-- uses bounded post-run worker concurrency
-- retries timeout-bound explains with bounded backoff
-- bounded by explain max time
-- never blocks active workload execution path
+Think of this as a two-stage pipeline:
 
-When enabled, explain evidence can refine index confidence messaging.
+1. Insights Capture (Retention & Sampling)
+- Controls whether operation events are recorded at all (`insights_enabled`).
+- Controls sampling rate (`insights_sampling_rate`) and retention caps (`insights_max_events`, `insights_max_groups`).
+- Determines memory footprint and the amount of post-run evidence available.
+- Applies slow-threshold filtering (`insights_slow_threshold_ms`) for report relevance.
 
-## Explain Operation Support Matrix
+2. Explain Enrichment (Post-Run Explain Analysis)
+- Runs only after workload completion.
+- Uses retained sampled events to find representative explain candidates.
+- Requires retained filter/pipeline metadata for supported operation types.
+- Adds deeper plan/evidence signals and recommendation confidence.
+
+Practical dependency:
+- Explain does not run during workload execution.
+- Explain depends on what was retained by capture/sampling.
+- If capture is disabled, explain cannot enrich anything meaningful.
+- If capture is too sparse, explain may return `insufficient_metadata` or leave shapes unattempted.
+
+Common operating modes:
+- Sampling ON, Explain OFF:
+  - Best for lightweight post-run profiling and benchmark fidelity.
+- Sampling ON, Explain ON:
+  - Best for troubleshooting and actionable plan diagnostics.
+- Sampling OFF, Explain ON:
+  - Not useful in practice; explain has no retained evidence to enrich.
+- Sampling OFF, Explain OFF:
+  - Disables insights entirely.
+
+## Explain Mode Details
+
+Explain runs only after workloads complete.
+
+Design guarantees:
+- Explain does not execute inside the measured workload loop.
+- Explain impact is classified as post-run only.
+- Fallback heuristics are used when explain is unavailable.
+
+Verbosity options:
+- `executionStats` (default): richer troubleshooting evidence
+- `queryPlanner`: lighter, but less actionable runtime evidence
+
+What `executionStats` can provide when available:
+- `execution_time_millis`
+- `total_docs_examined`
+- `total_keys_examined`
+- `n_returned`
+- index and scan stage signals
+- examined-to-returned and keys-to-returned ratios
+- stage chain and recommendation context
+
+## Explain Support Matrix
 
 Currently explain-supported:
 - `find`
@@ -162,208 +168,132 @@ Currently not supported:
 - `transaction`
 - other non-query-planner operations
 
-Notes:
-- `update*` and `delete*` are evaluated through a safe filter-based query-planner surrogate path to inspect index/scan behavior.
-- `aggregate` explain works when representative sampled pipeline metadata is retained.
+## Explain Status and Reason Fields
 
-## Explain Status and Reason Semantics
-
-Each slow shape and index issue includes:
+Each analyzed shape can include:
 - `explain_status`
 - `explain_reason`
 
-Statuses:
-- `explained`: explain successfully executed
-- `explain_unavailable`: explain not attempted for this shape (for example top-N limit)
-- `not_supported`: operation type is not explain-supported
-- `insufficient_metadata`: required sampled replay metadata was unavailable
-- `timed_out`: explain exceeded configured server/client timeout budget
-- `execution_failed`: explain execution/connectivity/auth/namespace failed
+`explain_status` values:
+- `explained`
+- `explain_unavailable`
+- `not_supported`
+- `insufficient_metadata`
+- `timed_out`
+- `execution_failed`
 
-Common reasons include:
+Common `explain_reason` examples:
 - `explain_disabled`
 - `explain_not_attempted_yet`
 - `not_selected_top_n_<N>`
-- `low_value_shape_filtered`
-- `shape_event_not_retained`
+- `filtered_by_threshold`
+- `filtered_by_severity_mode_<mode>`
 - `missing_filter_sample`
 - `missing_pipeline_sample`
+- `max_time_exceeded`
 - `connect_failed`
 - `not_authorized`
 - `namespace_not_found`
-- `command_not_found`
-- `max_time_exceeded`
 - `run_command_failed`
-- `collscan_observed`
-- `ixscan_observed`
-- `no_scan_stage_detected`
 
-## Confidence and Evidence Model
+## Reading the Dashboard Output
 
-PLGM intentionally separates observed evidence from recommendations:
+Quick triage order:
+1. Check top finding and severity badge.
+2. Check explain status badge and reason text.
+3. Review plan/evidence line (`index used`, `collscan`, docs/keys/returned, ratios).
+4. Read interpretation and `next step` recommendation.
+5. Use affected collections and iteration/timeline tabs for blast radius and timing context.
 
-Typical confidence mapping:
-- `high`: explain observed `COLLSCAN` for representative shape
-- `medium`: explain observed `IXSCAN` but performance is still poor
-- `low`: heuristic-only, unsupported, unavailable, insufficient metadata, or failed explain
+Each slow-query row can show:
+- latency stats (`avg/p95/p99/max`) and count
+- query reference block (`query_label`, `query_source`, `workload_name`, `query_file`, definition id/index)
+- representative query/pipeline preview for quick identification
+- shape identity and trend
+- explain diagnostics (`db`, verbosity, timeout budget, stage summary)
+- plan summary and evidence ratios
+- interpretation and confidence-weighted next step
 
-Evidence levels are explicit (for example `heuristic_*`, `explain_*`) and reflected in both UI and export.
+The `Copy diagnostics` button copies a structured JSON payload for ticketing/triage.
 
-Guidance language is intentionally cautious and never presents heuristics as guaranteed truth.
+## Query Traceability (Finding the Exact Query to Optimize)
 
-## UI: What You Should Expect
+Insights now carry query-reference metadata so users can map findings back to workload definitions quickly.
 
-During run:
-- Insights panel remains visible with pending status text.
-- No final index/slow-shape conclusions are shown.
+For each slow-query/index entry, look for:
+- `query_label`
+- `query_source`
+- `workload_name`
+- `query_file`
+- `query_definition_id`
+- `query_definition_index`
+- `representative_query_summary`
+- `representative_pipeline_summary`
 
-After run:
-- Top findings summarize the strongest signals.
-- Slow query rows include latency stats, shape id, and explain status/reason.
-- Index issue rows include confidence, evidence level, explain status/reason, and recommended action.
-- Iteration and timeline tabs provide supporting context.
+How these fields are populated:
+- File-based workload queries: source file and definition index are captured.
+- Uploaded UI query files: uploaded filename and definition index are captured.
+- Generated runtime/fallback paths: source is marked as runtime-generated.
+- If a JSON query has `id`/`label`/`name`, those are used as primary user-facing identifiers.
 
-## Download Summary Behavior
+Important grouping behavior:
+- Insights aggregate by normalized shape.
+- Multiple query definitions can collapse into the same shape.
+- When this happens, the UI marks it as multiple query definitions and shows a variants count.
 
-`Download Summary` includes `insights` from the same final model used by `/api/insights`.
+## Download Summary Parity
 
-This means:
-- UI and export should match for completed runs.
-- Password redaction behavior remains unchanged.
+`Download Summary` embeds the same insights object returned by `/api/insights` at completion.
 
-## Configuration
-
-Web UI path:
-- `Advanced -> Insights Analysis`
-
-Controls:
-- Enable Post-Run Insights Analysis
-- Enable Post-Run Explain Sampling (Optional)
-- Insights Sampling Rate
-- Slow Threshold (ms)
-- Max Retained Events
-- Max Group Entries
-- Explain Top N Shapes
-- Explain Max Time (ms)
-- Explain Workers (Post-Run)
-- Explain Timeout Retries
-- Explain Retry Backoff (ms)
-
-YAML keys:
-- `insights_enabled`
-- `insights_sampling_rate`
-- `insights_slow_threshold_ms`
-- `insights_max_events`
-- `insights_max_groups`
-- `insights_explain_enabled`
-- `insights_explain_top_n`
-- `insights_explain_max_time_ms`
-- `insights_explain_workers`
-- `insights_explain_retries`
-- `insights_explain_backoff_ms`
-
-Environment variables:
-- `PLGM_INSIGHTS_ENABLED`
-- `PLGM_INSIGHTS_SAMPLING_RATE`
-- `PLGM_INSIGHTS_SLOW_THRESHOLD_MS`
-- `PLGM_INSIGHTS_MAX_EVENTS`
-- `PLGM_INSIGHTS_MAX_GROUPS`
-- `PLGM_INSIGHTS_EXPLAIN_ENABLED`
-- `PLGM_INSIGHTS_EXPLAIN_TOP_N`
-- `PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS`
-- `PLGM_INSIGHTS_EXPLAIN_WORKERS`
-- `PLGM_INSIGHTS_EXPLAIN_RETRIES`
-- `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS`
-
-## Recommended Baselines
-
-General benchmarking:
-- sampling rate: `0.10`
-- slow threshold: `200`
-- max events: `5000`
-- max groups: `300`
-- explain enabled: `false`
-- explain workers: `1`
-- explain retries: `1`
-- explain backoff: `150`
-
-Focused troubleshooting:
-- sampling rate: `0.25` to `1.0`
-- explain enabled: `true`
-- explain top N: `3` to `5`
-- explain max time: `1000` to `3000`
-- explain workers: `1` to `2` (increase carefully)
-- explain retries: `1` to `2`
-- explain backoff: `150` to `400`
+Practical meaning:
+- UI and export should match for the same completed run.
+- Export contains the same filtering outcomes, explain statuses, and recommendations.
+- Export includes the same query-reference metadata shown in the UI.
+- Password redaction and existing summary protections remain unchanged.
 
 ## Practical Use Cases
 
-1. Immediate post-run triage
-- Find top slow operation groups and start with the highest-severity shape.
+1. Benchmark triage after a run
+- Identify top `critical/high` slow groups quickly.
 
-2. Collection hotspot ranking
-- Identify which collections contribute most to slow ratios.
+2. Index investigation backlog
+- Use explain-backed findings first, heuristic findings second.
 
-3. Safe index investigation shortlist
-- Use filter field patterns and evidence level to build DBA validation backlog.
+3. Regression checks across iterations
+- Track trend direction and p95/p99 deltas by shape.
 
-4. Iteration drift detection
-- Compare per-iteration slow ratio and p95/p99 changes.
+4. Reporting and incident artifacts
+- Export final summary JSON with `insights` for sharing with DBAs/SREs.
 
-5. Time-slice correlation
-- Align latency hotspots with throughput periods using `time_slices`.
-
-6. CI/export analysis
-- Ingest `insights` JSON into automated benchmark regression reports.
-
-## Limitations and Non-Goals
-
-- Sampling is representative, not exhaustive.
-- Heuristic index suggestions are not proof of root cause.
-- Explain depends on retained replay metadata and server permissions.
-- Top-N explain means some shapes will remain `explain_unavailable`.
-- Trend memory is process-local and reset on restart.
-- Insights are post-run only by design to protect workload performance.
+5. Explain budget control
+- Keep explain scoped with threshold + severity mode + top-N limits.
 
 ## Troubleshooting
 
-If explain stays unavailable:
-- confirm explain mode is enabled
-- increase sampling rate
-- increase max retained events
-- increase explain top N
-- increase explain max time (ms)
-- keep explain workers low first (to avoid extra cluster pressure)
-- verify MongoDB auth allows explain commands
+If findings seem too sparse:
+- Increase sampling rate.
+- Increase retained events/groups.
+- Ensure run duration has enough operation volume.
 
-If many shapes show insufficient metadata:
-- ensure explain mode was enabled before run start
-- increase sampling rate and max events
+If many items are filtered out:
+- Lower `insights_slow_threshold_ms` carefully.
+- Expand severity mode from `high_only` to `medium_only` or `high_and_low`.
 
-If explain shows timeout failures:
-- raise `insights_explain_max_time_ms`
-- keep retries at `1` or `2` (higher values increase post-run analysis time)
-- use low worker count first (`1`), then increase only if cluster capacity allows
+If explain times out:
+- Increase `insights_explain_max_time_ms`.
+- Keep workers low first (`1`).
+- Use modest retries (`1-2`) with non-zero backoff.
 
-If confidence remains low:
-- expected when evidence is heuristic only
-- rerun with explain enabled and targeted workload duration
+If explain is unavailable:
+- Confirm explain is enabled.
+- Increase top-N if needed.
+- Ensure metadata retention is sufficient (sampling/events).
+- Verify database permissions for explain commands.
 
-If report is empty:
-- increase sampling rate
-- check run duration and operation volume
+## Limitations
 
-## Versioning Expectations
-
-The insights schema is designed for dashboard/export use and may evolve. Consumers should:
-- tolerate additional fields
-- treat unknown fields as non-breaking
-- rely on `metadata.status` to determine readiness
-
-## Future Extensions
-
-Potential additions for full dashboard evolution:
-- persistent multi-run history
-- deeper explain plan diagnostics
-- cross-run diff/regression scoring
-- richer shape drill-down and replay helpers
+- Sampling is representative, not exhaustive tracing.
+- Trend baseline is process-local and resets on restart.
+- Explain depends on retained replay metadata and server permissions.
+- Top-N explain means some shapes intentionally remain unattempted.
+- Heuristic guidance is intentionally cautious and not proof of root cause.

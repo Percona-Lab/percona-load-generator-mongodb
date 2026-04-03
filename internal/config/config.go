@@ -62,6 +62,7 @@ type AppConfig struct {
 	InsightsExplainEnabled      bool    `yaml:"insights_explain_enabled"`
 	InsightsExplainTopN         int     `yaml:"insights_explain_top_n"`
 	InsightsExplainMaxTimeMS    int     `yaml:"insights_explain_max_time_ms"`
+	InsightsExplainVerbosity    string  `yaml:"insights_explain_verbosity"`
 	InsightsExplainSeverityMode string  `yaml:"insights_explain_severity_mode"`
 	InsightsExplainWorkers      int     `yaml:"insights_explain_workers"`
 	InsightsExplainRetries      int     `yaml:"insights_explain_retries"`
@@ -173,6 +174,7 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.InsightsExplainEnabled = false
 	cfg.InsightsExplainTopN = 5
 	cfg.InsightsExplainMaxTimeMS = 1000
+	cfg.InsightsExplainVerbosity = "executionStats"
 	cfg.InsightsExplainSeverityMode = "high_only"
 	cfg.InsightsExplainWorkers = 1
 	cfg.InsightsExplainRetries = 1
@@ -211,6 +213,11 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	if cfg.InsightsExplainMaxTimeMS <= 0 {
 		cfg.InsightsExplainMaxTimeMS = 1000
+	}
+	switch cfg.InsightsExplainVerbosity {
+	case "queryPlanner", "executionStats":
+	default:
+		cfg.InsightsExplainVerbosity = "executionStats"
 	}
 	switch cfg.InsightsExplainSeverityMode {
 	case "high_and_low", "medium_only", "critical_only", "high_only":
@@ -588,6 +595,9 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.InsightsExplainMaxTimeMS = n
 		}
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_VERBOSITY"); v != "" {
+		cfg.InsightsExplainVerbosity = v
 	}
 	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE"); v != "" {
 		cfg.InsightsExplainSeverityMode = v

@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestHandleInsightsLifecycleAndParity(t *testing.T) {
@@ -39,6 +42,14 @@ func TestHandleInsightsLifecycleAndParity(t *testing.T) {
 		1,
 		map[string]interface{}{"_id": 1},
 		nil,
+		"find flights by _id",
+		"unit_test",
+		"default_workload",
+		"queries_test.json",
+		"q_find_1",
+		"{_id:<num>}",
+		"",
+		0,
 	)
 
 	s.CurrentStats = c
@@ -120,7 +131,7 @@ func TestEnrichInsightsWithExplain_ClassifiesUnsupportedAndInsufficientMetadata(
 	rep.QueryShapes[1].ShapeID = rep.SlowQueries[1].ShapeID
 	rep.PotentialIndexIssues[0].ShapeID = rep.SlowQueries[0].ShapeID
 
-	enrichInsightsWithExplain("ready", &rep, events, &config.AppConfig{}, 5, 1000, "high_and_low", 1, 1, 0)
+	enrichInsightsWithExplain("ready", &rep, events, &config.AppConfig{}, 5, 1000, "executionStats", "high_and_low", 1, 1, 0)
 
 	if rep.SlowQueries[0].ExplainStatus != "insufficient_metadata" || rep.SlowQueries[0].ExplainReason != "missing_filter_sample" {
 		t.Fatalf("expected find shape insufficient metadata, got status=%q reason=%q", rep.SlowQueries[0].ExplainStatus, rep.SlowQueries[0].ExplainReason)
@@ -160,7 +171,7 @@ func TestEnrichInsightsWithExplain_RespectsTopNSelection(t *testing.T) {
 		{Operation: "find", Database: "testdb", Collection: "orders", ShapeKey: "k2", FilterSample: map[string]interface{}{"b": 1}},
 	}
 
-	enrichInsightsWithExplain("ready", &rep, events, &config.AppConfig{}, 1, 1000, "high_and_low", 1, 1, 0)
+	enrichInsightsWithExplain("ready", &rep, events, &config.AppConfig{}, 1, 1000, "executionStats", "high_and_low", 1, 1, 0)
 
 	if rep.SlowQueries[0].ExplainStatus != "execution_failed" {
 		t.Fatalf("expected first shape selected for explain and failed via stubbed connect, got %q", rep.SlowQueries[0].ExplainStatus)
@@ -269,10 +280,10 @@ func TestInsightsEndpointAndExportParityBySeverityMode(t *testing.T) {
 			InsightsExplainEnabled:      false,
 		})
 		for i := 0; i < 6; i++ {
-			c.RecordOperationEvent("find", "testdb", "orders", "shape_high", "high", []string{"customer_id"}, 950*time.Millisecond, true, 1, nil, nil)
+			c.RecordOperationEvent("find", "testdb", "orders", "shape_high", "high", []string{"customer_id"}, 950*time.Millisecond, true, 1, nil, nil, "orders high query", "unit_test", "test_workload", "queries_high.json", "q_high", "{customer_id:<num>}", "", 0)
 		}
 		for i := 0; i < 3; i++ {
-			c.RecordOperationEvent("find", "testdb", "payments", "shape_medium", "medium", []string{"account_id"}, 280*time.Millisecond, true, 1, nil, nil)
+			c.RecordOperationEvent("find", "testdb", "payments", "shape_medium", "medium", []string{"account_id"}, 280*time.Millisecond, true, 1, nil, nil, "payments medium query", "unit_test", "test_workload", "queries_medium.json", "q_medium", "{account_id:<num>}", "", 1)
 		}
 		return c
 	}
@@ -333,5 +344,357 @@ func TestInsightsEndpointAndExportParityBySeverityMode(t *testing.T) {
 				t.Fatalf("expected export insights payload to match /api/insights response exactly")
 			}
 		})
+	}
+}
+
+func TestBuildExplainCommandSpecAggregateIncludesExpectedOptions(t *testing.T) {
+	ev := stats.OperationEvent{
+		Operation:  "aggregate",
+		Collection: "orders",
+		PipelineSample: []interface{}{
+			map[string]interface{}{"$match": map[string]interface{}{"is_expedited_shipping": true}},
+			map[string]interface{}{"$group": map[string]interface{}{"_id": "$shipping_city"}},
+			map[string]interface{}{"$sort": map[string]interface{}{"total_revenue": -1}},
+			map[string]interface{}{"$limit": 5},
+		},
+	}
+	spec, reason := buildExplainCommandSpec(ev, 5000, "executionStats")
+	if reason != "" {
+		t.Fatalf("expected aggregate explain command spec, got reason %q", reason)
+	}
+	if spec.serverMaxTime != 5000 {
+		t.Fatalf("expected server max time 5000, got %d", spec.serverMaxTime)
+	}
+	if spec.clientTimeout <= 0 {
+		t.Fatalf("expected positive client timeout")
+	}
+	cmdText := fmt.Sprintf("%v", spec.cmd)
+	if !strings.Contains(cmdText, "allowDiskUse") || !strings.Contains(cmdText, "maxTimeMS") {
+		t.Fatalf("expected aggregate explain command to include allowDiskUse and maxTimeMS, got %s", cmdText)
+	}
+	if !strings.Contains(spec.stageSummary, "$match") || !strings.Contains(spec.stageSummary, "$group") {
+		t.Fatalf("expected stage summary to include key pipeline stages, got %q", spec.stageSummary)
+	}
+}
+
+func TestBuildExplainCommandSpecSupportedOperations(t *testing.T) {
+	tests := []struct {
+		name         string
+		ev           stats.OperationEvent
+		wantReason   string
+		wantContains []string
+	}{
+		{
+			name: "find with nested filter",
+			ev: stats.OperationEvent{
+				Operation:  "find",
+				Collection: "orders",
+				FilterSample: map[string]interface{}{
+					"$and": []interface{}{
+						map[string]interface{}{"status": "open"},
+						map[string]interface{}{"total_amount": map[string]interface{}{"$gt": 100}},
+					},
+				},
+			},
+			wantContains: []string{"find", "filter", "maxTimeMS"},
+		},
+		{
+			name: "updateOne uses filter explain surrogate",
+			ev: stats.OperationEvent{
+				Operation:    "updateOne",
+				Collection:   "orders",
+				FilterSample: map[string]interface{}{"customer_id": map[string]interface{}{"$exists": true}},
+			},
+			wantContains: []string{"find", "filter", "maxTimeMS"},
+		},
+		{
+			name: "deleteMany uses filter explain surrogate",
+			ev: stats.OperationEvent{
+				Operation:    "deleteMany",
+				Collection:   "orders",
+				FilterSample: map[string]interface{}{"status": "cancelled"},
+			},
+			wantContains: []string{"find", "filter", "maxTimeMS"},
+		},
+		{
+			name: "aggregate with nested stages",
+			ev: stats.OperationEvent{
+				Operation:  "aggregate",
+				Collection: "orders",
+				PipelineSample: []interface{}{
+					map[string]interface{}{"$match": map[string]interface{}{"status": "open"}},
+					map[string]interface{}{"$group": map[string]interface{}{"_id": "$shipping_city", "total": map[string]interface{}{"$sum": "$total_amount"}}},
+					map[string]interface{}{"$sort": map[string]interface{}{"total": -1}},
+				},
+			},
+			wantContains: []string{"aggregate", "pipeline", "allowDiskUse", "maxTimeMS"},
+		},
+		{
+			name: "missing filter for delete",
+			ev: stats.OperationEvent{
+				Operation:  "deleteOne",
+				Collection: "orders",
+			},
+			wantReason: "missing_filter_sample",
+		},
+		{
+			name: "missing pipeline for aggregate",
+			ev: stats.OperationEvent{
+				Operation:  "aggregate",
+				Collection: "orders",
+			},
+			wantReason: "missing_pipeline_sample",
+		},
+		{
+			name: "unsupported operation",
+			ev: stats.OperationEvent{
+				Operation:  "insert",
+				Collection: "orders",
+			},
+			wantReason: "unsupported_operation",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, reason := buildExplainCommandSpec(tc.ev, 1500, "executionStats")
+			if reason != tc.wantReason {
+				t.Fatalf("buildExplainCommandSpec() reason=%q, want %q", reason, tc.wantReason)
+			}
+			if tc.wantReason != "" {
+				return
+			}
+			if spec.verbosity != "executionStats" {
+				t.Fatalf("expected executionStats verbosity, got %q", spec.verbosity)
+			}
+			cmdText := fmt.Sprintf("%v", spec.cmd)
+			for _, want := range tc.wantContains {
+				if !strings.Contains(cmdText, want) {
+					t.Fatalf("expected command to contain %q, got %s", want, cmdText)
+				}
+			}
+		})
+	}
+}
+
+func TestFindExplainCandidatePrefersSuccessfulFastestSample(t *testing.T) {
+	shapeID := stats.StableShapeID("aggregate", "orders", "agg-shape")
+	sq := stats.SlowQueryInsight{
+		ShapeID:    shapeID,
+		Operation:  "aggregate",
+		Collection: "orders",
+	}
+	events := []stats.OperationEvent{
+		{Operation: "aggregate", Collection: "orders", ShapeKey: "agg-shape", Success: false, DurationMs: 5000, PipelineSample: []interface{}{map[string]interface{}{"$match": map[string]interface{}{"a": 1}}}},
+		{Operation: "aggregate", Collection: "orders", ShapeKey: "agg-shape", Success: true, DurationMs: 1200, PipelineSample: []interface{}{map[string]interface{}{"$match": map[string]interface{}{"a": 2}}}},
+		{Operation: "aggregate", Collection: "orders", ShapeKey: "agg-shape", Success: true, DurationMs: 800, PipelineSample: []interface{}{map[string]interface{}{"$match": map[string]interface{}{"a": 3}}}},
+	}
+	ev, reason, ok := findExplainCandidate(events, sq)
+	if !ok || reason != "" {
+		t.Fatalf("expected explain candidate, got ok=%v reason=%q", ok, reason)
+	}
+	if !ev.Success {
+		t.Fatalf("expected selected candidate to be successful sample")
+	}
+	if ev.DurationMs != 800 {
+		t.Fatalf("expected fastest successful sample (800ms), got %.0fms", ev.DurationMs)
+	}
+}
+
+func TestApplyExplainToSlowQueriesPropagatesDiagnostics(t *testing.T) {
+	shapeID := "shape_diag"
+	rep := stats.InsightsReport{
+		SlowQueries: []stats.SlowQueryInsight{
+			{ShapeID: shapeID, Operation: "aggregate", Collection: "orders"},
+		},
+		QueryShapes: []stats.SlowQueryInsight{
+			{ShapeID: shapeID, Operation: "aggregate", Collection: "orders"},
+		},
+	}
+	results := map[string]explainEvidence{
+		shapeID: {
+			status: "explained",
+			reason: "ixscan_observed",
+			diag: &stats.ExplainDiagnostics{
+				ReplayDB:         "shop",
+				ReplayCollection: "orders",
+				Verbosity:        "queryPlanner",
+				ServerMaxTimeMS:  5000,
+				ClientTimeoutMS:  7000,
+				StageSummary:     "$match -> $group -> $sort -> $limit",
+				ElapsedMS:        690,
+			},
+		},
+	}
+
+	applyExplainToSlowQueries(&rep, results)
+
+	if rep.SlowQueries[0].ExplainDiag == nil {
+		t.Fatalf("expected slow query explain diagnostics to be populated")
+	}
+	if rep.QueryShapes[0].ExplainDiag == nil {
+		t.Fatalf("expected query-shape explain diagnostics to be populated")
+	}
+	if rep.SlowQueries[0].ExplainDiag.ElapsedMS != 690 {
+		t.Fatalf("expected elapsed diagnostics to be preserved, got %d", rep.SlowQueries[0].ExplainDiag.ElapsedMS)
+	}
+}
+
+func TestParseExplainSignalsAggregateNestedPlan(t *testing.T) {
+	out := bson.M{
+		"queryPlanner": bson.M{
+			"winningPlan": bson.M{
+				"queryPlan": bson.M{
+					"stage": "GROUP",
+					"inputStage": bson.M{
+						"stage": "SORT",
+						"inputStage": bson.M{
+							"stage":     "FETCH",
+							"indexName": "is_expedited_shipping_1_status_1",
+							"inputStage": bson.M{
+								"stage": "IXSCAN",
+							},
+						},
+					},
+				},
+			},
+		},
+		"executionStats": bson.M{
+			"executionTimeMillis": 691,
+			"totalDocsExamined":   152865,
+			"totalKeysExamined":   152865,
+			"nReturned":           5,
+		},
+		"indexesUsed":     bson.A{"is_expedited_shipping_1_status_1"},
+		"collectionScans": 0,
+	}
+	sig := parseExplainSignals(out)
+	if !sig.indexScan {
+		t.Fatalf("expected index scan signal")
+	}
+	if sig.collectionScan {
+		t.Fatalf("expected no collection scan signal")
+	}
+	if !sig.fetch || !sig.group || !sig.sort {
+		t.Fatalf("expected fetch/group/sort signals, got fetch=%v group=%v sort=%v", sig.fetch, sig.group, sig.sort)
+	}
+	if len(sig.indexesUsed) == 0 || sig.indexesUsed[0] != "is_expedited_shipping_1_status_1" {
+		t.Fatalf("expected indexesUsed parsed, got %+v", sig.indexesUsed)
+	}
+	if sig.docsExamined != 152865 || sig.keysExamined != 152865 || sig.nReturned != 5 {
+		t.Fatalf("expected examined/returned metrics parsed, got docs=%d keys=%d nReturned=%d", sig.docsExamined, sig.keysExamined, sig.nReturned)
+	}
+}
+
+func TestParseExplainSignalsAggregateShardedCursorExecutionStats(t *testing.T) {
+	out := bson.M{
+		"shards": bson.M{
+			"lab-shard0": bson.D{
+				{Key: "stages", Value: bson.A{
+					bson.D{{Key: "$cursor", Value: bson.D{
+						{Key: "queryPlanner", Value: bson.D{
+							{Key: "winningPlan", Value: bson.D{
+								{Key: "queryPlan", Value: bson.D{
+									{Key: "stage", Value: "GROUP"},
+									{Key: "inputStage", Value: bson.D{
+										{Key: "stage", Value: "FETCH"},
+										{Key: "inputStage", Value: bson.D{
+											{Key: "stage", Value: "IXSCAN"},
+											{Key: "indexName", Value: "is_expedited_shipping_1_status_1"},
+										}},
+									}},
+								}},
+							}},
+						}},
+						{Key: "executionStats", Value: bson.D{
+							{Key: "nReturned", Value: int64(98)},
+							{Key: "executionTimeMillis", Value: int64(691)},
+							{Key: "totalKeysExamined", Value: int64(152865)},
+							{Key: "totalDocsExamined", Value: int64(152865)},
+							{Key: "executionStages", Value: bson.D{
+								{Key: "stage", Value: "nlj"},
+								{Key: "collectionScans", Value: int64(0)},
+								{Key: "indexSeeks", Value: int64(1)},
+								{Key: "indexesUsed", Value: bson.A{"is_expedited_shipping_1_status_1"}},
+								{Key: "inputStage", Value: bson.D{
+									{Key: "stage", Value: "group"},
+									{Key: "usedDisk", Value: false},
+									{Key: "spills", Value: int64(0)},
+								}},
+							}},
+						}},
+					}}},
+					bson.D{{Key: "$sort", Value: bson.D{{Key: "usedDisk", Value: false}, {Key: "spills", Value: int64(0)}}}},
+				}},
+			},
+		},
+	}
+
+	sig := parseExplainSignals(out)
+	if sig.winningPlanSummary == "stage_chain_unavailable" {
+		t.Fatalf("expected stage chain to be parsed from sharded cursor plan")
+	}
+	if !sig.indexScan || sig.collectionScan {
+		t.Fatalf("expected ixscan true and collscan false, got ixscan=%v collscan=%v", sig.indexScan, sig.collectionScan)
+	}
+	if !sig.fetch || !sig.group || !sig.sort {
+		t.Fatalf("expected fetch/group/sort detection from nested plan, got fetch=%v group=%v sort=%v", sig.fetch, sig.group, sig.sort)
+	}
+	if len(sig.indexesUsed) == 0 || sig.indexesUsed[0] != "is_expedited_shipping_1_status_1" {
+		t.Fatalf("expected indexesUsed from executionStages, got %+v", sig.indexesUsed)
+	}
+	if sig.docsExamined != 152865 || sig.keysExamined != 152865 || sig.nReturned != 98 {
+		t.Fatalf("expected executionStats counters, got docs=%d keys=%d returned=%d", sig.docsExamined, sig.keysExamined, sig.nReturned)
+	}
+	if sig.executionTimeMS != 691 {
+		t.Fatalf("expected executionTimeMillis=691, got %d", sig.executionTimeMS)
+	}
+}
+
+func TestParseExplainSignalsDetectsIndexSeekWithoutIndexesUsedArray(t *testing.T) {
+	out := bson.M{
+		"executionStats": bson.M{
+			"executionStages": bson.M{
+				"stage":      "nlj",
+				"indexSeeks": int64(2),
+				"inputStage": bson.M{
+					"stage": "ixseek",
+				},
+			},
+			"nReturned": int64(10),
+		},
+	}
+
+	sig := parseExplainSignals(out)
+	if !sig.indexScan {
+		t.Fatalf("expected index scan detection via ixseek/indexSeeks")
+	}
+	if sig.collectionScan {
+		t.Fatalf("expected no collection scan")
+	}
+}
+
+func TestBuildExplainRecommendationIndexBackedHighFanout(t *testing.T) {
+	interpretation, recommendation, confidence, evidence := buildExplainRecommendation(explainSignals{
+		indexScan:      true,
+		collectionScan: false,
+		group:          true,
+		sort:           true,
+		docsExamined:   152865,
+		keysExamined:   152865,
+		nReturned:      5,
+		indexesUsed:    []string{"is_expedited_shipping_1_status_1"},
+	})
+	if confidence == "low" {
+		t.Fatalf("expected medium/high confidence for index-backed high-fanout recommendation")
+	}
+	if !strings.Contains(strings.ToLower(interpretation), "index") {
+		t.Fatalf("expected interpretation to mention index-backed behavior, got %q", interpretation)
+	}
+	if !strings.Contains(strings.ToLower(recommendation), "selectivity") {
+		t.Fatalf("expected recommendation to mention selectivity/targeting, got %q", recommendation)
+	}
+	if !strings.Contains(evidence, "IXSCAN") || !strings.Contains(evidence, "docsExamined=152865") {
+		t.Fatalf("expected evidence summary with ixscan/docs, got %q", evidence)
 	}
 }

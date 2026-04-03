@@ -64,3 +64,13 @@ go test ./...
 go test -tags=integration ./internal/mongo -run TestRunWorkloadIntegration_OneShotExecutesFindUpdateAndSkipsInsert -v
 ```
 
+## Insights Feature Test Focus (Unit)
+
+If you are changing Post-Run Insights or explain-analysis behavior, these focused tests are useful:
+
+```bash
+go test ./internal/stats -run Insights -v
+go test ./internal/webui -run Insights -v
+```
+
+These cover filtering/severity behavior, `/api/insights` lifecycle, and export payload parity with insights output.

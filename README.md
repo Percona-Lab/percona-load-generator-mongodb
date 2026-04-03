@@ -96,6 +96,8 @@ Quick access:
 * Web UI path: `Advanced -> Insights Analysis`
 * Output: Dashboard insights panel + `Download Summary` JSON (`insights` section)
 * Includes explain support matrix, status/reason glossary, confidence model, troubleshooting, and limitations
+* Includes `executionStats` vs `queryPlanner` guidance, severity-based explain eligibility, filtering counters, and expected outcomes
+* Includes query traceability fields so each finding can be mapped to a concrete query source/definition
 
 ## The Interactive UI
 
@@ -711,6 +713,11 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `insights_explain_enabled` | `PLGM_INSIGHTS_EXPLAIN_ENABLED` | Enable optional post-run explain sampling | `false` |
 | `insights_explain_top_n` | `PLGM_INSIGHTS_EXPLAIN_TOP_N` | Number of top slow shapes to attempt explain on | `5` |
 | `insights_explain_max_time_ms` | `PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS` | Max server time per explain command | `1000` |
+| `insights_explain_verbosity` | `PLGM_INSIGHTS_EXPLAIN_VERBOSITY` | Explain verbosity (`executionStats` recommended, `queryPlanner` lighter) | `executionStats` |
+| `insights_explain_severity_mode` | `PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE` | Explain eligibility mode (`high_only`, `medium_only`, `critical_only`, `high_and_low`) | `high_only` |
+| `insights_explain_workers` | `PLGM_INSIGHTS_EXPLAIN_WORKERS` | Post-run explain worker count | `1` |
+| `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retry count for explain timeout/failure | `1` |
+| `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Backoff between explain retries (ms) | `150` |
 | **Workload Control** | | | |
 | `concurrency` | `PLGM_CONCURRENCY` | Number of active worker goroutines | `50` |
 | `duration` | `PLGM_DURATION` | Test duration (Go duration string) | `5m`, `60s` |

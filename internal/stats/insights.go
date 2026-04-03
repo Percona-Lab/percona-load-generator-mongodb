@@ -12,18 +12,26 @@ import (
 )
 
 type OperationEvent struct {
-	Operation      string                 `json:"operation"`
-	Database       string                 `json:"database,omitempty"`
-	Collection     string                 `json:"collection"`
-	ShapeKey       string                 `json:"shape_key"`
-	ShapeSummary   string                 `json:"shape_summary"`
-	FilterFields   []string               `json:"filter_fields,omitempty"`
-	DurationMs     float64                `json:"duration_ms"`
-	Success        bool                   `json:"success"`
-	Iteration      int                    `json:"iteration"`
-	TimestampMs    int64                  `json:"timestamp_ms"`
-	FilterSample   map[string]interface{} `json:"-"`
-	PipelineSample []interface{}          `json:"-"`
+	Operation       string                 `json:"operation"`
+	Database        string                 `json:"database,omitempty"`
+	Collection      string                 `json:"collection"`
+	ShapeKey        string                 `json:"shape_key"`
+	ShapeSummary    string                 `json:"shape_summary"`
+	QueryLabel      string                 `json:"query_label,omitempty"`
+	QuerySource     string                 `json:"query_source,omitempty"`
+	WorkloadName    string                 `json:"workload_name,omitempty"`
+	QueryFile       string                 `json:"query_file,omitempty"`
+	QueryDefID      string                 `json:"query_definition_id,omitempty"`
+	QueryDefIndex   int                    `json:"query_definition_index"`
+	QuerySummary    string                 `json:"representative_query_summary,omitempty"`
+	PipelineSummary string                 `json:"representative_pipeline_summary,omitempty"`
+	FilterFields    []string               `json:"filter_fields,omitempty"`
+	DurationMs      float64                `json:"duration_ms"`
+	Success         bool                   `json:"success"`
+	Iteration       int                    `json:"iteration"`
+	TimestampMs     int64                  `json:"timestamp_ms"`
+	FilterSample    map[string]interface{} `json:"-"`
+	PipelineSample  []interface{}          `json:"-"`
 }
 
 type ShapeTrend struct {
@@ -31,6 +39,41 @@ type ShapeTrend struct {
 	CurrentP95Ms  float64 `json:"current_p95_ms"`
 	DeltaP95Ms    float64 `json:"delta_p95_ms"`
 	Direction     string  `json:"direction"`
+}
+
+type ExplainDiagnostics struct {
+	ReplayDB                 string   `json:"replay_db,omitempty"`
+	ReplayCollection         string   `json:"replay_collection,omitempty"`
+	Verbosity                string   `json:"verbosity,omitempty"`
+	ServerMaxTimeMS          int      `json:"server_max_time_ms,omitempty"`
+	ClientTimeoutMS          int      `json:"client_timeout_ms,omitempty"`
+	StageSummary             string   `json:"stage_summary,omitempty"`
+	ElapsedMS                int      `json:"elapsed_ms,omitempty"`
+	WinningPlanSummary       string   `json:"winning_plan_summary,omitempty"`
+	PlanStages               []string `json:"plan_stages,omitempty"`
+	IndexesUsed              []string `json:"indexes_used,omitempty"`
+	CollectionScanDetected   bool     `json:"collection_scan_detected"`
+	IndexScanDetected        bool     `json:"index_scan_detected"`
+	FetchDetected            bool     `json:"fetch_detected"`
+	GroupDetected            bool     `json:"group_detected"`
+	SortDetected             bool     `json:"sort_detected"`
+	LimitDetected            bool     `json:"limit_detected"`
+	BlockingSortDetected     bool     `json:"blocking_sort_detected"`
+	UsedDisk                 bool     `json:"used_disk"`
+	DocsExamined             int64    `json:"docs_examined,omitempty"`
+	KeysExamined             int64    `json:"keys_examined,omitempty"`
+	NReturned                int64    `json:"n_returned,omitempty"`
+	CollectionScans          int64    `json:"collection_scans,omitempty"`
+	IndexSeeks               int64    `json:"index_seeks,omitempty"`
+	ExecutionTimeMillis      int64    `json:"execution_time_millis,omitempty"`
+	Spills                   int64    `json:"spills,omitempty"`
+	ExaminedToReturnedRatio  float64  `json:"examined_to_returned_ratio,omitempty"`
+	KeysToReturnedRatio      float64  `json:"keys_to_returned_ratio,omitempty"`
+	ShardDetailsSummary      string   `json:"shard_details_summary,omitempty"`
+	Interpretation           string   `json:"interpretation,omitempty"`
+	Recommendation           string   `json:"recommendation,omitempty"`
+	RecommendationConfidence string   `json:"recommendation_confidence,omitempty"`
+	EvidenceSummary          string   `json:"evidence_summary,omitempty"`
 }
 
 type InsightsMetadata struct {
@@ -47,6 +90,7 @@ type InsightsMetadata struct {
 	EvidenceLevel       string  `json:"evidence_level"`
 	ExplainEnabled      bool    `json:"explain_enabled"`
 	ExplainMode         string  `json:"explain_mode"`
+	ExplainVerbosity    string  `json:"explain_verbosity"`
 	ExplainSeverityMode string  `json:"explain_severity_mode"`
 	ExplainWorkers      int     `json:"explain_workers"`
 	ExplainRetries      int     `json:"explain_retries"`
@@ -62,25 +106,35 @@ type InsightsSummary struct {
 }
 
 type SlowQueryInsight struct {
-	Rank          int         `json:"rank"`
-	ShapeID       string      `json:"shape_id"`
-	Operation     string      `json:"operation"`
-	Collection    string      `json:"collection"`
-	ShapeKey      string      `json:"shape_key"`
-	ShapeSummary  string      `json:"shape_summary"`
-	FilterFields  []string    `json:"filter_fields,omitempty"`
-	Count         int         `json:"count"`
-	ErrorCount    int         `json:"error_count"`
-	SlowCount     int         `json:"slow_count"`
-	SlowRatio     float64     `json:"slow_ratio"`
-	AvgMs         float64     `json:"avg_ms"`
-	P95Ms         float64     `json:"p95_ms"`
-	P99Ms         float64     `json:"p99_ms"`
-	MaxMs         float64     `json:"max_ms"`
-	Severity      string      `json:"severity"`
-	ExplainStatus string      `json:"explain_status,omitempty"`
-	ExplainReason string      `json:"explain_reason,omitempty"`
-	Trend         *ShapeTrend `json:"trend,omitempty"`
+	Rank             int                 `json:"rank"`
+	ShapeID          string              `json:"shape_id"`
+	Operation        string              `json:"operation"`
+	Collection       string              `json:"collection"`
+	ShapeKey         string              `json:"shape_key"`
+	ShapeSummary     string              `json:"shape_summary"`
+	QueryLabel       string              `json:"query_label,omitempty"`
+	QuerySource      string              `json:"query_source,omitempty"`
+	WorkloadName     string              `json:"workload_name,omitempty"`
+	QueryFile        string              `json:"query_file,omitempty"`
+	QueryDefID       string              `json:"query_definition_id,omitempty"`
+	QueryDefIndex    int                 `json:"query_definition_index"`
+	QuerySummary     string              `json:"representative_query_summary,omitempty"`
+	PipelineSummary  string              `json:"representative_pipeline_summary,omitempty"`
+	QueryRefVariants int                 `json:"query_reference_variants,omitempty"`
+	FilterFields     []string            `json:"filter_fields,omitempty"`
+	Count            int                 `json:"count"`
+	ErrorCount       int                 `json:"error_count"`
+	SlowCount        int                 `json:"slow_count"`
+	SlowRatio        float64             `json:"slow_ratio"`
+	AvgMs            float64             `json:"avg_ms"`
+	P95Ms            float64             `json:"p95_ms"`
+	P99Ms            float64             `json:"p99_ms"`
+	MaxMs            float64             `json:"max_ms"`
+	Severity         string              `json:"severity"`
+	ExplainStatus    string              `json:"explain_status,omitempty"`
+	ExplainReason    string              `json:"explain_reason,omitempty"`
+	ExplainDiag      *ExplainDiagnostics `json:"explain_diagnostics,omitempty"`
+	Trend            *ShapeTrend         `json:"trend,omitempty"`
 }
 
 type CollectionInsight struct {
@@ -115,23 +169,32 @@ type TimeSliceInsight struct {
 }
 
 type IndexIssue struct {
-	Rank           int      `json:"rank"`
-	ShapeID        string   `json:"shape_id"`
-	Collection     string   `json:"collection"`
-	Operation      string   `json:"operation"`
-	ShapeKey       string   `json:"shape_key"`
-	FilterFields   []string `json:"filter_fields,omitempty"`
-	Count          int      `json:"count"`
-	AvgMs          float64  `json:"avg_ms"`
-	P95Ms          float64  `json:"p95_ms"`
-	P99Ms          float64  `json:"p99_ms"`
-	MaxMs          float64  `json:"max_ms"`
-	EvidenceLevel  string   `json:"evidence_level"`
-	Confidence     string   `json:"confidence"`
-	ExplainStatus  string   `json:"explain_status,omitempty"`
-	ExplainReason  string   `json:"explain_reason,omitempty"`
-	Message        string   `json:"message"`
-	Recommendation string   `json:"recommendation"`
+	Rank             int      `json:"rank"`
+	ShapeID          string   `json:"shape_id"`
+	Collection       string   `json:"collection"`
+	Operation        string   `json:"operation"`
+	ShapeKey         string   `json:"shape_key"`
+	QueryLabel       string   `json:"query_label,omitempty"`
+	QuerySource      string   `json:"query_source,omitempty"`
+	WorkloadName     string   `json:"workload_name,omitempty"`
+	QueryFile        string   `json:"query_file,omitempty"`
+	QueryDefID       string   `json:"query_definition_id,omitempty"`
+	QueryDefIndex    int      `json:"query_definition_index"`
+	QuerySummary     string   `json:"representative_query_summary,omitempty"`
+	PipelineSummary  string   `json:"representative_pipeline_summary,omitempty"`
+	QueryRefVariants int      `json:"query_reference_variants,omitempty"`
+	FilterFields     []string `json:"filter_fields,omitempty"`
+	Count            int      `json:"count"`
+	AvgMs            float64  `json:"avg_ms"`
+	P95Ms            float64  `json:"p95_ms"`
+	P99Ms            float64  `json:"p99_ms"`
+	MaxMs            float64  `json:"max_ms"`
+	EvidenceLevel    string   `json:"evidence_level"`
+	Confidence       string   `json:"confidence"`
+	ExplainStatus    string   `json:"explain_status,omitempty"`
+	ExplainReason    string   `json:"explain_reason,omitempty"`
+	Message          string   `json:"message"`
+	Recommendation   string   `json:"recommendation"`
 }
 
 type InsightRecommendation struct {
@@ -155,19 +218,20 @@ type InsightsReport struct {
 }
 
 type insightsSettings struct {
-	enabled         bool
-	samplePermille  int
-	sampleRate      float64
-	slowThresholdMs float64
-	maxEvents       int
-	maxGroups       int
-	explainEnabled  bool
-	explainTopN     int
-	explainMaxMs    int
-	explainSeverity string
-	explainWorkers  int
-	explainRetries  int
-	explainBackoff  int
+	enabled          bool
+	samplePermille   int
+	sampleRate       float64
+	slowThresholdMs  float64
+	maxEvents        int
+	maxGroups        int
+	explainEnabled   bool
+	explainTopN      int
+	explainMaxMs     int
+	explainVerbosity string
+	explainSeverity  string
+	explainWorkers   int
+	explainRetries   int
+	explainBackoff   int
 }
 
 type collectionIndexInfo struct {
@@ -175,34 +239,45 @@ type collectionIndexInfo struct {
 }
 
 type groupAgg struct {
-	Operation    string
-	Collection   string
-	ShapeKey     string
-	ShapeSummary string
-	FilterFields []string
-	Count        int
-	ErrorCount   int
-	SlowCount    int
-	SumMs        float64
-	MaxMs        float64
-	latencies    []float64
+	Operation        string
+	Collection       string
+	ShapeKey         string
+	ShapeSummary     string
+	QueryLabel       string
+	QuerySource      string
+	WorkloadName     string
+	QueryFile        string
+	QueryDefID       string
+	QueryDefIndex    int
+	QuerySummary     string
+	PipelineSummary  string
+	QueryRefVariants int
+	refCounts        map[string]int
+	FilterFields     []string
+	Count            int
+	ErrorCount       int
+	SlowCount        int
+	SumMs            float64
+	MaxMs            float64
+	latencies        []float64
 }
 
 func defaultInsightsSettings() insightsSettings {
 	return insightsSettings{
-		enabled:         true,
-		samplePermille:  100,
-		sampleRate:      0.10,
-		slowThresholdMs: 200.0,
-		maxEvents:       5000,
-		maxGroups:       300,
-		explainEnabled:  false,
-		explainTopN:     5,
-		explainMaxMs:    1000,
-		explainSeverity: "high_only",
-		explainWorkers:  1,
-		explainRetries:  1,
-		explainBackoff:  150,
+		enabled:          true,
+		samplePermille:   100,
+		sampleRate:       0.10,
+		slowThresholdMs:  200.0,
+		maxEvents:        5000,
+		maxGroups:        300,
+		explainEnabled:   false,
+		explainTopN:      5,
+		explainMaxMs:     1000,
+		explainVerbosity: "executionStats",
+		explainSeverity:  "high_only",
+		explainWorkers:   1,
+		explainRetries:   1,
+		explainBackoff:   150,
 	}
 }
 
@@ -245,6 +320,12 @@ func (c *Collector) configureInsights(cfg *config.AppConfig) {
 		}
 		if cfg.InsightsExplainMaxTimeMS > 0 {
 			s.explainMaxMs = cfg.InsightsExplainMaxTimeMS
+		}
+		switch cfg.InsightsExplainVerbosity {
+		case "queryPlanner", "executionStats":
+			s.explainVerbosity = cfg.InsightsExplainVerbosity
+		default:
+			s.explainVerbosity = "executionStats"
 		}
 		s.explainSeverity = normalizeExplainSeverityMode(cfg.InsightsExplainSeverityMode)
 		if cfg.InsightsExplainWorkers > 0 {
@@ -305,7 +386,7 @@ func (c *Collector) ResetInsights() {
 	c.finalInsights = nil
 }
 
-func (c *Collector) RecordOperationEvent(op, database, collection, shapeKey, shapeSummary string, filterFields []string, duration time.Duration, success bool, iteration int, filterSample map[string]interface{}, pipelineSample []interface{}) {
+func (c *Collector) RecordOperationEvent(op, database, collection, shapeKey, shapeSummary string, filterFields []string, duration time.Duration, success bool, iteration int, filterSample map[string]interface{}, pipelineSample []interface{}, queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary string, queryDefIndex int) {
 	c.insightsMu.Lock()
 	defer c.insightsMu.Unlock()
 
@@ -324,18 +405,26 @@ func (c *Collector) RecordOperationEvent(op, database, collection, shapeKey, sha
 	}
 
 	ev := OperationEvent{
-		Operation:      op,
-		Database:       database,
-		Collection:     collection,
-		ShapeKey:       shapeKey,
-		ShapeSummary:   shapeSummary,
-		FilterFields:   dedupeAndSortStrings(filterFields),
-		DurationMs:     float64(duration.Nanoseconds()) / 1e6,
-		Success:        success,
-		Iteration:      iteration,
-		TimestampMs:    time.Now().UnixMilli(),
-		FilterSample:   nil,
-		PipelineSample: nil,
+		Operation:       op,
+		Database:        database,
+		Collection:      collection,
+		ShapeKey:        shapeKey,
+		ShapeSummary:    shapeSummary,
+		QueryLabel:      queryLabel,
+		QuerySource:     querySource,
+		WorkloadName:    workloadName,
+		QueryFile:       queryFile,
+		QueryDefID:      queryDefID,
+		QueryDefIndex:   queryDefIndex,
+		QuerySummary:    querySummary,
+		PipelineSummary: pipelineSummary,
+		FilterFields:    dedupeAndSortStrings(filterFields),
+		DurationMs:      float64(duration.Nanoseconds()) / 1e6,
+		Success:         success,
+		Iteration:       iteration,
+		TimestampMs:     time.Now().UnixMilli(),
+		FilterSample:    nil,
+		PipelineSample:  nil,
 	}
 	if c.insightsCfg.explainEnabled {
 		ev.FilterSample = cloneMapDeep(filterSample)
@@ -373,6 +462,7 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 				SlowThresholdMs:     c.insightsCfg.slowThresholdMs,
 				ExplainEnabled:      c.insightsCfg.explainEnabled,
 				ExplainMode:         "disabled",
+				ExplainVerbosity:    c.insightsCfg.explainVerbosity,
 				ExplainSeverityMode: c.insightsCfg.explainSeverity,
 				ExplainWorkers:      c.insightsCfg.explainWorkers,
 				ExplainRetries:      c.insightsCfg.explainRetries,
@@ -396,6 +486,7 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 		c.insightEligible,
 		c.insightSampledIn,
 		c.insightsCfg.explainEnabled,
+		c.insightsCfg.explainVerbosity,
 		c.insightsCfg.explainSeverity,
 		c.insightsCfg.explainWorkers,
 		c.insightsCfg.explainRetries,
@@ -405,10 +496,10 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 	return report
 }
 
-func (c *Collector) GetExplainSettings() (enabled bool, topN int, maxTimeMs int, severityMode string, workers int, retries int, backoffMs int) {
+func (c *Collector) GetExplainSettings() (enabled bool, topN int, maxTimeMs int, verbosity string, severityMode string, workers int, retries int, backoffMs int) {
 	c.insightsMu.Lock()
 	defer c.insightsMu.Unlock()
-	return c.insightsCfg.explainEnabled, c.insightsCfg.explainTopN, c.insightsCfg.explainMaxMs, c.insightsCfg.explainSeverity, c.insightsCfg.explainWorkers, c.insightsCfg.explainRetries, c.insightsCfg.explainBackoff
+	return c.insightsCfg.explainEnabled, c.insightsCfg.explainTopN, c.insightsCfg.explainMaxMs, c.insightsCfg.explainVerbosity, c.insightsCfg.explainSeverity, c.insightsCfg.explainWorkers, c.insightsCfg.explainRetries, c.insightsCfg.explainBackoff
 }
 
 func (c *Collector) SnapshotOperationEvents() []OperationEvent {
@@ -442,12 +533,16 @@ func buildInsightsReport(
 	eligible uint64,
 	sampledIn uint64,
 	explainEnabled bool,
+	explainVerbosity string,
 	explainSeverity string,
 	explainWorkers int,
 	explainRetries int,
 	explainBackoff int,
 ) InsightsReport {
 	explainSeverity = normalizeExplainSeverityMode(explainSeverity)
+	if explainVerbosity != "queryPlanner" {
+		explainVerbosity = "executionStats"
+	}
 	rep := InsightsReport{
 		Metadata: InsightsMetadata{
 			Status:              "ready",
@@ -460,6 +555,7 @@ func buildInsightsReport(
 			EvidenceLevel:       "heuristic",
 			ExplainEnabled:      explainEnabled,
 			ExplainMode:         boolToMode(explainEnabled),
+			ExplainVerbosity:    explainVerbosity,
 			ExplainSeverityMode: explainSeverity,
 			ExplainWorkers:      explainWorkers,
 			ExplainRetries:      explainRetries,
@@ -718,6 +814,54 @@ func updateGroupAgg(g *groupAgg, ev OperationEvent, slowThresholdMs float64) {
 	if g.Collection == "" {
 		g.Collection = ev.Collection
 	}
+	if g.refCounts == nil {
+		g.refCounts = make(map[string]int)
+	}
+	refKey := buildQueryRefKey(ev)
+	if refKey != "" {
+		g.refCounts[refKey]++
+		if len(g.refCounts) > g.QueryRefVariants {
+			g.QueryRefVariants = len(g.refCounts)
+		}
+		if g.QueryLabel == "" {
+			g.QueryLabel = ev.QueryLabel
+			g.QuerySource = ev.QuerySource
+			g.WorkloadName = ev.WorkloadName
+			g.QueryFile = ev.QueryFile
+			g.QueryDefID = ev.QueryDefID
+			g.QueryDefIndex = ev.QueryDefIndex
+			g.QuerySummary = ev.QuerySummary
+			g.PipelineSummary = ev.PipelineSummary
+		} else if g.QueryLabel != ev.QueryLabel || g.QuerySource != ev.QuerySource || g.QueryFile != ev.QueryFile || g.QueryDefID != ev.QueryDefID {
+			g.QueryLabel = "multiple query definitions"
+			g.QuerySource = "multiple_sources"
+			if g.WorkloadName == "" {
+				g.WorkloadName = ev.WorkloadName
+			}
+			if g.QuerySummary == "" {
+				g.QuerySummary = ev.QuerySummary
+			}
+			if g.PipelineSummary == "" {
+				g.PipelineSummary = ev.PipelineSummary
+			}
+		}
+	}
+}
+
+func buildQueryRefKey(ev OperationEvent) string {
+	parts := []string{
+		strings.TrimSpace(ev.QueryLabel),
+		strings.TrimSpace(ev.QuerySource),
+		strings.TrimSpace(ev.WorkloadName),
+		strings.TrimSpace(ev.QueryFile),
+		strings.TrimSpace(ev.QueryDefID),
+		fmt.Sprintf("%d", ev.QueryDefIndex),
+	}
+	key := strings.Join(parts, "|")
+	if strings.Trim(key, "|0") == "" {
+		return ""
+	}
+	return key
 }
 
 func toSlowInsight(g *groupAgg) SlowQueryInsight {
@@ -733,21 +877,30 @@ func toSlowInsight(g *groupAgg) SlowQueryInsight {
 	coll := emptyFallback(g.Collection, "(unknown)")
 	shape := emptyFallback(g.ShapeKey, "(shape unavailable)")
 	return SlowQueryInsight{
-		ShapeID:      StableShapeID(op, coll, shape),
-		Operation:    op,
-		Collection:   coll,
-		ShapeKey:     shape,
-		ShapeSummary: emptyFallback(g.ShapeSummary, "(shape unavailable)"),
-		FilterFields: g.FilterFields,
-		Count:        g.Count,
-		ErrorCount:   g.ErrorCount,
-		SlowCount:    g.SlowCount,
-		SlowRatio:    slowRatio,
-		AvgMs:        round2(avg),
-		P95Ms:        round2(p95),
-		P99Ms:        round2(p99),
-		MaxMs:        round2(g.MaxMs),
-		Severity:     sev,
+		ShapeID:          StableShapeID(op, coll, shape),
+		Operation:        op,
+		Collection:       coll,
+		ShapeKey:         shape,
+		ShapeSummary:     emptyFallback(g.ShapeSummary, "(shape unavailable)"),
+		QueryLabel:       g.QueryLabel,
+		QuerySource:      g.QuerySource,
+		WorkloadName:     g.WorkloadName,
+		QueryFile:        g.QueryFile,
+		QueryDefID:       g.QueryDefID,
+		QueryDefIndex:    g.QueryDefIndex,
+		QuerySummary:     g.QuerySummary,
+		PipelineSummary:  g.PipelineSummary,
+		QueryRefVariants: g.QueryRefVariants,
+		FilterFields:     g.FilterFields,
+		Count:            g.Count,
+		ErrorCount:       g.ErrorCount,
+		SlowCount:        g.SlowCount,
+		SlowRatio:        slowRatio,
+		AvgMs:            round2(avg),
+		P95Ms:            round2(p95),
+		P99Ms:            round2(p99),
+		MaxMs:            round2(g.MaxMs),
+		Severity:         sev,
 	}
 }
 
@@ -787,20 +940,29 @@ func buildIndexIssues(groups []SlowQueryInsight, indexes map[string]collectionIn
 		}
 
 		issues = append(issues, IndexIssue{
-			ShapeID:        g.ShapeID,
-			Collection:     g.Collection,
-			Operation:      g.Operation,
-			ShapeKey:       g.ShapeKey,
-			FilterFields:   g.FilterFields,
-			Count:          g.Count,
-			AvgMs:          g.AvgMs,
-			P95Ms:          g.P95Ms,
-			P99Ms:          g.P99Ms,
-			MaxMs:          g.MaxMs,
-			EvidenceLevel:  evidence,
-			Confidence:     confidence,
-			Message:        msg,
-			Recommendation: reco,
+			ShapeID:          g.ShapeID,
+			Collection:       g.Collection,
+			Operation:        g.Operation,
+			ShapeKey:         g.ShapeKey,
+			QueryLabel:       g.QueryLabel,
+			QuerySource:      g.QuerySource,
+			WorkloadName:     g.WorkloadName,
+			QueryFile:        g.QueryFile,
+			QueryDefID:       g.QueryDefID,
+			QueryDefIndex:    g.QueryDefIndex,
+			QuerySummary:     g.QuerySummary,
+			PipelineSummary:  g.PipelineSummary,
+			QueryRefVariants: g.QueryRefVariants,
+			FilterFields:     g.FilterFields,
+			Count:            g.Count,
+			AvgMs:            g.AvgMs,
+			P95Ms:            g.P95Ms,
+			P99Ms:            g.P99Ms,
+			MaxMs:            g.MaxMs,
+			EvidenceLevel:    evidence,
+			Confidence:       confidence,
+			Message:          msg,
+			Recommendation:   reco,
 		})
 	}
 
@@ -827,20 +989,36 @@ func buildRecommendations(rep InsightsReport) []InsightRecommendation {
 
 	if len(rep.SlowQueries) > 0 {
 		top := rep.SlowQueries[0]
+		queryRef := fmt.Sprintf("%s/%s", emptyFallback(top.Operation, "op"), emptyFallback(top.Collection, "collection"))
+		if strings.TrimSpace(top.QueryLabel) != "" {
+			queryRef = top.QueryLabel
+		} else if strings.TrimSpace(top.QueryDefID) != "" {
+			queryRef = top.QueryDefID
+		}
+		if strings.TrimSpace(top.QueryFile) != "" {
+			queryRef = fmt.Sprintf("%s from %s", queryRef, top.QueryFile)
+		}
 		recs = append(recs, InsightRecommendation{
 			Priority:   "high",
 			Title:      "Address the highest-latency operation group first",
-			Details:    fmt.Sprintf("%s on %s shows p99 %.2fms across %d sampled events.", top.Operation, top.Collection, top.P99Ms, top.Count),
+			Details:    fmt.Sprintf("%s shows p99 %.2fms across %d sampled events. Review this query definition first.", queryRef, top.P99Ms, top.Count),
 			Confidence: "high",
 		})
 	}
 
 	if len(rep.PotentialIndexIssues) > 0 {
 		top := rep.PotentialIndexIssues[0]
+		queryCtx := fmt.Sprintf("%s (%s)", top.Collection, top.Operation)
+		if strings.TrimSpace(top.QueryLabel) != "" {
+			queryCtx = top.QueryLabel
+		}
+		if strings.TrimSpace(top.QueryFile) != "" {
+			queryCtx = fmt.Sprintf("%s in %s", queryCtx, top.QueryFile)
+		}
 		recs = append(recs, InsightRecommendation{
 			Priority:   "high",
 			Title:      "Investigate index coverage for repeated slow filters",
-			Details:    fmt.Sprintf("%s (%s) shows repeated slow behavior. %s", top.Collection, top.Operation, top.Recommendation),
+			Details:    fmt.Sprintf("%s shows repeated slow behavior. %s", queryCtx, top.Recommendation),
 			Confidence: top.Confidence,
 		})
 	}

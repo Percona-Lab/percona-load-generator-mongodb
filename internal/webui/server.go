@@ -162,16 +162,37 @@ func parseFloat(val string, defaultVal float64) float64 {
 	return parsed
 }
 
+func writeStartError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  "error",
+		"message": message,
+	})
+}
+
+func explainCollectionsFormatError(raw []byte, wrappedErr error, arrErr error) string {
+	body := string(raw)
+	if strings.Contains(body, "\"databaseName\"") || strings.Contains(body, "\"collectionName\"") {
+		return "invalid collections format: use keys 'database' and 'collection' (not 'databaseName'/'collectionName')"
+	}
+	base := "invalid collections format: expected either [{...}] or {\"collections\":[...]} with keys 'database' and 'collection'"
+	if wrappedErr != nil || arrErr != nil {
+		base = fmt.Sprintf("%s (wrapper parse: %v; array parse: %v)", base, wrappedErr, arrErr)
+	}
+	return base
+}
+
 func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeStartError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	s.mu.Lock()
 	if s.IsRunning {
 		s.mu.Unlock()
-		http.Error(w, "Workload is already running", http.StatusConflict)
+		writeStartError(w, http.StatusConflict, "workload is already running")
 		return
 	}
 	s.IsRunning = true
@@ -184,7 +205,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		s.abortRun("Failed to parse form")
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeStartError(w, http.StatusBadRequest, fmt.Sprintf("failed to parse multipart form: %v", err))
 		return
 	}
 
@@ -230,6 +251,14 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainEnabled = r.FormValue("insights_explain_enabled") == "true" || r.FormValue("insights_explain_enabled") == "on"
 	cfg.InsightsExplainTopN = parseInt(r.FormValue("insights_explain_top_n"), cfg.InsightsExplainTopN)
 	cfg.InsightsExplainMaxTimeMS = parseInt(r.FormValue("insights_explain_max_time_ms"), cfg.InsightsExplainMaxTimeMS)
+	if v := r.FormValue("insights_explain_verbosity"); v != "" {
+		cfg.InsightsExplainVerbosity = v
+	}
+	switch cfg.InsightsExplainVerbosity {
+	case "queryPlanner", "executionStats":
+	default:
+		cfg.InsightsExplainVerbosity = "executionStats"
+	}
 	if mode := r.FormValue("insights_explain_severity_mode"); mode != "" {
 		cfg.InsightsExplainSeverityMode = mode
 	}
@@ -300,42 +329,74 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		collFile, _, err := r.FormFile("collections_file")
 		if err == nil {
 			defer collFile.Close()
-			b, _ := io.ReadAll(collFile)
+			b, readErr := io.ReadAll(collFile)
+			if readErr != nil {
+				s.abortRun("Failed to read custom collections_file: " + readErr.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to read uploaded collections_file: "+readErr.Error())
+				return
+			}
 			var wrapped config.CollectionsFile
-			if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Collections) > 0 {
+			wrappedErr := json.Unmarshal(b, &wrapped)
+			if wrappedErr == nil && len(wrapped.Collections) > 0 {
 				customCollections = &wrapped
 			} else {
 				var arr []config.CollectionDefinition
-				if err := json.Unmarshal(b, &arr); err == nil && len(arr) > 0 {
+				arrErr := json.Unmarshal(b, &arr)
+				if arrErr == nil && len(arr) > 0 {
 					customCollections = &config.CollectionsFile{Collections: arr}
+				} else {
+					parseMsg := explainCollectionsFormatError(b, wrappedErr, arrErr)
+					s.abortRun("Failed to parse custom collections_file: " + parseMsg)
+					writeStartError(w, http.StatusBadRequest, parseMsg)
+					return
 				}
 			}
 
 			if customCollections != nil {
 				for i, col := range customCollections.Collections {
 					if col.DatabaseName == "" || col.Name == "" {
-						s.abortRun(fmt.Sprintf("Loaded collection at index %d has empty 'database' or 'collection' name.", i))
-						http.Error(w, "Invalid collections format: missing db or collection name", http.StatusBadRequest)
+						msg := fmt.Sprintf("invalid collections format: item %d is missing required keys 'database' or 'collection'", i)
+						body := string(b)
+						if strings.Contains(body, "\"databaseName\"") || strings.Contains(body, "\"collectionName\"") {
+							msg = "invalid collections format: use keys 'database' and 'collection' (not 'databaseName'/'collectionName')"
+						}
+						s.abortRun(msg)
+						writeStartError(w, http.StatusBadRequest, msg)
 						return
 					}
 				}
-			} else {
-				s.abortRun("Failed to parse custom collections_file")
-				http.Error(w, "Invalid collections format", http.StatusBadRequest)
-				return
 			}
 		}
 
-		queryFile, _, err := r.FormFile("queries_file")
+		queryFile, queryHeader, err := r.FormFile("queries_file")
 		if err == nil {
 			defer queryFile.Close()
-			b, _ := io.ReadAll(queryFile)
+			b, readErr := io.ReadAll(queryFile)
+			if readErr != nil {
+				s.abortRun("Failed to read custom queries_file: " + readErr.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to read uploaded queries_file: "+readErr.Error())
+				return
+			}
 			var defs []config.QueryDefinition
 			if err := json.Unmarshal(b, &defs); err == nil && len(defs) > 0 {
+				sourceFile := "uploaded_queries.json"
+				if queryHeader != nil && strings.TrimSpace(queryHeader.Filename) != "" {
+					sourceFile = queryHeader.Filename
+				}
+				for i := range defs {
+					defs[i].SourceType = "uploaded_file"
+					defs[i].SourceFile = sourceFile
+					defs[i].WorkloadName = "custom_workload"
+					defs[i].DefinitionIndex = i
+				}
 				customQueries = &config.QueriesFile{Queries: defs}
 			} else {
-				s.abortRun("Failed to parse custom queries_file")
-				http.Error(w, "Invalid queries format", http.StatusBadRequest)
+				msg := "invalid queries format: expected JSON array of query definitions"
+				if err != nil {
+					msg = fmt.Sprintf("%s (%v)", msg, err)
+				}
+				s.abortRun("Failed to parse custom queries_file: " + msg)
+				writeStartError(w, http.StatusBadRequest, msg)
 				return
 			}
 		}
@@ -723,9 +784,9 @@ func (s *WebServer) handleInsights(w http.ResponseWriter, r *http.Request) {
 
 	rep := collector.GetFinalInsights()
 	events := collector.SnapshotOperationEvents()
-	explainEnabled, explainTopN, explainMaxMs, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
+	explainEnabled, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
 	if explainEnabled {
-		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs)
+		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs)
 	}
 	applyTrends(&rep, baseTrends)
 
@@ -776,9 +837,41 @@ type explainEvidence struct {
 	ixscan   bool
 	status   string
 	reason   string
+	diag     *stats.ExplainDiagnostics
 }
 
-func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int, explainSeverityMode string, workers int, retries int, backoffMs int) {
+type explainCommandSpec struct {
+	cmd           bson.D
+	verbosity     string
+	serverMaxTime int
+	clientTimeout time.Duration
+	commandType   string
+	stageSummary  string
+}
+
+type explainSignals struct {
+	planStages         []string
+	indexesUsed        []string
+	collectionScan     bool
+	indexScan          bool
+	fetch              bool
+	group              bool
+	sort               bool
+	limit              bool
+	blockingSort       bool
+	usedDisk           bool
+	docsExamined       int64
+	keysExamined       int64
+	nReturned          int64
+	collectionScans    int64
+	indexSeeks         int64
+	executionTimeMS    int64
+	spills             int64
+	winningPlanSummary string
+	shardSummary       string
+}
+
+func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int, explainVerbosity string, explainSeverityMode string, workers int, retries int, backoffMs int) {
 	if status != "ready" || cfg == nil || topN <= 0 || len(rep.SlowQueries) == 0 {
 		return
 	}
@@ -794,6 +887,11 @@ func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events 
 	rep.Metadata.ExplainWorkers = workers
 	rep.Metadata.ExplainRetries = retries
 	rep.Metadata.ExplainBackoffMS = backoffMs
+	if explainVerbosity == "queryPlanner" {
+		rep.Metadata.ExplainVerbosity = "queryPlanner"
+	} else {
+		rep.Metadata.ExplainVerbosity = "executionStats"
+	}
 
 	indexIssueShapes := make(map[string]struct{}, len(rep.PotentialIndexIssues))
 	for _, issue := range rep.PotentialIndexIssues {
@@ -847,7 +945,7 @@ func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events 
 		shapeIDs = append(shapeIDs, shapeID)
 	}
 	sort.Strings(shapeIDs)
-	applyExplainCandidatesConcurrently(results, candidates, shapeIDs, workers, cfg, maxTimeMs, retries, backoffMs)
+	applyExplainCandidatesConcurrently(results, candidates, shapeIDs, workers, cfg, maxTimeMs, explainVerbosity, retries, backoffMs)
 
 	appliedExplain := false
 	for _, ev := range results {
@@ -875,6 +973,11 @@ func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events 
 		}
 		issue.ExplainStatus = ev.status
 		issue.ExplainReason = ev.reason
+		if ev.diag != nil && ev.status == "explained" {
+			issue.Recommendation = ev.diag.Recommendation
+			issue.Confidence = ev.diag.RecommendationConfidence
+			issue.Message = ev.diag.Interpretation
+		}
 		if ev.collscan {
 			issue.EvidenceLevel = "explain_collscan_observed"
 			issue.Confidence = "high"
@@ -891,9 +994,11 @@ func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events 
 		}
 		switch ev.status {
 		case "explained":
-			issue.EvidenceLevel = "explain_no_strong_index_signal"
-			issue.Confidence = "low"
-			issue.Message = "Explain succeeded but did not show a clear COLLSCAN/IXSCAN signal. Keep heuristic guidance and sample additional shapes if needed."
+			issue.EvidenceLevel = "explain_structured_plan_signal"
+			if ev.diag == nil || strings.TrimSpace(ev.diag.Interpretation) == "" {
+				issue.Confidence = "low"
+				issue.Message = "Explain succeeded, but parsed plan evidence was limited. Keep guidance cautious and validate with additional explain samples."
+			}
 		case "not_supported":
 			issue.EvidenceLevel = "heuristic_not_supported"
 			issue.Confidence = "low"
@@ -959,6 +1064,7 @@ func applyExplainCandidatesConcurrently(
 	workers int,
 	cfg *config.AppConfig,
 	maxTimeMs int,
+	explainVerbosity string,
 	retries int,
 	backoffMs int,
 ) {
@@ -1009,7 +1115,7 @@ func applyExplainCandidatesConcurrently(
 					conn = newConn
 					conns[dbName] = conn
 				}
-				evidence := runExplainForEventWithRetry(conn.Database, j.event, maxTimeMs, retries, backoffMs)
+				evidence := runExplainForEventWithRetry(conn.Database, j.event, maxTimeMs, explainVerbosity, retries, backoffMs)
 				outs <- out{shapeID: j.shapeID, evidence: evidence}
 			}
 		}()
@@ -1029,9 +1135,9 @@ func applyExplainCandidatesConcurrently(
 	}
 }
 
-func runExplainForEventWithRetry(database *mongodrv.Database, ev stats.OperationEvent, baseMaxTimeMs int, retries int, backoffMs int) explainEvidence {
+func runExplainForEventWithRetry(database *mongodrv.Database, ev stats.OperationEvent, baseMaxTimeMs int, explainVerbosity string, retries int, backoffMs int) explainEvidence {
 	return retryExplainEvidence(baseMaxTimeMs, retries, backoffMs, func(maxTimeMs int) explainEvidence {
-		return runExplainForEvent(database, ev, maxTimeMs)
+		return runExplainForEvent(database, ev, maxTimeMs, explainVerbosity)
 	})
 }
 
@@ -1065,58 +1171,132 @@ func retryExplainEvidence(baseMaxTimeMs int, retries int, backoffMs int, run fun
 	return last
 }
 
-func runExplainForEvent(database *mongodrv.Database, ev stats.OperationEvent, maxTimeMs int) explainEvidence {
-	coll := database.Collection(ev.Collection)
-	timeoutMs := maxTimeMs + 2000
-	if timeoutMs < 3000 {
-		timeoutMs = 3000
+func runExplainForEvent(database *mongodrv.Database, ev stats.OperationEvent, maxTimeMs int, explainVerbosity string) explainEvidence {
+	spec, reason := buildExplainCommandSpec(ev, maxTimeMs, explainVerbosity)
+	if reason != "" {
+		if reason == "unsupported_operation" {
+			return explainEvidence{status: "not_supported", reason: reason}
+		}
+		return explainEvidence{status: "insufficient_metadata", reason: reason}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
 
-	var cmd bson.D
-	switch ev.Operation {
-	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
-		if len(ev.FilterSample) == 0 {
-			return explainEvidence{status: "insufficient_metadata", reason: "missing_filter_sample"}
-		}
-		inner := bson.D{{Key: "find", Value: coll.Name()}, {Key: "filter", Value: ev.FilterSample}, {Key: "limit", Value: 1}}
-		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
-	case "aggregate":
-		if len(ev.PipelineSample) == 0 {
-			return explainEvidence{status: "insufficient_metadata", reason: "missing_pipeline_sample"}
-		}
-		inner := bson.D{{Key: "aggregate", Value: coll.Name()}, {Key: "pipeline", Value: ev.PipelineSample}, {Key: "cursor", Value: bson.M{}}}
-		cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: "queryPlanner"}, {Key: "maxTimeMS", Value: maxTimeMs}}
-	default:
-		return explainEvidence{status: "not_supported", reason: "unsupported_operation"}
+	ctx, cancel := context.WithTimeout(context.Background(), spec.clientTimeout)
+	defer cancel()
+	start := time.Now()
+	baseDiag := &stats.ExplainDiagnostics{
+		ReplayDB:         nonEmptyOrFallback(ev.Database, database.Name()),
+		ReplayCollection: ev.Collection,
+		Verbosity:        spec.verbosity,
+		ServerMaxTimeMS:  spec.serverMaxTime,
+		ClientTimeoutMS:  int(spec.clientTimeout / time.Millisecond),
+		StageSummary:     spec.stageSummary,
 	}
 
 	var out bson.M
-	if err := database.RunCommand(ctx, cmd, options.RunCmd()).Decode(&out); err != nil {
+	if err := database.RunCommand(ctx, spec.cmd, options.RunCmd()).Decode(&out); err != nil {
 		reason := classifyExplainCommandError(err)
+		baseDiag.ElapsedMS = int(time.Since(start) / time.Millisecond)
+		log.Printf("[Insights Explain] op=%s db=%s coll=%s shape=%s mode=%s server_max_ms=%d client_timeout_ms=%d stages=%s result=%s elapsed_ms=%d",
+			ev.Operation,
+			baseDiag.ReplayDB,
+			ev.Collection,
+			stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey),
+			spec.verbosity,
+			spec.serverMaxTime,
+			int(spec.clientTimeout/time.Millisecond),
+			spec.stageSummary,
+			reason,
+			int(time.Since(start)/time.Millisecond),
+		)
 		if reason == "max_time_exceeded" || reason == "client_deadline_exceeded" {
 			return explainEvidence{
 				status: "timed_out",
 				reason: reason,
+				diag:   baseDiag,
 			}
 		}
 		return explainEvidence{
 			status: "execution_failed",
 			reason: reason,
+			diag:   baseDiag,
 		}
 	}
-	reason := "no_scan_stage_detected"
-	if containsStage(out, "COLLSCAN") {
-		reason = "collscan_observed"
-	} else if containsStage(out, "IXSCAN") {
-		reason = "ixscan_observed"
+	reasonSignal := "no_scan_stage_detected"
+	signals := parseExplainSignals(out)
+	if signals.collectionScan {
+		reasonSignal = "collscan_observed"
+	} else if signals.indexScan {
+		reasonSignal = "ixscan_observed"
 	}
+	baseDiag.ElapsedMS = int(time.Since(start) / time.Millisecond)
+	applyExplainSignalsToDiagnostics(baseDiag, signals)
+	log.Printf("[Insights Explain] op=%s db=%s coll=%s shape=%s mode=%s server_max_ms=%d client_timeout_ms=%d stages=%s result=explained elapsed_ms=%d",
+		ev.Operation,
+		baseDiag.ReplayDB,
+		ev.Collection,
+		stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey),
+		spec.verbosity,
+		spec.serverMaxTime,
+		int(spec.clientTimeout/time.Millisecond),
+		spec.stageSummary,
+		int(time.Since(start)/time.Millisecond),
+	)
 	return explainEvidence{
-		collscan: containsStage(out, "COLLSCAN"),
-		ixscan:   containsStage(out, "IXSCAN"),
+		collscan: signals.collectionScan,
+		ixscan:   signals.indexScan,
 		status:   "explained",
-		reason:   reason,
+		reason:   reasonSignal,
+		diag:     baseDiag,
+	}
+}
+
+func buildExplainCommandSpec(ev stats.OperationEvent, maxTimeMs int, explainVerbosity string) (explainCommandSpec, string) {
+	if maxTimeMs <= 0 {
+		maxTimeMs = 1000
+	}
+	if explainVerbosity != "queryPlanner" {
+		explainVerbosity = "executionStats"
+	}
+	spec := explainCommandSpec{
+		verbosity:     explainVerbosity,
+		serverMaxTime: maxTimeMs,
+		clientTimeout: time.Duration(maxTimeMs+2000) * time.Millisecond,
+		commandType:   ev.Operation,
+	}
+	if spec.clientTimeout < 3*time.Second {
+		spec.clientTimeout = 3 * time.Second
+	}
+
+	switch ev.Operation {
+	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
+		if len(ev.FilterSample) == 0 {
+			return explainCommandSpec{}, "missing_filter_sample"
+		}
+		inner := bson.D{
+			{Key: "find", Value: ev.Collection},
+			{Key: "filter", Value: ev.FilterSample},
+			{Key: "limit", Value: 1},
+			{Key: "maxTimeMS", Value: maxTimeMs},
+		}
+		spec.cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: spec.verbosity}}
+		spec.stageSummary = summarizeFilterForLog(ev.FilterSample)
+		return spec, ""
+	case "aggregate":
+		if len(ev.PipelineSample) == 0 {
+			return explainCommandSpec{}, "missing_pipeline_sample"
+		}
+		inner := bson.D{
+			{Key: "aggregate", Value: ev.Collection},
+			{Key: "pipeline", Value: ev.PipelineSample},
+			{Key: "cursor", Value: bson.M{}},
+			{Key: "allowDiskUse", Value: true},
+			{Key: "maxTimeMS", Value: maxTimeMs},
+		}
+		spec.cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: spec.verbosity}}
+		spec.stageSummary = summarizePipelineForLog(ev.PipelineSample)
+		return spec, ""
+	default:
+		return explainCommandSpec{}, "unsupported_operation"
 	}
 }
 
@@ -1156,21 +1336,37 @@ func supportsExplainOperation(op string) bool {
 
 func findExplainCandidate(events []stats.OperationEvent, sq stats.SlowQueryInsight) (stats.OperationEvent, string, bool) {
 	shapeSeen := false
+	var bestSuccess *stats.OperationEvent
+	var bestAny *stats.OperationEvent
 	for _, ev := range events {
 		if stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey) != sq.ShapeID {
 			continue
 		}
 		shapeSeen = true
+		hasMetadata := false
 		switch sq.Operation {
 		case "aggregate":
-			if len(ev.PipelineSample) > 0 {
-				return ev, "", true
-			}
+			hasMetadata = len(ev.PipelineSample) > 0
 		case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
-			if len(ev.FilterSample) > 0 {
-				return ev, "", true
-			}
+			hasMetadata = len(ev.FilterSample) > 0
 		}
+		if !hasMetadata {
+			continue
+		}
+
+		candidate := ev
+		if bestAny == nil || candidate.DurationMs < bestAny.DurationMs {
+			bestAny = &candidate
+		}
+		if candidate.Success && (bestSuccess == nil || candidate.DurationMs < bestSuccess.DurationMs) {
+			bestSuccess = &candidate
+		}
+	}
+	if bestSuccess != nil {
+		return *bestSuccess, "", true
+	}
+	if bestAny != nil {
+		return *bestAny, "", true
 	}
 	if !shapeSeen {
 		return stats.OperationEvent{}, "shape_event_not_retained", false
@@ -1181,12 +1377,384 @@ func findExplainCandidate(events []stats.OperationEvent, sq stats.SlowQueryInsig
 	return stats.OperationEvent{}, "missing_filter_sample", false
 }
 
+func summarizePipelineForLog(pipeline []interface{}) string {
+	if len(pipeline) == 0 {
+		return "[]"
+	}
+	stages := make([]string, 0, len(pipeline))
+	for _, raw := range pipeline {
+		stage, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		keys := make([]string, 0, len(stage))
+		for k := range stage {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		stages = append(stages, strings.Join(keys, "+"))
+	}
+	if len(stages) == 0 {
+		return "unknown_stages"
+	}
+	return strings.Join(stages, " -> ")
+}
+
+func summarizeFilterForLog(filter map[string]interface{}) string {
+	if len(filter) == 0 {
+		return "{}"
+	}
+	keys := make([]string, 0, len(filter))
+	for k := range filter {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return "{" + strings.Join(keys, ",") + "}"
+}
+
+func parseExplainSignals(out bson.M) explainSignals {
+	s := explainSignals{}
+	stageSeen := make(map[string]struct{})
+	indexSeen := make(map[string]struct{})
+
+	addStage := func(stage string) {
+		stage = strings.ToUpper(strings.TrimSpace(stage))
+		if stage == "" {
+			return
+		}
+		if _, ok := stageSeen[stage]; ok {
+			return
+		}
+		stageSeen[stage] = struct{}{}
+		s.planStages = append(s.planStages, stage)
+	}
+	addIndex := func(idx string) {
+		idx = strings.TrimSpace(idx)
+		if idx == "" {
+			return
+		}
+		if _, ok := indexSeen[idx]; ok {
+			return
+		}
+		indexSeen[idx] = struct{}{}
+		s.indexesUsed = append(s.indexesUsed, idx)
+	}
+	updateMax := func(dst *int64, v int64) {
+		if v > *dst {
+			*dst = v
+		}
+	}
+	processKey := func(k string, val interface{}) {
+		if strings.HasPrefix(k, "$") && len(k) > 1 {
+			addStage(strings.TrimPrefix(k, "$"))
+		}
+		kl := strings.ToLower(k)
+		switch kl {
+		case "stage", "stagename", "nodetype":
+			if sv, ok := val.(string); ok {
+				addStage(sv)
+			}
+		case "indexname":
+			if sv, ok := val.(string); ok {
+				addIndex(sv)
+			}
+		case "indexesused":
+			for _, iv := range toStringSlice(val) {
+				addIndex(iv)
+			}
+		case "totaldocsexamined":
+			updateMax(&s.docsExamined, toInt64(val))
+		case "totalkeysexamined":
+			updateMax(&s.keysExamined, toInt64(val))
+		case "nreturned":
+			updateMax(&s.nReturned, toInt64(val))
+		case "collectionscans":
+			updateMax(&s.collectionScans, toInt64(val))
+		case "seeks", "indexseeks", "totalseeks":
+			updateMax(&s.indexSeeks, toInt64(val))
+		case "executiontimemillis", "executiontimemillisestimate":
+			updateMax(&s.executionTimeMS, toInt64(val))
+		case "useddisk":
+			if bv, ok := val.(bool); ok && bv {
+				s.usedDisk = true
+			}
+		case "spills":
+			sp := toInt64(val)
+			if sp > 0 {
+				updateMax(&s.spills, sp)
+				s.usedDisk = true
+			}
+		}
+	}
+
+	var walk func(v interface{}, path string)
+	walk = func(v interface{}, path string) {
+		switch t := v.(type) {
+		case bson.M:
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				val := t[k]
+				processKey(k, val)
+				walk(val, path+"."+k)
+			}
+		case map[string]interface{}:
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				val := t[k]
+				processKey(k, val)
+				walk(val, path+"."+k)
+			}
+		case bson.D:
+			for _, elem := range t {
+				processKey(elem.Key, elem.Value)
+				walk(elem.Value, path+"."+elem.Key)
+			}
+		case []bson.E:
+			for _, elem := range t {
+				processKey(elem.Key, elem.Value)
+				walk(elem.Value, path+"."+elem.Key)
+			}
+		case []interface{}:
+			for i := range t {
+				walk(t[i], fmt.Sprintf("%s[%d]", path, i))
+			}
+		case bson.A:
+			for i := range t {
+				walk(t[i], fmt.Sprintf("%s[%d]", path, i))
+			}
+		}
+	}
+	walk(out, "root")
+
+	s.collectionScan = hasPlanStage(s.planStages, "COLLSCAN") || s.collectionScans > 0
+	s.indexScan = hasAnyPlanStage(s.planStages, "IXSCAN", "IXSEEK", "DISTINCT_SCAN", "COUNT_SCAN") || len(s.indexesUsed) > 0 || s.indexSeeks > 0
+	s.fetch = hasPlanStage(s.planStages, "FETCH")
+	s.group = hasPlanStage(s.planStages, "GROUP")
+	s.sort = hasPlanStage(s.planStages, "SORT")
+	s.limit = hasPlanStage(s.planStages, "LIMIT")
+	s.blockingSort = s.sort && !s.indexScan
+
+	s.winningPlanSummary = strings.Join(s.planStages, " -> ")
+	if s.winningPlanSummary == "" {
+		s.winningPlanSummary = "stage_chain_unavailable"
+	}
+	s.shardSummary = buildShardSummary(out)
+	return s
+}
+
+func applyExplainSignalsToDiagnostics(diag *stats.ExplainDiagnostics, sig explainSignals) {
+	if diag == nil {
+		return
+	}
+	diag.WinningPlanSummary = sig.winningPlanSummary
+	diag.PlanStages = sig.planStages
+	diag.IndexesUsed = sig.indexesUsed
+	diag.CollectionScanDetected = sig.collectionScan
+	diag.IndexScanDetected = sig.indexScan
+	diag.FetchDetected = sig.fetch
+	diag.GroupDetected = sig.group
+	diag.SortDetected = sig.sort
+	diag.LimitDetected = sig.limit
+	diag.BlockingSortDetected = sig.blockingSort
+	diag.UsedDisk = sig.usedDisk
+	diag.DocsExamined = sig.docsExamined
+	diag.KeysExamined = sig.keysExamined
+	diag.NReturned = sig.nReturned
+	diag.CollectionScans = sig.collectionScans
+	diag.IndexSeeks = sig.indexSeeks
+	diag.ExecutionTimeMillis = sig.executionTimeMS
+	diag.Spills = sig.spills
+	if sig.nReturned > 0 {
+		diag.ExaminedToReturnedRatio = float64(sig.docsExamined) / float64(sig.nReturned)
+		diag.KeysToReturnedRatio = float64(sig.keysExamined) / float64(sig.nReturned)
+	}
+	diag.ShardDetailsSummary = sig.shardSummary
+	diag.Interpretation, diag.Recommendation, diag.RecommendationConfidence, diag.EvidenceSummary = buildExplainRecommendation(sig)
+}
+
+func buildExplainRecommendation(sig explainSignals) (interpretation, recommendation, confidence, evidence string) {
+	evidenceParts := make([]string, 0, 8)
+	if sig.indexScan {
+		evidenceParts = append(evidenceParts, "IXSCAN detected")
+	} else {
+		evidenceParts = append(evidenceParts, "IXSCAN not detected")
+	}
+	if sig.collectionScan {
+		evidenceParts = append(evidenceParts, "COLLSCAN detected")
+	} else {
+		evidenceParts = append(evidenceParts, "COLLSCAN not detected")
+	}
+	if sig.docsExamined > 0 {
+		evidenceParts = append(evidenceParts, fmt.Sprintf("docsExamined=%d", sig.docsExamined))
+	}
+	if sig.keysExamined > 0 {
+		evidenceParts = append(evidenceParts, fmt.Sprintf("keysExamined=%d", sig.keysExamined))
+	}
+	if sig.nReturned > 0 {
+		evidenceParts = append(evidenceParts, fmt.Sprintf("nReturned=%d", sig.nReturned))
+	}
+	if len(sig.indexesUsed) > 0 {
+		evidenceParts = append(evidenceParts, "indexesUsed="+strings.Join(sig.indexesUsed, ","))
+	}
+	evidence = strings.Join(evidenceParts, "; ")
+
+	highFanout := sig.nReturned > 0 && sig.docsExamined > sig.nReturned*20
+	switch {
+	case sig.collectionScan:
+		interpretation = "Explain indicates a collection scan path. Query appears under-indexed for its filter shape."
+		recommendation = "Add or validate a selective index on the match/filter fields, then compare docsExamined and latency before rollout."
+		confidence = "high"
+	case sig.indexScan && highFanout:
+		interpretation = "An index is used, but examined-document volume is still high relative to rows returned."
+		recommendation = "Refine index selectivity (for example, a more targeted compound index) and review predicate/cardinality to reduce scanned documents."
+		confidence = "high"
+	case sig.indexScan && (sig.group || sig.sort):
+		interpretation = "Query is index-backed, but aggregation/sort stages are likely contributing most of the runtime cost."
+		recommendation = "Focus on reducing post-match workload: tighten early match/project stages, review group cardinality, and evaluate sort pressure."
+		confidence = "medium"
+	case sig.indexScan:
+		interpretation = "Index-backed plan detected with no collection scan signal."
+		recommendation = "Treat this as index-supported; investigate residual latency via cardinality, document size, and pipeline/operator cost."
+		confidence = "medium"
+	default:
+		interpretation = "Explain completed, but a clear index/scan signal was not detected in parsed plan fields."
+		recommendation = "Capture additional explain samples and verify winning plan details directly before making index changes."
+		confidence = "low"
+	}
+
+	if sig.usedDisk {
+		recommendation += " Explain reports disk/spill usage; review memory-heavy sort/group stages."
+	}
+	return interpretation, recommendation, confidence, evidence
+}
+
+func hasPlanStage(stages []string, target string) bool {
+	target = strings.ToUpper(strings.TrimSpace(target))
+	for _, s := range stages {
+		if strings.EqualFold(s, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnyPlanStage(stages []string, targets ...string) bool {
+	for _, target := range targets {
+		if hasPlanStage(stages, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func toInt64(v interface{}) int64 {
+	switch t := v.(type) {
+	case int:
+		return int64(t)
+	case int32:
+		return int64(t)
+	case int64:
+		return t
+	case float32:
+		return int64(t)
+	case float64:
+		return int64(t)
+	case json.Number:
+		i, _ := t.Int64()
+		return i
+	default:
+		return 0
+	}
+}
+
+func toStringSlice(v interface{}) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []interface{}:
+		out := make([]string, 0, len(t))
+		for _, item := range t {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	case bson.A:
+		out := make([]string, 0, len(t))
+		for _, item := range t {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func buildShardSummary(out bson.M) string {
+	shardsRaw, ok := out["shards"]
+	if !ok {
+		return ""
+	}
+	var shardsMap map[string]interface{}
+	switch t := shardsRaw.(type) {
+	case map[string]interface{}:
+		shardsMap = t
+	case bson.M:
+		shardsMap = map[string]interface{}(t)
+	default:
+		return ""
+	}
+	if len(shardsMap) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(shardsMap))
+	for name := range shardsMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		sig := explainSignals{}
+		switch t := shardsMap[name].(type) {
+		case map[string]interface{}:
+			b, _ := json.Marshal(t)
+			var m bson.M
+			_ = json.Unmarshal(b, &m)
+			sig = parseExplainSignals(m)
+		case bson.M:
+			sig = parseExplainSignals(t)
+		default:
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s docs=%d keys=%d returned=%d", name, sig.docsExamined, sig.keysExamined, sig.nReturned))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func nonEmptyOrFallback(v, fb string) string {
+	if strings.TrimSpace(v) == "" {
+		return fb
+	}
+	return v
+}
+
 func applyExplainToSlowQueries(rep *stats.InsightsReport, results map[string]explainEvidence) {
 	for i := range rep.SlowQueries {
 		s := &rep.SlowQueries[i]
 		if ev, ok := results[s.ShapeID]; ok {
 			s.ExplainStatus = ev.status
 			s.ExplainReason = ev.reason
+			s.ExplainDiag = ev.diag
 			continue
 		}
 		if supportsExplainOperation(s.Operation) {
@@ -1207,6 +1775,7 @@ func applyExplainToSlowQueries(rep *stats.InsightsReport, results map[string]exp
 		if ev, ok := byShape[s.ShapeID]; ok {
 			s.ExplainStatus = ev.status
 			s.ExplainReason = ev.reason
+			s.ExplainDiag = ev.diag
 			continue
 		}
 		if supportsExplainOperation(s.Operation) {

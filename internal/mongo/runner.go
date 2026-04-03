@@ -257,12 +257,24 @@ func generateFallbackQuery(ctx context.Context, db *mongo.Database, opType strin
 		fieldType = def.Type
 	}
 	filter := map[string]interface{}{filterField: fmt.Sprintf("<%s>", fieldType)}
+	base := config.QueryDefinition{
+		Collection:      collectionName,
+		Operation:       opType,
+		SourceType:      "generated_fallback",
+		SourceFile:      "runtime_generated",
+		WorkloadName:    "generated_workload",
+		DefinitionIndex: -1,
+		Label:           fmt.Sprintf("fallback %s query on %s", opType, filterField),
+	}
 	if opType == "updateOne" || opType == "updateMany" {
 		updatePayload := workloads.GenerateFallbackUpdate(col, cfg, rng)
-		return config.QueryDefinition{Collection: collectionName, Operation: opType, Filter: filter, Update: updatePayload}, true
+		base.Filter = filter
+		base.Update = updatePayload
+		return base, true
 	}
 	if opType == "deleteOne" || opType == "deleteMany" {
-		return config.QueryDefinition{Collection: collectionName, Operation: opType, Filter: filter}, true
+		base.Filter = filter
+		return base, true
 	}
 	return config.QueryDefinition{}, false
 }
@@ -285,7 +297,16 @@ func generateInsertQuery(col config.CollectionDefinition, rng *rand.Rand, cfg *c
 	default:
 		doc = workloads.GenerateDocument(col, cfg)
 	}
-	return config.QueryDefinition{Collection: col.Name, Operation: "insert", Filter: doc}
+	return config.QueryDefinition{
+		Collection:      col.Name,
+		Operation:       "insert",
+		Filter:          doc,
+		SourceType:      "generated_insert",
+		SourceFile:      "runtime_generated",
+		WorkloadName:    "generated_workload",
+		DefinitionIndex: -1,
+		Label:           "generated insert document",
+	}
 }
 
 func generateInsertManyQuery(col config.CollectionDefinition, rng *rand.Rand, cfg *config.AppConfig) []interface{} {
@@ -384,7 +405,7 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 	if err == nil {
 		dur := time.Since(start)
 		wCfg.collector.Track("transaction", dur)
-		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil)
+		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil, "transaction batch", "runtime_transaction", "transaction_workload", "runtime", "transaction_batch", "", "", -1)
 	}
 }
 
@@ -449,11 +470,11 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				}
 				dur := time.Since(start)
 				wCfg.collector.Add("insert", 1, dur)
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, nil)
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
 			} else {
 				dur := time.Since(start)
 				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), dur/time.Duration(wCfg.appConfig.InsertBatchSize))
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil)
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
 			}
 			continue
 		}
@@ -488,11 +509,11 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				}
 				dur := time.Since(start)
 				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
 			} else {
 				dur := time.Since(start)
 				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
 			}
 			continue
 		}
@@ -596,7 +617,8 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 		dur := time.Since(start)
 		wCfg.collector.Track(opType, dur)
 		shapeKey, shapeSummary, fields := buildOperationShape(opType, filter, pipeline)
-		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, filter, pipeline)
+		queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex := buildQueryReferenceFromDefinition(q, opType, filter, pipeline)
+		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, filter, pipeline, queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex)
 	}
 }
 
@@ -759,6 +781,62 @@ func buildOperationShape(opType string, filter map[string]interface{}, pipeline 
 	default:
 		return opType + "|(unknown)", opType, nil
 	}
+}
+
+func summarizeQueryPreview(filter map[string]interface{}, maxLen int) string {
+	if len(filter) == 0 {
+		return ""
+	}
+	shape := renderShape(filter)
+	if len(shape) > maxLen {
+		return shape[:maxLen] + "...(truncated)"
+	}
+	return shape
+}
+
+func summarizePipelinePreview(pipeline []interface{}, maxLen int) string {
+	if len(pipeline) == 0 {
+		return ""
+	}
+	shape := renderShape(pipeline)
+	if len(shape) > maxLen {
+		return shape[:maxLen] + "...(truncated)"
+	}
+	return shape
+}
+
+func buildQueryReferenceFromDefinition(q config.QueryDefinition, opType string, filter map[string]interface{}, pipeline []interface{}) (queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary string, queryDefIndex int) {
+	queryDefIndex = q.DefinitionIndex
+	queryLabel = strings.TrimSpace(q.Label)
+	if queryLabel == "" {
+		queryLabel = strings.TrimSpace(q.Name)
+	}
+	if queryLabel == "" {
+		if q.DefinitionIndex >= 0 {
+			queryLabel = fmt.Sprintf("%s query #%d", opType, q.DefinitionIndex+1)
+		} else {
+			queryLabel = fmt.Sprintf("%s query", opType)
+		}
+	}
+	querySource = strings.TrimSpace(q.SourceType)
+	if querySource == "" {
+		querySource = "query_definition"
+	}
+	workloadName = strings.TrimSpace(q.WorkloadName)
+	if workloadName == "" {
+		workloadName = "custom_workload"
+	}
+	queryFile = strings.TrimSpace(q.SourceFile)
+	if queryFile == "" {
+		queryFile = "runtime"
+	}
+	queryDefID = strings.TrimSpace(q.ID)
+	if queryDefID == "" && q.DefinitionIndex >= 0 {
+		queryDefID = fmt.Sprintf("%s:%d", queryFile, q.DefinitionIndex+1)
+	}
+	querySummary = summarizeQueryPreview(filter, 256)
+	pipelineSummary = summarizePipelinePreview(pipeline, 256)
+	return
 }
 
 func processRecursive(v interface{}, rng *rand.Rand) {

@@ -9,7 +9,7 @@ import (
 
 func recordShapeEvents(c *Collector, op, coll, shapeKey, shapeSummary string, filterFields []string, durs []time.Duration) {
 	for _, d := range durs {
-		c.RecordOperationEvent(op, "testdb", coll, shapeKey, shapeSummary, filterFields, d, true, 1, map[string]interface{}{"k": 1}, nil)
+		c.RecordOperationEvent(op, "testdb", coll, shapeKey, shapeSummary, filterFields, d, true, 1, map[string]interface{}{"k": 1}, nil, "test query", "unit_test", "test_workload", "insights_test.json", "q1", "{k:<num>}", "", 0)
 	}
 }
 
@@ -119,15 +119,16 @@ func TestGetExplainSettingsIncludesSeverityMode(t *testing.T) {
 		InsightsExplainEnabled:      true,
 		InsightsExplainTopN:         7,
 		InsightsExplainMaxTimeMS:    1500,
+		InsightsExplainVerbosity:    "queryPlanner",
 		InsightsExplainSeverityMode: "high_and_low",
 		InsightsExplainWorkers:      2,
 		InsightsExplainRetries:      3,
 		InsightsExplainBackoffMS:    250,
 	})
 
-	enabled, topN, maxMs, mode, workers, retries, backoff := c.GetExplainSettings()
-	if !enabled || topN != 7 || maxMs != 1500 || mode != "high_and_low" || workers != 2 || retries != 3 || backoff != 250 {
-		t.Fatalf("unexpected explain settings: enabled=%v topN=%d maxMs=%d mode=%q workers=%d retries=%d backoff=%d", enabled, topN, maxMs, mode, workers, retries, backoff)
+	enabled, topN, maxMs, verbosity, mode, workers, retries, backoff := c.GetExplainSettings()
+	if !enabled || topN != 7 || maxMs != 1500 || verbosity != "queryPlanner" || mode != "high_and_low" || workers != 2 || retries != 3 || backoff != 250 {
+		t.Fatalf("unexpected explain settings: enabled=%v topN=%d maxMs=%d verbosity=%q mode=%q workers=%d retries=%d backoff=%d", enabled, topN, maxMs, verbosity, mode, workers, retries, backoff)
 	}
 }
 
@@ -179,5 +180,42 @@ func TestInsightsReportSeverityModesMediumAndCriticalOnly(t *testing.T) {
 	}
 	if repCritical.Metadata.FilteredBySeverity != 2 {
 		t.Fatalf("expected 2 severity-filtered groups in critical_only mode, got %d", repCritical.Metadata.FilteredBySeverity)
+	}
+}
+
+func TestInsightsReportIncludesQueryReferenceMetadata(t *testing.T) {
+	c := NewCollector()
+	c.ConfigureInsights(&config.AppConfig{
+		InsightsEnabled:             true,
+		InsightsSamplingRate:        1,
+		InsightsSlowThresholdMs:     100,
+		InsightsMaxEvents:           200,
+		InsightsMaxGroups:           50,
+		InsightsExplainEnabled:      true,
+		InsightsExplainSeverityMode: "high_and_low",
+	})
+
+	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 600*time.Millisecond, true, 1, nil, []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
+	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 620*time.Millisecond, true, 1, nil, []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
+
+	rep := c.GetFinalInsights()
+	if len(rep.SlowQueries) != 1 {
+		t.Fatalf("expected one slow query group, got %d", len(rep.SlowQueries))
+	}
+	sq := rep.SlowQueries[0]
+	if sq.QueryLabel != "Orders Revenue Aggregate" {
+		t.Fatalf("expected query label to be propagated, got %q", sq.QueryLabel)
+	}
+	if sq.QuerySource != "uploaded_file" || sq.QueryFile != "suboptimal_queries.json" {
+		t.Fatalf("expected query source/file metadata, got source=%q file=%q", sq.QuerySource, sq.QueryFile)
+	}
+	if sq.QueryDefID != "orders_agg_top5" {
+		t.Fatalf("expected query definition id, got %q", sq.QueryDefID)
+	}
+	if sq.PipelineSummary == "" {
+		t.Fatalf("expected representative pipeline summary to be populated")
+	}
+	if len(rep.PotentialIndexIssues) > 0 && rep.PotentialIndexIssues[0].QueryLabel == "" {
+		t.Fatalf("expected index issue to carry query label metadata")
 	}
 }

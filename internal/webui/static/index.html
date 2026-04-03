@@ -831,6 +831,22 @@
             margin-top: 3px;
         }
 
+        .insights-copy-btn {
+            margin-left: 8px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--p-night);
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            cursor: pointer;
+        }
+
+        .insights-copy-btn:hover {
+            background: #f8fafc;
+        }
+
         .insight-badge {
             display: inline-flex;
             align-items: center;
@@ -1504,14 +1520,22 @@
                     </section>
 
                     <section class="settings-card">
-                        <h4>Retention & Sampling</h4>
-                        <div class="settings-help">Controls for post-run insights data volume and signal quality.</div>
+                        <h4>Insights & Analysis</h4>
+                        <div class="settings-help">Two-step model: first capture sampled operation events, then optionally run post-run explain enrichment on selected slow shapes.</div>
+                        <div class="settings-note" style="margin-bottom: 12px;">
+                            Recommended patterns:
+                            <br>• Sampling only: lightweight slow-query profiling
+                            <br>• Sampling + Explain: full troubleshooting workflow
+                            <br>• Explain depends on retained sampled events (filters/pipelines for selected shapes)
+                        </div>
+                        <div class="settings-note" style="margin-bottom: 10px;"><strong>1) Insights Capture (Retention & Sampling)</strong></div>
                         <div class="grid-2">
                             <div style="display:flex; flex-direction:column; gap:12px;">
                                 <div class="checkbox-group">
                                     <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
                                     <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
                                 </div>
+                                <div class="settings-note">Controls what telemetry is captured and retained in memory for final post-run analysis.</div>
                             </div>
                             <div class="grid-2" style="gap:12px;">
                                 <div class="form-group" style="margin-bottom:0;">
@@ -1532,23 +1556,29 @@
                                 </div>
                             </div>
                         </div>
-                    </section>
-
-                    <section class="settings-card">
-                        <h4>Explain Analysis</h4>
-                        <div class="settings-help">Post-run explain enrichment for top candidate shapes. Disabled by default to minimize cluster pressure.</div>
+                        <hr style="border:0; border-top:1px solid var(--p-border); margin:14px 0 12px;">
+                        <div class="settings-note" style="margin-bottom: 10px;"><strong>2) Explain Enrichment (Post-Run)</strong></div>
+                        <div class="settings-help">Runs MongoDB explain after workload completion for selected slow shapes. This does not run during measured workload execution.</div>
                         <div class="grid-2">
                             <div style="display:flex; flex-direction:column; gap:12px;">
                                 <div class="checkbox-group">
                                     <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true">
                                     <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling</label>
                                 </div>
-                                <div class="settings-note">Explain is post-run only and does not execute during measured workload runtime.</div>
+                                <div class="settings-note">Explain requires eligible retained samples from Insights Capture. If sampling/retention are too low, explain may be unavailable for some shapes.</div>
                             </div>
                             <div class="grid-2" style="gap:12px;">
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Explain Top N Shapes</label>
                                     <input type="number" name="insights_explain_top_n" min="1" step="1" value="5">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Verbosity</label>
+                                    <select name="insights_explain_verbosity">
+                                        <option value="executionStats" selected>executionStats (Recommended)</option>
+                                        <option value="queryPlanner">queryPlanner (lighter)</option>
+                                    </select>
+                                    <div class="settings-note">executionStats provides real examined/returned evidence and better troubleshooting recommendations.</div>
                                 </div>
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Explain Severity Mode</label>
@@ -2300,6 +2330,7 @@
                 document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
                 document.getElementById('insightsExplainEnabled').checked = !!cfg.InsightsExplainEnabled;
                 document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
+                document.querySelector('[name="insights_explain_verbosity"]').value = cfg.InsightsExplainVerbosity || 'executionStats';
                 document.querySelector('[name="insights_explain_severity_mode"]').value = cfg.InsightsExplainSeverityMode || 'high_only';
                 document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
                 document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
@@ -2385,7 +2416,7 @@
                 missing_pipeline_sample: 'Sampled pipeline metadata was not available.',
                 collscan_observed: 'Explain observed a collection scan (COLLSCAN).',
                 ixscan_observed: 'Explain observed an index scan (IXSCAN).',
-                no_scan_stage_detected: 'Explain succeeded without a clear COLLSCAN/IXSCAN stage signal.',
+                no_scan_stage_detected: 'Explain succeeded; use winning-plan and execution-stats diagnostics below for actionable signals.',
                 not_authorized: 'Explain command failed due to authorization limits.',
                 namespace_not_found: 'Collection/namespace was not found at explain time.',
                 command_not_found: 'Explain command was not available on the target server.',
@@ -2464,6 +2495,107 @@
             return `<span class="insight-badge status-${escHtml(st)}">${escHtml(explainStatusText(st))}</span>`;
         }
 
+        function diagnosticsClipboardText(s) {
+            const d = s.explain_diagnostics || {};
+            return [
+                `shape_id: ${s.shape_id || ''}`,
+                `operation: ${s.operation || ''}`,
+                `collection: ${s.collection || ''}`,
+                `explain_status: ${s.explain_status || ''}`,
+                `explain_reason: ${s.explain_reason || ''}`,
+                `replay_db: ${d.replay_db || ''}`,
+                `replay_collection: ${d.replay_collection || ''}`,
+                `verbosity: ${d.verbosity || ''}`,
+                `server_max_time_ms: ${d.server_max_time_ms || 0}`,
+                `client_timeout_ms: ${d.client_timeout_ms || 0}`,
+                `stage_summary: ${d.stage_summary || ''}`,
+                `elapsed_ms: ${d.elapsed_ms || 0}`,
+                `winning_plan_summary: ${d.winning_plan_summary || ''}`,
+                `indexes_used: ${(d.indexes_used || []).join(', ')}`,
+                `collection_scan_detected: ${!!d.collection_scan_detected}`,
+                `index_scan_detected: ${!!d.index_scan_detected}`,
+                `fetch_detected: ${!!d.fetch_detected}`,
+                `group_detected: ${!!d.group_detected}`,
+                `sort_detected: ${!!d.sort_detected}`,
+                `blocking_sort_detected: ${!!d.blocking_sort_detected}`,
+                `used_disk: ${!!d.used_disk}`,
+                `docs_examined: ${d.docs_examined || 0}`,
+                `keys_examined: ${d.keys_examined || 0}`,
+                `n_returned: ${d.n_returned || 0}`,
+                `collection_scans: ${d.collection_scans || 0}`,
+                `index_seeks: ${d.index_seeks || 0}`,
+                `execution_time_millis: ${d.execution_time_millis || 0}`,
+                `spills: ${d.spills || 0}`,
+                `examined_to_returned_ratio: ${d.examined_to_returned_ratio || 0}`,
+                `keys_to_returned_ratio: ${d.keys_to_returned_ratio || 0}`,
+                `shard_details_summary: ${d.shard_details_summary || ''}`,
+                `interpretation: ${d.interpretation || ''}`,
+                `recommendation: ${d.recommendation || ''}`,
+                `recommendation_confidence: ${d.recommendation_confidence || ''}`,
+                `evidence_summary: ${d.evidence_summary || ''}`
+            ].join('\n');
+        }
+
+        function encodeExplainDiagnosticsPayload(s) {
+            return encodeURIComponent(JSON.stringify({
+                shape_id: s.shape_id || '',
+                operation: s.operation || '',
+                collection: s.collection || '',
+                query_label: s.query_label || '',
+                query_source: s.query_source || '',
+                workload_name: s.workload_name || '',
+                query_file: s.query_file || '',
+                query_definition_id: s.query_definition_id || '',
+                query_definition_index: s.query_definition_index || -1,
+                representative_query_summary: s.representative_query_summary || '',
+                representative_pipeline_summary: s.representative_pipeline_summary || '',
+                explain_status: s.explain_status || '',
+                explain_reason: s.explain_reason || '',
+                explain_diagnostics: s.explain_diagnostics || {}
+            }));
+        }
+
+        function copyTextToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                return navigator.clipboard.writeText(text);
+            }
+            return new Promise((resolve, reject) => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (!ok) return reject(new Error('copy command failed'));
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }
+
+        function copyExplainDiagnosticsFromEncoded(encoded, buttonEl) {
+            try {
+                const parsed = JSON.parse(decodeURIComponent(encoded));
+                const payload = diagnosticsClipboardText(parsed);
+                copyTextToClipboard(payload).then(() => {
+                    if (buttonEl) {
+                        const old = buttonEl.textContent;
+                        buttonEl.textContent = 'Copied';
+                        setTimeout(() => { buttonEl.textContent = old; }, 1200);
+                    }
+                }).catch(() => {
+                    showError('Unable to copy diagnostics automatically. You can copy from the details shown in this row.');
+                });
+            } catch (e) {
+                showError('Failed to prepare diagnostics payload for copy.');
+            }
+        }
+
         function clearInsightsContentForPending() {
             const ids = [
                 'insightsTopFindings',
@@ -2520,13 +2652,14 @@
                 setPill('pending', 'Pending');
             }
             const explainMode = explainModeText(md.explain_mode);
+            const explainVerbosity = md.explain_verbosity || 'executionStats';
             const explainSeverityMode = explainSeverityModeText(md.explain_severity_mode);
             const explainWorkers = md.explain_workers || 1;
             const explainRetries = (md.explain_retries !== undefined) ? md.explain_retries : 0;
             const explainImpact = explainImpactText(md.explain_impact);
             const filteredThreshold = md.filtered_by_threshold || 0;
             const filteredSeverity = md.filtered_by_severity || 0;
-            status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | filtered(threshold/severity): ${filteredThreshold}/${filteredSeverity} | evidence: ${md.evidence_level || 'heuristic'} | explain: ${explainMode} (${explainSeverityMode}, workers ${explainWorkers}, retries ${explainRetries}) | impact: ${explainImpact}`;
+            status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | filtered(threshold/severity): ${filteredThreshold}/${filteredSeverity} | evidence: ${md.evidence_level || 'heuristic'} | explain: ${explainMode} (${explainVerbosity}, ${explainSeverityMode}, workers ${explainWorkers}, retries ${explainRetries}) | impact: ${explainImpact}`;
 
             const top = [];
             if (rep.slow_queries && rep.slow_queries[0]) {
@@ -2546,8 +2679,15 @@
                 `<div class="insights-row">
                     <div class="insights-row-title">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')} ${insightSeverityBadge(s.severity)} ${insightExplainStatusBadge(s.explain_status)}</div>
                     <div class="insights-row-subtitle">${escHtml(s.shape_summary || s.shape_key || '')}</div>
+                    <div class="insights-row-footnote">query reference: ${escHtml(s.query_label || `${s.operation || ''} query`)} | source ${escHtml(s.query_source || '-')} | workload ${escHtml(s.workload_name || '-')} | file ${escHtml(s.query_file || '-')} | def ${escHtml(s.query_definition_id || (s.query_definition_index !== undefined ? `#${Number(s.query_definition_index) + 1}` : '-'))}${s.query_reference_variants > 1 ? ` | variants ${Number(s.query_reference_variants)}` : ''}</div>
+                    ${s.representative_query_summary ? `<div class="insights-row-footnote">representative query: ${escHtml(s.representative_query_summary)}</div>` : ''}
+                    ${s.representative_pipeline_summary ? `<div class="insights-row-footnote">representative pipeline: ${escHtml(s.representative_pipeline_summary)}</div>` : ''}
                     <div class="insights-row-metrics">avg ${Number(s.avg_ms || 0).toFixed(2)}ms | p95 ${Number(s.p95_ms || 0).toFixed(2)}ms | p99 ${Number(s.p99_ms || 0).toFixed(2)}ms | max ${Number(s.max_ms || 0).toFixed(2)}ms | count ${s.count || 0}</div>
                     <div class="insights-row-footnote">explain: ${escHtml(explainReasonText(s.explain_reason))}</div>
+                    ${(s.explain_diagnostics && (s.explain_diagnostics.replay_db || s.explain_diagnostics.verbosity || s.explain_diagnostics.server_max_time_ms || s.explain_diagnostics.stage_summary)) ? `<div class="insights-row-footnote">diagnostics: db ${escHtml(s.explain_diagnostics.replay_db || '-')} | mode ${escHtml(s.explain_diagnostics.verbosity || '-')} | max/client ${Number(s.explain_diagnostics.server_max_time_ms || 0)}ms/${Number(s.explain_diagnostics.client_timeout_ms || 0)}ms | stages ${escHtml(s.explain_diagnostics.stage_summary || '-')} | elapsed ${Number(s.explain_diagnostics.elapsed_ms || 0)}ms <button type="button" class="insights-copy-btn" onclick='copyExplainDiagnosticsFromEncoded("${encodeExplainDiagnosticsPayload(s)}", this)'>Copy diagnostics</button></div>` : ''}
+                    ${(s.explain_diagnostics && (s.explain_diagnostics.winning_plan_summary || (s.explain_diagnostics.indexes_used || []).length > 0 || s.explain_diagnostics.docs_examined || s.explain_diagnostics.keys_examined)) ? `<div class="insights-row-footnote">plan: ${escHtml(s.explain_diagnostics.winning_plan_summary || '-')} | index used ${s.explain_diagnostics.index_scan_detected ? 'yes' : 'no'} | collscan ${s.explain_diagnostics.collection_scan_detected ? 'yes' : 'no'} | indexes ${(s.explain_diagnostics.indexes_used || []).length ? escHtml((s.explain_diagnostics.indexes_used || []).join(', ')) : '-'} | docs/keys/returned ${Number(s.explain_diagnostics.docs_examined || 0)}/${Number(s.explain_diagnostics.keys_examined || 0)}/${Number(s.explain_diagnostics.n_returned || 0)} | exec ${Number(s.explain_diagnostics.execution_time_millis || 0)}ms | d/r ${Number(s.explain_diagnostics.examined_to_returned_ratio || 0).toFixed(2)} | k/r ${Number(s.explain_diagnostics.keys_to_returned_ratio || 0).toFixed(2)}</div>` : ''}
+                    ${(s.explain_diagnostics && s.explain_diagnostics.interpretation) ? `<div class="insights-row-footnote">interpretation: ${escHtml(s.explain_diagnostics.interpretation || '')}</div>` : ''}
+                    ${(s.explain_diagnostics && s.explain_diagnostics.recommendation) ? `<div class="insights-row-footnote"><strong>next step:</strong> ${escHtml(s.explain_diagnostics.recommendation || '')}${s.explain_diagnostics.recommendation_confidence ? ` (confidence: ${escHtml(s.explain_diagnostics.recommendation_confidence)})` : ''}</div>` : ''}
                     <div class="insights-row-footnote">shape id: ${escHtml(s.shape_id || '')}${s.trend ? ` | trend: ${escHtml(s.trend.direction || 'flat')} (${Number(s.trend.delta_p95_ms || 0).toFixed(2)}ms p95)` : ''}</div>
                 </div>`
             );
@@ -2563,6 +2703,9 @@
                 `<div class="insights-row">
                     <div class="insights-row-title">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')} ${insightConfidenceBadge(i.confidence)} ${insightExplainStatusBadge(i.explain_status)}</div>
                     <div class="insights-row-subtitle">evidence: ${escHtml(i.evidence_level || 'heuristic')} | explain: ${escHtml(explainReasonText(i.explain_reason))}</div>
+                    <div class="insights-row-footnote">query reference: ${escHtml(i.query_label || `${i.operation || ''} query`)} | source ${escHtml(i.query_source || '-')} | workload ${escHtml(i.workload_name || '-')} | file ${escHtml(i.query_file || '-')} | def ${escHtml(i.query_definition_id || (i.query_definition_index !== undefined ? `#${Number(i.query_definition_index) + 1}` : '-'))}${i.query_reference_variants > 1 ? ` | variants ${Number(i.query_reference_variants)}` : ''}</div>
+                    ${i.representative_query_summary ? `<div class="insights-row-footnote">representative query: ${escHtml(i.representative_query_summary)}</div>` : ''}
+                    ${i.representative_pipeline_summary ? `<div class="insights-row-footnote">representative pipeline: ${escHtml(i.representative_pipeline_summary)}</div>` : ''}
                     <div class="insights-row-metrics">${escHtml(i.message || '')}</div>
                     <div class="insights-row-metrics"><strong>Action:</strong> ${escHtml(i.recommendation || '')}</div>
                 </div>`
@@ -2610,14 +2753,21 @@
         function launchWorkload(formData) {
             lastFormData = formData;
             fetch('/api/start', { method: 'POST', body: formData })
-                .then(r => r.json())
-                .then(data => {
-
-                    if (data.status === 'error') {
-                        showError(data.message);
-                        return;
+                .then(async r => {
+                    const bodyText = await r.text();
+                    let data = null;
+                    try {
+                        data = JSON.parse(bodyText);
+                    } catch (e) {
+                        throw new Error(`HTTP ${r.status}: ${bodyText || 'non-JSON response from backend'}`);
                     }
-
+                    if (!r.ok || data.status === 'error') {
+                        const message = (data && data.message) ? data.message : bodyText;
+                        throw new Error(message || `HTTP ${r.status}`);
+                    }
+                    return data;
+                })
+                .then(data => {
                     if (data.status === 'started') {
                         document.getElementById('configForm').style.display = 'none';
                         document.getElementById('dashboard').style.display = 'block';
@@ -2666,7 +2816,7 @@
                         startPolling();
                     }
                 }).catch(err => {
-                    showError("Network error contacting PLGM backend: " + err);
+                    showError("Failed to start workload: " + (err && err.message ? err.message : String(err)));
                 });
         }
 

@@ -72,6 +72,7 @@ insights_max_groups: 300
 insights_explain_enabled: false
 insights_explain_top_n: 5
 insights_explain_max_time_ms: 1000
+insights_explain_verbosity: "executionStats"
 # Modes: high_only (default), medium_only, critical_only, high_and_low
 insights_explain_severity_mode: "high_only"
 insights_explain_workers: 1

@@ -11,15 +11,24 @@ import (
 )
 
 type QueryDefinition struct {
-	Database   string                 `json:"database" yaml:"database"`
-	Collection string                 `json:"collection" yaml:"collection"`
-	Operation  string                 `json:"operation" yaml:"operation"`
-	Filter     map[string]interface{} `json:"filter" yaml:"filter"`
-	Pipeline   []interface{}          `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
-	Projection map[string]interface{} `json:"projection,omitempty" yaml:"projection,omitempty"`
-	Limit      int64                  `json:"limit,omitempty" yaml:"limit,omitempty"`
-	Update     map[string]interface{} `json:"update,omitempty" yaml:"update,omitempty"`
-	Upsert     bool                   `json:"upsert,omitempty" yaml:"upsert,omitempty"`
+	Database    string                 `json:"database" yaml:"database"`
+	Collection  string                 `json:"collection" yaml:"collection"`
+	Operation   string                 `json:"operation" yaml:"operation"`
+	ID          string                 `json:"id,omitempty" yaml:"id,omitempty"`
+	Name        string                 `json:"name,omitempty" yaml:"name,omitempty"`
+	Label       string                 `json:"label,omitempty" yaml:"label,omitempty"`
+	Description string                 `json:"description,omitempty" yaml:"description,omitempty"`
+	Filter      map[string]interface{} `json:"filter" yaml:"filter"`
+	Pipeline    []interface{}          `json:"pipeline,omitempty" yaml:"pipeline,omitempty"`
+	Projection  map[string]interface{} `json:"projection,omitempty" yaml:"projection,omitempty"`
+	Limit       int64                  `json:"limit,omitempty" yaml:"limit,omitempty"`
+	Update      map[string]interface{} `json:"update,omitempty" yaml:"update,omitempty"`
+	Upsert      bool                   `json:"upsert,omitempty" yaml:"upsert,omitempty"`
+
+	SourceFile      string `json:"-" yaml:"-"`
+	SourceType      string `json:"-" yaml:"-"`
+	WorkloadName    string `json:"-" yaml:"-"`
+	DefinitionIndex int    `json:"-" yaml:"-"`
 }
 
 type QueriesFile struct {
@@ -79,6 +88,11 @@ func LoadQueries(path string, loadDefault bool) (*QueriesFile, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error loading query file %s: %w", entry.Name(), err)
 			}
+			workload := "custom_workload"
+			if loadDefault {
+				workload = "default_workload"
+			}
+			annotateQueryMetadata(loaded.Queries, "file", entry.Name(), workload)
 			allQueries = append(allQueries, loaded.Queries...)
 		}
 	} else {
@@ -86,6 +100,11 @@ func LoadQueries(path string, loadDefault bool) (*QueriesFile, error) {
 		if err != nil {
 			return nil, err
 		}
+		workload := "custom_workload"
+		if loadDefault {
+			workload = "default_workload"
+		}
+		annotateQueryMetadata(loaded.Queries, "file", filepath.Base(path), workload)
 		allQueries = append(allQueries, loaded.Queries...)
 	}
 
@@ -103,6 +122,7 @@ func loadEmbeddedQuery(embedPath string) (*QueriesFile, error) {
 	if err := json.Unmarshal(b, &defs); err != nil {
 		return nil, fmt.Errorf("invalid JSON format for embedded queries: %w", err)
 	}
+	annotateQueryMetadata(defs, "embedded_default", embedPath, "default_workload")
 	return &QueriesFile{Queries: defs}, nil
 }
 
@@ -118,4 +138,13 @@ func loadQueriesFromFile(path string) (*QueriesFile, error) {
 	}
 
 	return &QueriesFile{Queries: defs}, nil
+}
+
+func annotateQueryMetadata(defs []QueryDefinition, sourceType, sourceFile, workloadName string) {
+	for i := range defs {
+		defs[i].SourceType = sourceType
+		defs[i].SourceFile = sourceFile
+		defs[i].WorkloadName = workloadName
+		defs[i].DefinitionIndex = i
+	}
 }

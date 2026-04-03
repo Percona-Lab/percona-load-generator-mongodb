@@ -28,8 +28,8 @@ func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	if cfg.FindPercent+cfg.UpdatePercent+cfg.DeletePercent+cfg.InsertPercent+cfg.AggregatePercent+cfg.TransactionPercent+cfg.BulkInsertPercent != 100 {
 		t.Fatalf("expected normalized percentages to total 100")
 	}
-	if cfg.InsightsExplainWorkers != 1 || cfg.InsightsExplainRetries != 1 || cfg.InsightsExplainBackoffMS != 150 || cfg.InsightsExplainSeverityMode != "high_only" {
-		t.Fatalf("expected explain defaults workers=1 retries=1 backoff=150 mode=high_only, got workers=%d retries=%d backoff=%d mode=%q", cfg.InsightsExplainWorkers, cfg.InsightsExplainRetries, cfg.InsightsExplainBackoffMS, cfg.InsightsExplainSeverityMode)
+	if cfg.InsightsExplainWorkers != 1 || cfg.InsightsExplainRetries != 1 || cfg.InsightsExplainBackoffMS != 150 || cfg.InsightsExplainSeverityMode != "high_only" || cfg.InsightsExplainVerbosity != "executionStats" {
+		t.Fatalf("expected explain defaults workers=1 retries=1 backoff=150 mode=high_only verbosity=executionStats, got workers=%d retries=%d backoff=%d mode=%q verbosity=%q", cfg.InsightsExplainWorkers, cfg.InsightsExplainRetries, cfg.InsightsExplainBackoffMS, cfg.InsightsExplainSeverityMode, cfg.InsightsExplainVerbosity)
 	}
 }
 
@@ -143,6 +143,7 @@ func TestApplyEnvOverridesInsightsExplainRuntimeSettings(t *testing.T) {
 	t.Setenv("PLGM_INSIGHTS_EXPLAIN_RETRIES", "2")
 	t.Setenv("PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS", "250")
 	t.Setenv("PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE", "medium_only")
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_VERBOSITY", "queryPlanner")
 
 	_ = applyEnvOverrides(cfg)
 	applyBaseDefaults(cfg)
@@ -159,6 +160,9 @@ func TestApplyEnvOverridesInsightsExplainRuntimeSettings(t *testing.T) {
 	if cfg.InsightsExplainSeverityMode != "medium_only" {
 		t.Fatalf("expected explain severity mode override medium_only, got %q", cfg.InsightsExplainSeverityMode)
 	}
+	if cfg.InsightsExplainVerbosity != "queryPlanner" {
+		t.Fatalf("expected explain verbosity override queryPlanner, got %q", cfg.InsightsExplainVerbosity)
+	}
 }
 
 func TestApplyBaseDefaultsNormalizesUnknownExplainSeverityMode(t *testing.T) {
@@ -166,5 +170,13 @@ func TestApplyBaseDefaultsNormalizesUnknownExplainSeverityMode(t *testing.T) {
 	applyBaseDefaults(cfg)
 	if cfg.InsightsExplainSeverityMode != "high_only" {
 		t.Fatalf("expected invalid explain severity mode to normalize to high_only, got %q", cfg.InsightsExplainSeverityMode)
+	}
+}
+
+func TestApplyBaseDefaultsNormalizesUnknownExplainVerbosity(t *testing.T) {
+	cfg := &AppConfig{InsightsExplainVerbosity: "unexpected_mode"}
+	applyBaseDefaults(cfg)
+	if cfg.InsightsExplainVerbosity != "executionStats" {
+		t.Fatalf("expected invalid explain verbosity to normalize to executionStats, got %q", cfg.InsightsExplainVerbosity)
 	}
 }

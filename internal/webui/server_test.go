@@ -142,6 +142,47 @@ func TestHandleStartInvalidCustomCollectionsFile(t *testing.T) {
 	}
 }
 
+func TestHandleStartCustomCollectionsWrongKeysReturnsActionableError(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	if err := w.WriteField("default_workload", "false"); err != nil {
+		t.Fatalf("write field: %v", err)
+	}
+	part, err := w.CreateFormFile("collections_file", "collections.json")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write([]byte(`[{"databaseName":"shop","collectionName":"orders","fields":{}}]`)); err != nil {
+		t.Fatalf("write file content: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/start", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	s.handleStart(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected JSON error payload, got decode error: %v body=%s", err, rec.Body.String())
+	}
+	if payload["status"] != "error" {
+		t.Fatalf("expected error status, got %+v", payload)
+	}
+	msg, _ := payload["message"].(string)
+	if !strings.Contains(msg, "databaseName") || !strings.Contains(msg, "database") {
+		t.Fatalf("expected actionable key-mismatch message, got %q", msg)
+	}
+}
+
 func TestHandleStop(t *testing.T) {
 	s := NewServer(&config.AppConfig{Duration: "5s"})
 
