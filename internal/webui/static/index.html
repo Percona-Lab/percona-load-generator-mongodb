@@ -831,6 +831,243 @@
             margin-top: 3px;
         }
 
+        .insights-finding-grid {
+            display: grid;
+            gap: 8px;
+        }
+
+        .insights-finding-card {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .insights-finding-card.active {
+            border-color: var(--p-night);
+            box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
+        }
+
+        .insights-finding-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .insights-finding-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .insights-finding-meta {
+            margin-top: 4px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .insights-finding-metrics {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .insights-kpi {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: #f8fafc;
+            padding: 3px 8px;
+            font-size: 10px;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .insights-finding-actions {
+            margin-top: 8px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .insights-explore-btn {
+            border: 1px solid var(--p-night);
+            background: #fff;
+            color: var(--p-night);
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+
+        .insights-explore-btn:hover {
+            background: #f8fafc;
+        }
+
+        .insights-drawer {
+            position: fixed;
+            top: 0;
+            right: -520px;
+            width: 500px;
+            max-width: 94vw;
+            height: 100vh;
+            background: #fff;
+            box-shadow: -6px 0 24px rgba(15, 23, 42, 0.16);
+            z-index: 1200;
+            transition: right 0.2s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .insights-drawer.open {
+            right: 0;
+        }
+
+        .insights-drawer-header {
+            padding: 14px 16px 10px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .insights-drawer-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .insights-drawer-title {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--p-night);
+        }
+
+        .insights-drawer-close {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--p-night);
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+
+        .insights-drawer-nav {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--p-night);
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 9px;
+            cursor: pointer;
+        }
+
+        .insights-drawer-nav:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .insights-drawer-content {
+            padding: 12px 14px 16px 14px;
+            overflow-y: auto;
+            display: grid;
+            gap: 10px;
+        }
+
+        .insights-detail-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--text);
+            margin: 0;
+        }
+
+        .insights-detail-subtitle {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .insights-detail-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .insights-detail-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .insights-plan-flow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .insights-plan-stage {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .insights-plan-stage.risk-high {
+            border-color: #fca5a5;
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .insights-plan-stage.risk-medium {
+            border-color: #fdba74;
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .insights-plan-arrow {
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+
+        .insights-plan-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .insights-plan-legend-item {
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            background: #fff;
+            font-weight: 600;
+        }
+
+        .insights-kv {
+            font-size: 11px;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
         .insights-copy-btn {
             margin-left: 8px;
             border: 1px solid var(--border);
@@ -1260,8 +1497,7 @@
                 <div id="insightsStatus" class="insights-status-line"></div>
                 <details id="insightsGuide" class="insights-guide">
                     <summary>
-                        <span>Insights Quick Guide</span>
-                        <span class="guide-hint">How To Read This Panel</span>
+                        <span>Insights Quick Guide (How To Read This Panel)</span>
                     </summary>
                     <div class="insights-guide-body">
                         <ol class="insights-guide-list">
@@ -1313,6 +1549,25 @@
                     <div id="insightsTimeSlices"></div>
                 </div>
             </div>
+
+            <aside id="insightsDetailDrawer" class="insights-drawer" aria-hidden="true">
+                <div class="insights-drawer-header">
+                    <h4 class="insights-drawer-title">Finding Details</h4>
+                    <div class="insights-drawer-actions">
+                        <button type="button" id="insightsPrevBtn" class="insights-drawer-nav" onclick="navigateInsightsDrawer(-1)">Prev</button>
+                        <button type="button" id="insightsNextBtn" class="insights-drawer-nav" onclick="navigateInsightsDrawer(1)">Next</button>
+                        <button type="button" class="insights-drawer-close" onclick="closeInsightsDrawer()">Close</button>
+                    </div>
+                </div>
+                <div class="latency-toggles" style="padding: 10px 14px 0 14px; margin-bottom: 0;">
+                    <button type="button" id="insDetailTabSummaryBtn" class="toggle-chip active" onclick="showInsightsDetailTab('summary')">Summary</button>
+                    <button type="button" id="insDetailTabPlanBtn" class="toggle-chip" onclick="showInsightsDetailTab('plan')">Execution Plan</button>
+                    <button type="button" id="insDetailTabRecoBtn" class="toggle-chip" onclick="showInsightsDetailTab('recommendation')">Recommendation</button>
+                    <button type="button" id="insDetailTabDiagBtn" class="toggle-chip" onclick="showInsightsDetailTab('diagnostics')">Diagnostics</button>
+                    <button type="button" id="insDetailTabRefBtn" class="toggle-chip" onclick="showInsightsDetailTab('reference')">Query Reference</button>
+                </div>
+                <div id="insightsDetailBody" class="insights-drawer-content"></div>
+            </aside>
 
             <div id="finishActions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
@@ -2234,6 +2489,8 @@
         };
         let finalReportData = null;
         let finalInsightsData = null;
+        let insightsDrawerCurrent = null;
+        let insightsDrawerTab = 'summary';
 
         function parseDuration(str) {
             if (!str) return 60;
@@ -2270,6 +2527,10 @@
 
         document.addEventListener("DOMContentLoaded", function () {
             initCharts();
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeInsightsDrawer();
+            });
+            updateInsightsDrawerNavButtons();
             fetch('/api/config').then(r => r.json()).then(cfg => {
                 document.querySelector('[name="uri"]').value = cfg.URI || '';
                 document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
@@ -2470,6 +2731,234 @@
             });
         }
 
+        function trimText(v, maxLen = 140) {
+            const s = String(v || '');
+            if (s.length <= maxLen) return s;
+            return s.slice(0, maxLen) + '...';
+        }
+
+        function insightPrimaryLocation(item) {
+            return trimText(item.query_label || item.query_definition_id || `${item.operation || 'query'} query`, 90);
+        }
+
+        function insightWhereFound(item) {
+            const workload = item.workload_name || '-';
+            const file = item.query_file || '-';
+            return `${workload} • ${file}`;
+        }
+
+        function formatMs(v) {
+            return `${Number(v || 0).toFixed(2)}ms`;
+        }
+
+        function metricsChipsForItem(item) {
+            const d = item.explain_diagnostics || {};
+            const chips = [
+                `p95 ${formatMs(item.p95_ms)}`,
+                `p99 ${formatMs(item.p99_ms)}`,
+                `count ${Number(item.count || 0)}`
+            ];
+            if (d.execution_time_millis) chips.push(`exec ${Number(d.execution_time_millis)}ms`);
+            if (d.docs_examined) chips.push(`docs ${Number(d.docs_examined)}`);
+            if (d.keys_examined) chips.push(`keys ${Number(d.keys_examined)}`);
+            return chips.slice(0, 6);
+        }
+
+        function findingCardId(kind, index) {
+            return `finding-${kind}-${index}`;
+        }
+
+        function setActiveFindingCard(kind, index) {
+            document.querySelectorAll('.insights-finding-card').forEach(el => el.classList.remove('active'));
+            const el = document.getElementById(findingCardId(kind, index));
+            if (el) el.classList.add('active');
+        }
+
+        function parseStageList(item) {
+            const d = item.explain_diagnostics || {};
+            if (Array.isArray(d.plan_stages) && d.plan_stages.length > 0) return d.plan_stages;
+            if (d.winning_plan_summary && d.winning_plan_summary !== 'stage_chain_unavailable') {
+                return String(d.winning_plan_summary).split('->').map(s => s.trim()).filter(Boolean);
+            }
+            if (d.stage_summary) {
+                return String(d.stage_summary).split('->').map(s => s.trim().replace(/^\$/g, '').toUpperCase()).filter(Boolean);
+            }
+            return [];
+        }
+
+        function planStageClass(stage, item) {
+            const s = String(stage || '').toUpperCase();
+            const d = item.explain_diagnostics || {};
+            if (s.includes('COLLSCAN')) return 'risk-high';
+            if (s.includes('SORT') && d.blocking_sort_detected) return 'risk-medium';
+            if (s.includes('FETCH') && d.index_scan_detected) return 'risk-medium';
+            return '';
+        }
+
+        function renderPlanFlow(item) {
+            const stages = parseStageList(item);
+            if (!stages.length) {
+                return `<div class="insights-row-subtitle">No structured stage flow detected.</div>`;
+            }
+            const parts = [];
+            stages.forEach((st, idx) => {
+                if (idx > 0) parts.push(`<span class="insights-plan-arrow">→</span>`);
+                parts.push(`<span class="insights-plan-stage ${planStageClass(st, item)}">${escHtml(st)}</span>`);
+            });
+            return `<div class="insights-plan-flow">${parts.join('')}</div>`;
+        }
+
+        function showInsightsDetailTab(tab) {
+            insightsDrawerTab = tab || insightsDrawerTab || 'summary';
+            const tabs = ['summary', 'plan', 'recommendation', 'diagnostics', 'reference'];
+            if (!tabs.includes(insightsDrawerTab)) insightsDrawerTab = 'summary';
+            tabs.forEach(t => {
+                const btn = document.getElementById(`insDetailTab${t === 'summary' ? 'Summary' : (t === 'plan' ? 'Plan' : (t === 'recommendation' ? 'Reco' : (t === 'diagnostics' ? 'Diag' : 'Ref')))}Btn`);
+                if (btn) btn.classList.toggle('active', t === insightsDrawerTab);
+            });
+            renderInsightsDrawerBody();
+        }
+
+        function drawerItemsForKind(kind) {
+            const rep = finalInsightsData || {};
+            if (kind === 'slow') return rep.slow_queries || [];
+            if (kind === 'issue') return rep.potential_index_issues || [];
+            return [];
+        }
+
+        function updateInsightsDrawerNavButtons() {
+            const prevBtn = document.getElementById('insightsPrevBtn');
+            const nextBtn = document.getElementById('insightsNextBtn');
+            if (!prevBtn || !nextBtn) return;
+            if (!insightsDrawerCurrent) {
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                return;
+            }
+            const items = drawerItemsForKind(insightsDrawerCurrent.kind);
+            const idx = Number(insightsDrawerCurrent.index || 0);
+            prevBtn.disabled = idx <= 0;
+            nextBtn.disabled = idx >= (items.length - 1);
+        }
+
+        function navigateInsightsDrawer(delta) {
+            if (!insightsDrawerCurrent) return;
+            const items = drawerItemsForKind(insightsDrawerCurrent.kind);
+            const next = Number(insightsDrawerCurrent.index || 0) + Number(delta || 0);
+            if (next < 0 || next >= items.length) return;
+            openInsightsDrawer(insightsDrawerCurrent.kind, next);
+        }
+
+        function closeInsightsDrawer() {
+            const drawer = document.getElementById('insightsDetailDrawer');
+            if (!drawer) return;
+            drawer.classList.remove('open');
+            drawer.setAttribute('aria-hidden', 'true');
+            insightsDrawerCurrent = null;
+            document.querySelectorAll('.insights-finding-card').forEach(el => el.classList.remove('active'));
+            updateInsightsDrawerNavButtons();
+        }
+
+        function openInsightsDrawer(kind, index) {
+            const rep = finalInsightsData || {};
+            let item = null;
+            if (kind === 'slow') item = (rep.slow_queries || [])[index] || null;
+            if (kind === 'issue') item = (rep.potential_index_issues || [])[index] || null;
+            if (!item) return;
+            insightsDrawerCurrent = { kind, index, item };
+            const drawer = document.getElementById('insightsDetailDrawer');
+            if (!drawer) return;
+            drawer.classList.add('open');
+            drawer.setAttribute('aria-hidden', 'false');
+            setActiveFindingCard(kind, index);
+            updateInsightsDrawerNavButtons();
+            showInsightsDetailTab('summary');
+        }
+
+        function renderInsightsDrawerBody() {
+            const body = document.getElementById('insightsDetailBody');
+            if (!body) return;
+            if (!insightsDrawerCurrent || !insightsDrawerCurrent.item) {
+                body.innerHTML = `<div class="insights-row-subtitle">Select a finding to explore details.</div>`;
+                return;
+            }
+            const item = insightsDrawerCurrent.item;
+            const d = item.explain_diagnostics || {};
+            const title = `${item.operation || ''} • ${item.collection || ''}`;
+            const summaryBlock = `
+                <div class="insights-detail-card">
+                    <p class="insights-detail-title">${escHtml(title)}</p>
+                    <div class="insights-detail-subtitle">${escHtml(item.shape_summary || item.shape_key || '')}</div>
+                    <div class="insights-finding-metrics">
+                        ${metricsChipsForItem(item).map(c => `<span class="insights-kpi">${escHtml(c)}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+            const planBlock = `
+                <div class="insights-detail-card">
+                    <div class="insights-detail-label">Execution Plan Flow</div>
+                    ${renderPlanFlow(item)}
+                    <div class="insights-plan-legend">
+                        <span class="insights-plan-legend-item">Normal stage</span>
+                        <span class="insights-plan-legend-item" style="border-color:#fdba74;background:#ffedd5;color:#9a3412;">Potential bottleneck</span>
+                        <span class="insights-plan-legend-item" style="border-color:#fca5a5;background:#fee2e2;color:#991b1b;">High-risk scan stage</span>
+                    </div>
+                    <div class="insights-detail-subtitle" style="margin-top:8px;">
+                        index used: ${d.index_scan_detected ? 'yes' : 'no'} | collscan: ${d.collection_scan_detected ? 'yes' : 'no'} | blocking sort: ${d.blocking_sort_detected ? 'yes' : 'no'}
+                    </div>
+                </div>
+            `;
+            const recoBlock = `
+                <div class="insights-detail-card">
+                    <div class="insights-detail-label">Interpretation</div>
+                    <div class="insights-kv">${escHtml(d.interpretation || item.message || 'No interpretation available.')}</div>
+                    <div class="insights-detail-label" style="margin-top:8px;">Next Step</div>
+                    <div class="insights-kv">${escHtml(d.recommendation || item.recommendation || 'No recommendation available.')}</div>
+                    <div class="insights-detail-subtitle">confidence: ${escHtml(d.recommendation_confidence || item.confidence || 'low')}</div>
+                </div>
+            `;
+            const diagBlock = `
+                <div class="insights-detail-card">
+                    <div class="insights-detail-label">Supporting Evidence</div>
+                    <div class="insights-kv">explain status: ${escHtml(explainStatusText(item.explain_status || 'explain_unavailable'))}</div>
+                    <div class="insights-kv">reason: ${escHtml(explainReasonText(item.explain_reason || ''))}</div>
+                    <div class="insights-kv">docs/keys/returned: ${Number(d.docs_examined || 0)}/${Number(d.keys_examined || 0)}/${Number(d.n_returned || 0)}</div>
+                    <div class="insights-kv">exec: ${Number(d.execution_time_millis || 0)}ms | elapsed: ${Number(d.elapsed_ms || 0)}ms</div>
+                    <div class="insights-kv">d/r: ${Number(d.examined_to_returned_ratio || 0).toFixed(2)} | k/r: ${Number(d.keys_to_returned_ratio || 0).toFixed(2)}</div>
+                    <details style="margin-top:8px;">
+                        <summary style="cursor:pointer; font-size:11px; color:var(--text-secondary); font-weight:700;">Technical diagnostics</summary>
+                        <pre style="white-space:pre-wrap; font-size:10px; color:var(--text-secondary); margin-top:6px;">${escHtml(diagnosticsClipboardText(item))}</pre>
+                    </details>
+                    <div style="margin-top:8px;">
+                        <button type="button" class="insights-copy-btn" onclick='copyExplainDiagnosticsFromEncoded("${encodeExplainDiagnosticsPayload(item)}", this)'>Copy diagnostics</button>
+                    </div>
+                </div>
+            `;
+            const refBlock = `
+                <div class="insights-detail-card">
+                    <div class="insights-detail-label">Query Reference</div>
+                    <div class="insights-kv">label: ${escHtml(item.query_label || `${item.operation || ''} query`)}</div>
+                    <div class="insights-kv">source: ${escHtml(item.query_source || '-')}</div>
+                    <div class="insights-kv">workload: ${escHtml(item.workload_name || '-')}</div>
+                    <div class="insights-kv">query file: ${escHtml(item.query_file || '-')}</div>
+                    <div class="insights-kv">definition: ${escHtml(item.query_definition_id || (item.query_definition_index !== undefined ? `#${Number(item.query_definition_index) + 1}` : '-'))}</div>
+                    ${item.representative_query_summary ? `<div class="insights-kv">query preview: ${escHtml(item.representative_query_summary)}</div>` : ''}
+                    ${item.representative_pipeline_summary ? `<div class="insights-kv">pipeline preview: ${escHtml(item.representative_pipeline_summary)}</div>` : ''}
+                    <div class="insights-kv">shape id: ${escHtml(item.shape_id || '')}</div>
+                </div>
+            `;
+
+            const sections = {
+                summary: summaryBlock,
+                plan: planBlock,
+                recommendation: recoBlock,
+                diagnostics: diagBlock,
+                reference: refBlock
+            };
+            body.innerHTML = sections[insightsDrawerTab] || summaryBlock;
+            updateInsightsDrawerNavButtons();
+        }
+
         function renderInsightsRows(containerId, rows, formatter) {
             const el = document.getElementById(containerId);
             if (!el) return;
@@ -2477,7 +2966,7 @@
                 el.innerHTML = `<div class="insights-row-subtitle">No strong signals detected.</div>`;
                 return;
             }
-            el.innerHTML = rows.map(formatter).join('');
+            el.innerHTML = rows.map((row, idx) => formatter(row, idx)).join('');
         }
 
         function insightSeverityBadge(severity) {
@@ -2610,6 +3099,7 @@
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '';
             });
+            closeInsightsDrawer();
         }
 
         function renderFinalInsights(rep) {
@@ -2637,6 +3127,7 @@
             }
 
             panel.style.display = 'block';
+            closeInsightsDrawer();
             showInsightsTab('overview');
             const md = rep.metadata || {};
             const summary = rep.summary || {};
@@ -2675,20 +3166,19 @@
             }
             document.getElementById('insightsTopFindings').innerHTML = top.slice(0, 3).map(t => `<div class="insights-top-item">• ${escHtml(t)}</div>`).join('');
 
-            renderInsightsRows('insightsSlowQueries', (rep.slow_queries || []).slice(0, 8), s =>
-                `<div class="insights-row">
-                    <div class="insights-row-title">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')} ${insightSeverityBadge(s.severity)} ${insightExplainStatusBadge(s.explain_status)}</div>
-                    <div class="insights-row-subtitle">${escHtml(s.shape_summary || s.shape_key || '')}</div>
-                    <div class="insights-row-footnote">query reference: ${escHtml(s.query_label || `${s.operation || ''} query`)} | source ${escHtml(s.query_source || '-')} | workload ${escHtml(s.workload_name || '-')} | file ${escHtml(s.query_file || '-')} | def ${escHtml(s.query_definition_id || (s.query_definition_index !== undefined ? `#${Number(s.query_definition_index) + 1}` : '-'))}${s.query_reference_variants > 1 ? ` | variants ${Number(s.query_reference_variants)}` : ''}</div>
-                    ${s.representative_query_summary ? `<div class="insights-row-footnote">representative query: ${escHtml(s.representative_query_summary)}</div>` : ''}
-                    ${s.representative_pipeline_summary ? `<div class="insights-row-footnote">representative pipeline: ${escHtml(s.representative_pipeline_summary)}</div>` : ''}
-                    <div class="insights-row-metrics">avg ${Number(s.avg_ms || 0).toFixed(2)}ms | p95 ${Number(s.p95_ms || 0).toFixed(2)}ms | p99 ${Number(s.p99_ms || 0).toFixed(2)}ms | max ${Number(s.max_ms || 0).toFixed(2)}ms | count ${s.count || 0}</div>
-                    <div class="insights-row-footnote">explain: ${escHtml(explainReasonText(s.explain_reason))}</div>
-                    ${(s.explain_diagnostics && (s.explain_diagnostics.replay_db || s.explain_diagnostics.verbosity || s.explain_diagnostics.server_max_time_ms || s.explain_diagnostics.stage_summary)) ? `<div class="insights-row-footnote">diagnostics: db ${escHtml(s.explain_diagnostics.replay_db || '-')} | mode ${escHtml(s.explain_diagnostics.verbosity || '-')} | max/client ${Number(s.explain_diagnostics.server_max_time_ms || 0)}ms/${Number(s.explain_diagnostics.client_timeout_ms || 0)}ms | stages ${escHtml(s.explain_diagnostics.stage_summary || '-')} | elapsed ${Number(s.explain_diagnostics.elapsed_ms || 0)}ms <button type="button" class="insights-copy-btn" onclick='copyExplainDiagnosticsFromEncoded("${encodeExplainDiagnosticsPayload(s)}", this)'>Copy diagnostics</button></div>` : ''}
-                    ${(s.explain_diagnostics && (s.explain_diagnostics.winning_plan_summary || (s.explain_diagnostics.indexes_used || []).length > 0 || s.explain_diagnostics.docs_examined || s.explain_diagnostics.keys_examined)) ? `<div class="insights-row-footnote">plan: ${escHtml(s.explain_diagnostics.winning_plan_summary || '-')} | index used ${s.explain_diagnostics.index_scan_detected ? 'yes' : 'no'} | collscan ${s.explain_diagnostics.collection_scan_detected ? 'yes' : 'no'} | indexes ${(s.explain_diagnostics.indexes_used || []).length ? escHtml((s.explain_diagnostics.indexes_used || []).join(', ')) : '-'} | docs/keys/returned ${Number(s.explain_diagnostics.docs_examined || 0)}/${Number(s.explain_diagnostics.keys_examined || 0)}/${Number(s.explain_diagnostics.n_returned || 0)} | exec ${Number(s.explain_diagnostics.execution_time_millis || 0)}ms | d/r ${Number(s.explain_diagnostics.examined_to_returned_ratio || 0).toFixed(2)} | k/r ${Number(s.explain_diagnostics.keys_to_returned_ratio || 0).toFixed(2)}</div>` : ''}
-                    ${(s.explain_diagnostics && s.explain_diagnostics.interpretation) ? `<div class="insights-row-footnote">interpretation: ${escHtml(s.explain_diagnostics.interpretation || '')}</div>` : ''}
-                    ${(s.explain_diagnostics && s.explain_diagnostics.recommendation) ? `<div class="insights-row-footnote"><strong>next step:</strong> ${escHtml(s.explain_diagnostics.recommendation || '')}${s.explain_diagnostics.recommendation_confidence ? ` (confidence: ${escHtml(s.explain_diagnostics.recommendation_confidence)})` : ''}</div>` : ''}
-                    <div class="insights-row-footnote">shape id: ${escHtml(s.shape_id || '')}${s.trend ? ` | trend: ${escHtml(s.trend.direction || 'flat')} (${Number(s.trend.delta_p95_ms || 0).toFixed(2)}ms p95)` : ''}</div>
+            renderInsightsRows('insightsSlowQueries', (rep.slow_queries || []).slice(0, 8), (s, idx) =>
+                `<div id="${findingCardId('slow', idx)}" class="insights-finding-card">
+                    <div class="insights-finding-head">
+                        <div>
+                            <p class="insights-finding-title">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')}</p>
+                            <div class="insights-finding-meta">${insightSeverityBadge(s.severity)} ${insightExplainStatusBadge(s.explain_status)}</div>
+                        </div>
+                        <div class="insights-finding-meta">${insightConfidenceBadge((s.explain_diagnostics && s.explain_diagnostics.recommendation_confidence) || 'low')}</div>
+                    </div>
+                    <div class="insights-finding-meta">${escHtml(trimText(s.shape_summary || s.shape_key || '', 120))}</div>
+                    <div class="insights-finding-meta"><strong>${escHtml(insightPrimaryLocation(s))}</strong> • ${escHtml(insightWhereFound(s))}</div>
+                    <div class="insights-finding-metrics">${metricsChipsForItem(s).map(c => `<span class="insights-kpi">${escHtml(c)}</span>`).join('')}</div>
+                    <div class="insights-finding-actions"><button type="button" class="insights-explore-btn" onclick="openInsightsDrawer('slow', ${idx})">Explore</button></div>
                 </div>`
             );
 
@@ -2699,15 +3189,23 @@
                 </div>`
             );
 
-            renderInsightsRows('insightsIndexIssues', (rep.potential_index_issues || []).slice(0, 8), i =>
-                `<div class="insights-row">
-                    <div class="insights-row-title">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')} ${insightConfidenceBadge(i.confidence)} ${insightExplainStatusBadge(i.explain_status)}</div>
-                    <div class="insights-row-subtitle">evidence: ${escHtml(i.evidence_level || 'heuristic')} | explain: ${escHtml(explainReasonText(i.explain_reason))}</div>
-                    <div class="insights-row-footnote">query reference: ${escHtml(i.query_label || `${i.operation || ''} query`)} | source ${escHtml(i.query_source || '-')} | workload ${escHtml(i.workload_name || '-')} | file ${escHtml(i.query_file || '-')} | def ${escHtml(i.query_definition_id || (i.query_definition_index !== undefined ? `#${Number(i.query_definition_index) + 1}` : '-'))}${i.query_reference_variants > 1 ? ` | variants ${Number(i.query_reference_variants)}` : ''}</div>
-                    ${i.representative_query_summary ? `<div class="insights-row-footnote">representative query: ${escHtml(i.representative_query_summary)}</div>` : ''}
-                    ${i.representative_pipeline_summary ? `<div class="insights-row-footnote">representative pipeline: ${escHtml(i.representative_pipeline_summary)}</div>` : ''}
-                    <div class="insights-row-metrics">${escHtml(i.message || '')}</div>
-                    <div class="insights-row-metrics"><strong>Action:</strong> ${escHtml(i.recommendation || '')}</div>
+            renderInsightsRows('insightsIndexIssues', (rep.potential_index_issues || []).slice(0, 8), (i, idx) =>
+                `<div id="${findingCardId('issue', idx)}" class="insights-finding-card">
+                    <div class="insights-finding-head">
+                        <div>
+                            <p class="insights-finding-title">#${i.rank || '-'} ${escHtml(i.collection || '')} • ${escHtml(i.operation || '')}</p>
+                            <div class="insights-finding-meta">${insightConfidenceBadge(i.confidence)} ${insightExplainStatusBadge(i.explain_status)}</div>
+                        </div>
+                    </div>
+                    <div class="insights-finding-meta">${escHtml(trimText(i.message || '', 140))}</div>
+                    <div class="insights-finding-meta"><strong>${escHtml(insightPrimaryLocation(i))}</strong> • ${escHtml(insightWhereFound(i))}</div>
+                    <div class="insights-finding-metrics">
+                        <span class="insights-kpi">p95 ${formatMs(i.p95_ms)}</span>
+                        <span class="insights-kpi">p99 ${formatMs(i.p99_ms)}</span>
+                        <span class="insights-kpi">count ${Number(i.count || 0)}</span>
+                        <span class="insights-kpi">${escHtml(i.evidence_level || 'heuristic')}</span>
+                    </div>
+                    <div class="insights-finding-actions"><button type="button" class="insights-explore-btn" onclick="openInsightsDrawer('issue', ${idx})">Explore</button></div>
                 </div>`
             );
 

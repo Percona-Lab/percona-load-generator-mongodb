@@ -205,6 +205,28 @@ Quick triage order:
 4. Read interpretation and `next step` recommendation.
 5. Use affected collections and iteration/timeline tabs for blast radius and timing context.
 
+## Findings UX (Current)
+
+The post-run findings experience is intentionally split into:
+
+1. Main findings cards (overview surface)
+- Concise, high-signal cards for slow queries and index issues.
+- Focused on title, where-found context, key metrics, priority/confidence/explain status.
+- Designed for quick scanning and triage.
+
+2. Explore drawer (technical deep dive)
+- Open with the **Explore** action on any finding card.
+- Opens a right-side details panel.
+- Always defaults to **Summary** when opened.
+- Includes section toggles:
+  - `Summary`
+  - `Execution Plan`
+  - `Recommendation`
+  - `Diagnostics`
+  - `Query Reference`
+- Supports `Prev` / `Next` navigation across findings of the current list.
+- Supports `Esc` key to close.
+
 Each slow-query row can show:
 - latency stats (`avg/p95/p99/max`) and count
 - query reference block (`query_label`, `query_source`, `workload_name`, `query_file`, definition id/index)
@@ -215,6 +237,17 @@ Each slow-query row can show:
 - interpretation and confidence-weighted next step
 
 The `Copy diagnostics` button copies a structured JSON payload for ticketing/triage.
+
+## Execution Plan Visualization
+
+Inside the Explore drawer, execution plans are rendered as a stage-flow visualization (pill/arrow chain), for example:
+- `IXSCAN -> FETCH -> GROUP -> SORT -> LIMIT`
+
+Risk cues are highlighted in the flow:
+- high risk: collection-scan signals (`COLLSCAN`)
+- medium risk: common bottlenecks (for example blocking sort, fetch after index)
+
+Raw diagnostics remain available in an expandable technical section for deep troubleshooting, but are not the primary surface.
 
 ## Query Traceability (Finding the Exact Query to Optimize)
 

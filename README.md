@@ -98,6 +98,7 @@ Quick access:
 * Includes explain support matrix, status/reason glossary, confidence model, troubleshooting, and limitations
 * Includes `executionStats` vs `queryPlanner` guidance, severity-based explain eligibility, filtering counters, and expected outcomes
 * Includes query traceability fields so each finding can be mapped to a concrete query source/definition
+* Includes concise findings cards + Explore drawer workflow with execution-plan stage flow and technical details tabs
 
 ## The Interactive UI
 
