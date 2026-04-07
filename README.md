@@ -186,7 +186,12 @@ Simply grab the **Time Machine** slider above the charts and drag it to the left
 ![PLGM Time Machine Feature](./images/time_machine.png)
 
 ### 6. Post-Run Slow Query & Index Analysis
-Once PLGM is configured and the Insights and Analysis feature is enabled, you will receive a detailed analysis of your slow queries upon completion of the workload (see [`INSIGHTS.md`](./INSIGHTS.md)). 
+Once PLGM is configured and the Insights and Analysis feature is enabled, you will receive a detailed analysis of your slow queries upon completion of the workload. Configuration and enabling this feature can be done via the `Metrics & Insights` section of the UI (or via the config file), see [`INSIGHTS.md`](./INSIGHTS.md) for further details:
+
+![Metrics and Insights](./images/metrics_insights.png)
+![Insights Configuration](./images/insights_config.png)
+
+The output, once the workload is completed, will look like the following:
 
 <img src="./images/insights.png" alt="post_run_insights" width="100%">
 <img src="./images/finding_summary.png" alt="finding_summary" width="100%">
