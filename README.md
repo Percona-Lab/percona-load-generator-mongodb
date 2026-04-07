@@ -87,7 +87,7 @@ Download the [`config.yaml`](./config.yaml) and make the necessary adjustments.
 
 For unit and integration test instructions (including Docker-based MongoDB setup), see [`TESTING.md`](./TESTING.md).
 
-### 5. Post-Run Insights (Shortcut)
+### 5. Post-Run Insights
 
 PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Advanced tab).
 
@@ -184,6 +184,16 @@ If you are running a long benchmark, you might miss a sudden latency spike. The 
 Simply grab the **Time Machine** slider above the charts and drag it to the left to pause the live feed and "scrub" backward in time. All line charts, sparklines, and numeric values will perfectly synchronize to show you the exact state of the database at that specific historical second. Click **Back to Live** to resume real-time monitoring.
 
 ![PLGM Time Machine Feature](./images/time_machine.png)
+
+### 6. Post-Run Slow Query & Index Analysis
+Once PLGM is configured and the Insights and Analysis feature is enabled, you will receive a detailed analysis of your slow queries upon completion of the workload (see [`INSIGHTS.md`](./INSIGHTS.md)). 
+
+<img src="./images/insights.png" alt="post_run_insights" width="100%">
+<img src="./images/finding_summary.png" alt="finding_summary" width="100%">
+<img src="./images/finding_exec_plan.png" alt="finding_execution_plan" width="50%">
+<img src="./images/finding_rec.png" alt="finding_recommendation" width="50%">
+<img src="./images/finding_diag.png" alt="finding_diagnostics" width="50%">
+<img src="./images/finding_query_ref.png" alt="finding_query_reference" width="50%">
 
 ## CLI 
 
