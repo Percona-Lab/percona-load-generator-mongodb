@@ -269,18 +269,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	validCollections := make(map[string]bool)
-	for _, col := range collectionsCfg.Collections {
-		validCollections[col.Name] = true
+	if err := config.ValidateCollectionDefinitions(collectionsCfg.Collections); err != nil {
+		log.Fatal(err)
 	}
 
-	var filteredQueries []config.QueryDefinition
-	for _, q := range queriesCfg.Queries {
-		if validCollections[q.Collection] {
-			filteredQueries = append(filteredQueries, q)
-		}
+	if err := config.NormalizeAndValidateQueries(queriesCfg.Queries); err != nil {
+		log.Fatal(err)
 	}
-	queriesCfg.Queries = filteredQueries
+	boundQueries, err := config.ValidateAndBindQueriesToCollections(queriesCfg.Queries, collectionsCfg.Collections)
+	if err != nil {
+		log.Fatal(err)
+	}
+	queriesCfg.Queries = boundQueries
 
 	dbName := collectionsCfg.Collections[0].DatabaseName
 	stats.PrintConfiguration(appCfg, collectionsCfg.Collections, version)
@@ -291,13 +291,22 @@ func main() {
 	}
 	defer conn.Disconnect(ctx)
 
+	initStart := time.Now()
+	log.Printf("[Lifecycle] Phase=initializing: preparing collections, indexes, sharding setup, and optional seed data")
+	log.Printf("[Lifecycle] Init Step 1/3: preparing collections")
 	if err := mongo.CreateCollectionsFromConfig(ctx, conn.Database, collectionsCfg, appCfg.DropCollections); err != nil {
 		log.Fatal(err)
 	}
+	totalIndexes := 0
+	for _, col := range collectionsCfg.Collections {
+		totalIndexes += len(col.Indexes)
+	}
+	log.Printf("[Lifecycle] Init Step 2/3: creating indexes (declared indexes=%d)", totalIndexes)
 	if err := mongo.CreateIndexesFromConfig(ctx, conn.Database, collectionsCfg); err != nil {
 		log.Fatal(err)
 	}
 
+	log.Printf("[Lifecycle] Init Step 3/3: optional seed (skip_seed=%v, documents_count=%d)", appCfg.SkipSeed, appCfg.DocumentsCount)
 	if !appCfg.SkipSeed && appCfg.DocumentsCount > 0 {
 		for _, col := range collectionsCfg.Collections {
 			if err := mongo.InsertRandomDocuments(ctx, conn.Database, col, appCfg.DocumentsCount, appCfg); err != nil {
@@ -305,13 +314,18 @@ func main() {
 			}
 		}
 	}
+	initDuration := time.Since(initStart)
+	log.Printf("[Lifecycle] Initialization completed in %s", initDuration.Round(10*time.Millisecond))
+	log.Printf("[Lifecycle] Phase=running: execution timers now track query workload only")
 
 	intervalDuration, _ := time.ParseDuration(appCfg.IntervalDelay)
 	for i := 1; i <= appCfg.Iterations; i++ {
+		iterStart := time.Now()
 		log.Printf("Starting Standard Workload iteration %d of %d", i, appCfg.Iterations)
 		if err := mongo.RunWorkload(ctx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {
 			log.Fatal(err)
 		}
+		log.Printf("[Lifecycle] Iteration %d execution duration: %s", i, time.Since(iterStart).Round(10*time.Millisecond))
 		if i < appCfg.Iterations && intervalDuration > 0 {
 			log.Printf("Waiting %s before next iteration...", appCfg.IntervalDelay)
 			time.Sleep(intervalDuration)

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -101,5 +102,98 @@ func TestLoadCollectionsValidationErrorForMissingNames(t *testing.T) {
 	_, err := LoadCollections(file, false)
 	if err == nil {
 		t.Fatalf("expected validation error for empty names")
+	}
+}
+
+func TestValidateCollectionDefinitionsRejectsDuplicates(t *testing.T) {
+	tests := []struct {
+		name string
+		cols []CollectionDefinition
+		want string
+	}{
+		{
+			name: "duplicate_namespace",
+			cols: []CollectionDefinition{
+				{DatabaseName: "db1", Name: "orders"},
+				{DatabaseName: "db1", Name: "Orders"},
+			},
+			want: "duplicate namespace",
+		},
+		{
+			name: "invalid_empty_index_keys",
+			cols: []CollectionDefinition{
+				{
+					DatabaseName: "db1",
+					Name:         "orders",
+					Indexes:      []IndexDefinition{{Keys: map[string]interface{}{}}},
+				},
+			},
+			want: "index keys cannot be empty",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateCollectionDefinitions(tc.cols)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateCollectionDefinitionsAllowsSameCollectionNameInDifferentDatabases(t *testing.T) {
+	cols := []CollectionDefinition{
+		{DatabaseName: "db1", Name: "orders"},
+		{DatabaseName: "db2", Name: "orders"},
+	}
+	if err := ValidateCollectionDefinitions(cols); err != nil {
+		t.Fatalf("expected same collection name across databases to be valid, got %v", err)
+	}
+}
+
+func TestValidateCollectionDefinitionsRejectsInvalidFieldRanges(t *testing.T) {
+	min, max := 10, 1
+	cols := []CollectionDefinition{
+		{
+			DatabaseName: "db1",
+			Name:         "orders",
+			Fields: map[string]CollectionField{
+				"amount": {Type: "int", Min: &min, Max: &max},
+			},
+		},
+	}
+	err := ValidateCollectionDefinitions(cols)
+	if err == nil || !strings.Contains(err.Error(), "invalid min/max") {
+		t.Fatalf("expected invalid min/max error, got %v", err)
+	}
+}
+
+func TestValidateCollectionDefinitionsRejectsNestedInvalidRanges(t *testing.T) {
+	minLen, maxLen := 50, 5
+	cols := []CollectionDefinition{
+		{
+			DatabaseName: "db1",
+			Name:         "orders",
+			Fields: map[string]CollectionField{
+				"items": {
+					Type: "array",
+					Items: &CollectionField{
+						Type: "object",
+						Fields: map[string]CollectionField{
+							"sku": {
+								Type:      "string",
+								MinLength: minLen,
+								MaxLength: maxLen,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	err := ValidateCollectionDefinitions(cols)
+	if err == nil || !strings.Contains(err.Error(), "invalid minLength/maxLength") {
+		t.Fatalf("expected nested minLength/maxLength validation error, got %v", err)
 	}
 }

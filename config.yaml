@@ -80,6 +80,20 @@ insights_explain_retries: 1
 insights_explain_backoff_ms: 150
 
 # ==============================================================================
+# Sharding Strategy
+# ==============================================================================
+# Controls how generic sharding setup is applied per collection.
+# Modes:
+# - auto: detect per collection (recommended)
+# - force_on: require mongos and apply sharding setup
+# - force_off: never apply sharding setup
+sharding_mode: "auto"
+
+# When true, collections without explicit shardConfig are skipped by generic sharding setup.
+# Recommended for mixed workloads where some collections are intentionally unsharded.
+sharding_skip_generic_without_config: true
+
+# ==============================================================================
 # Workload Definition
 # ==============================================================================
 

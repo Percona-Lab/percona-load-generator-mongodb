@@ -37,12 +37,13 @@
             font-family: 'Roboto', sans-serif;
             background: var(--bg);
             margin: 0;
-            padding: 20px;
+            padding: 16px;
             color: var(--text);
         }
 
         .container {
-            max-width: 1200px;
+            width: 85vw;
+            max-width: 1680px;
             margin: auto;
             background: var(--surface);
             border-radius: 6px;
@@ -56,8 +57,8 @@
             color: white;
             padding: 16px 24px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 10px;
             border-bottom: 3px solid var(--p-sunset);
         }
 
@@ -68,17 +69,64 @@
             letter-spacing: 0.5px;
         }
 
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .header-primary {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            min-width: 280px;
+            flex: 1 1 auto;
+        }
+
+        .header-runtime {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 14px;
+            flex-wrap: wrap;
+            flex: 0 1 auto;
+        }
+
+        .header-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
         .header-controls {
             display: flex;
             align-items: center;
-            gap: 24px;
+            gap: 12px;
         }
 
         .timer-text {
             font-family: monospace;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 500;
             color: white;
+            letter-spacing: 0.3px;
+        }
+
+        .lifecycle-hint {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.85);
+            flex: 1 1 420px;
+            min-width: 260px;
+            white-space: normal;
+            line-height: 1.35;
         }
 
         .refresh-rate-control {
@@ -87,6 +135,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            white-space: nowrap;
         }
 
         .refresh-rate-control input {
@@ -365,6 +414,10 @@
         }
 
         @media (max-width: 1050px) {
+            .container {
+                width: 92vw;
+            }
+
             .settings-console {
                 grid-template-columns: 1fr;
             }
@@ -390,6 +443,33 @@
                 bottom: -8px;
                 width: auto;
                 height: 3px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                width: 96vw;
+            }
+
+            .header {
+                padding: 12px 14px;
+            }
+
+            .header-runtime {
+                justify-content: flex-start;
+            }
+
+            .header-bottom {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .lifecycle-hint {
+                min-width: 0;
             }
         }
 
@@ -1274,33 +1354,38 @@
 
     <div class="container">
         <div class="header">
-            <div style="display: flex; align-items: center; gap: 16px;">
-                <h1>Percona Load Generator for MongoDB (PLGM)</h1>
-                <div id="statusIndicator" class="status-badge">STOPPED</div>
-                <div id="iterationBadge" class="status-badge"
-                    style="display:none; background: var(--p-amethyst); color: white;">
-                    ITERATION 1 / 1</div>
+            <div class="header-top">
+                <div class="header-primary">
+                    <h1>Percona Load Generator for MongoDB (PLGM)</h1>
+                    <div id="statusIndicator" class="status-badge">STOPPED</div>
+                    <div id="iterationBadge" class="status-badge"
+                        style="display:none; background: var(--p-amethyst); color: white;">
+                        ITERATION 1 / 1</div>
+                </div>
+
+                <div class="header-runtime">
+                    <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
+                    <button type="button" class="btn-exit" onclick="shutdownApp()" title="Shut down the PLGM backend">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        EXIT
+                    </button>
+                </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 24px;">
-                <div id="dashboardControls" class="header-controls" style="display: none;">
+            <div id="dashboardControls" class="header-bottom" style="display: none;">
+                <div id="lifecycleHint" class="lifecycle-hint"></div>
+                <div class="header-controls">
                     <div class="refresh-rate-control">
                         <label for="refreshRate" style="margin:0; cursor:pointer;">UI Refresh Rate (ms):</label>
                         <input type="number" id="refreshRate" value="500" step="100" min="100" max="5000"
                             onchange="updateRefreshRate()">
                     </div>
-                    <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
                 </div>
-
-                <button type="button" class="btn-exit" onclick="shutdownApp()" title="Shut down the PLGM backend">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    EXIT
-                </button>
             </div>
         </div>
 
@@ -1688,16 +1773,21 @@
 
                 <section class="settings-card">
                     <h4>Data / Query Configuration</h4>
-                    <div class="settings-help">Choose built-in defaults or upload custom collection/query definitions.</div>
+                    <div class="settings-help">Choose built-in defaults or upload one collections file and one queries file. Each file can contain multiple definitions.</div>
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
                             onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default Workload</label>
                     </div>
                     <div id="customFilesSection" class="grid-2" style="display: none; margin-top: 14px;">
-                        <div class="file-upload-box"><label>Custom Collections JSON</label><input type="file"
+                        <div class="file-upload-box"><label>Custom Collections JSON (single file, multi-collection supported)</label><input type="file"
                                 name="collections_file" accept=".json"></div>
-                        <div class="file-upload-box"><label>Custom Queries JSON</label><input type="file"
+                        <div class="file-upload-box"><label>Custom Queries JSON (single file, multi-query supported)</label><input type="file"
                                 name="queries_file" accept=".json"></div>
+                    </div>
+                    <div class="settings-note">Accepted formats:
+                        collections: <code>{"collections":[...]}</code> or <code>[...]</code>;
+                        queries: <code>{"queries":[...]}</code> or <code>[...]</code>.
+                        Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.
                     </div>
                     <div class="grid-2" style="margin-top: 14px;">
                         <div class="form-group"><label>Seed Document Count</label><input type="number"
@@ -1749,6 +1839,29 @@
                         <div class="checkbox-group" style="margin-top:4px; width:max-content;">
                             <input type="checkbox" id="useFindOne" name="use_findone_for_limit_one" value="true" checked>
                             <label for="useFindOne">Use <code>FindOne</code> when limit is 1 (recommended)</label>
+                        </div>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Sharding Strategy</h4>
+                        <div class="settings-help">Controls how PLGM applies per-collection sharding setup in sharded, non-sharded, or mixed topologies.</div>
+                        <div class="grid-2">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Sharding Mode</label>
+                                <select name="sharding_mode">
+                                    <option value="auto" selected>Auto Detect (Recommended)</option>
+                                    <option value="force_on">Force On</option>
+                                    <option value="force_off">Force Off</option>
+                                </select>
+                                <div class="settings-note">Auto applies sharding logic only when connected via mongos. Force On requires mongos and is best for controlled sharded benchmarks.</div>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:12px;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="shardSkipNoConfig" name="sharding_skip_generic_without_config" value="true">
+                                    <label for="shardSkipNoConfig">Skip Generic Setup When shardConfig Is Missing</label>
+                                </div>
+                                <div class="settings-note">Recommended for mixed workloads. Collections without explicit <code>shardConfig</code> are treated as non-sharded targets for setup purposes.</div>
+                            </div>
                         </div>
                     </section>
 
@@ -1983,11 +2096,12 @@
     </div>
 
     <script>
-        const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669' };
+        const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669', red: '#dc2626' };
         const WINDOW_SIZE = 45; 
         let globalMarkers = [];
         let lastKnownIteration = 0;
         let lastKnownWaiting = false;
+        let lastLifecyclePhase = 'idle';
 
         // Custom plugin to draw vertical lines safely
         const verticalLinePlugin = {
@@ -2091,6 +2205,13 @@
             const explainBackoff = num('insights_explain_backoff_ms');
             if (explainTopN < 1 || explainMaxTime < 100 || explainWorkers < 1 || explainRetries < 0 || explainBackoff < 0) {
                 showConfigInlineError('Explain settings are invalid. Check top-N, max time, workers, retries, and backoff values.');
+                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                return false;
+            }
+            const shardingMode = (document.querySelector('[name="sharding_mode"]')?.value || 'auto').trim();
+            const skipNoConfig = !!document.getElementById('shardSkipNoConfig')?.checked;
+            if (shardingMode === 'force_on' && skipNoConfig) {
+                showConfigInlineError('Sharding settings conflict: Force On cannot be combined with "Skip Generic Setup When shardConfig Is Missing".');
                 showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
                 return false;
             }
@@ -2478,6 +2599,7 @@
         let startTime;
         let targetSeconds = 0;
         let lastFormData = null;
+        let lastRuntimeErrorShown = '';
         let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
         let lastLat = {
             total: { sum: 0, count: 0 },
@@ -2521,6 +2643,8 @@
             document.getElementById('configForm').style.display = 'block';
             document.getElementById('dashboardControls').style.display = 'none';
             clearConfigInlineError();
+            const lifecycleHint = document.getElementById('lifecycleHint');
+            if (lifecycleHint) lifecycleHint.textContent = '';
             const badge = document.getElementById('statusIndicator');
             badge.textContent = "STOPPED"; badge.style.background = "rgba(255,255,255,0.2)"; badge.style.color = "white";
         }
@@ -2597,6 +2721,8 @@
                 document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
                 document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
                 document.querySelector('[name="insights_explain_backoff_ms"]').value = (cfg.InsightsExplainBackoffMS !== undefined) ? cfg.InsightsExplainBackoffMS : 150;
+                document.querySelector('[name="sharding_mode"]').value = cfg.ShardingMode || 'auto';
+                document.getElementById('shardSkipNoConfig').checked = (cfg.ShardingSkipGenericWithoutConfig !== undefined) ? !!cfg.ShardingSkipGenericWithoutConfig : true;
 
                 if (cfg.RawInjector) {
                     document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
@@ -3250,6 +3376,7 @@
 
         function launchWorkload(formData) {
             lastFormData = formData;
+            lastRuntimeErrorShown = '';
             fetch('/api/start', { method: 'POST', body: formData })
                 .then(async r => {
                     const bodyText = await r.text();
@@ -3306,6 +3433,7 @@
                         globalMarkers = [];
                         lastKnownIteration = 0;
                         lastKnownWaiting = false;
+                        lastLifecyclePhase = 'idle';
                         document.getElementById('iterationBadge').style.display = 'block';
 
                         goToLive();
@@ -3327,8 +3455,35 @@
                 fetch('/api/stats')
                     .then(r => r.json())
                     .then(stats => {
+                        if (stats.lastError && stats.lastError !== lastRuntimeErrorShown) {
+                            lastRuntimeErrorShown = stats.lastError;
+                            showError("Workload error: " + stats.lastError);
+                        }
                         const badge = document.getElementById('statusIndicator');
-                        const elapsed = (Date.now() - startTime) / 1000;
+                        const lifecyclePhase = stats.lifecyclePhase || (stats.isRunning ? 'running' : 'completed');
+                        const lifecycleStep = stats.lifecycleStep || '';
+                        const lifecycleStepIndex = Number(stats.lifecycleStepIndex || 0);
+                        const lifecycleStepTotal = Number(stats.lifecycleStepTotal || 0);
+                        const lifecycleStepProgressPct = Number(stats.lifecycleStepProgressPct || 0);
+                        const lifecycleEvents = Array.isArray(stats.lifecycleRecentEvents) ? stats.lifecycleRecentEvents : [];
+                        const executionElapsed = Number(stats.executionElapsedSec || 0);
+                        const initializationDuration = Number(stats.initializationDurationSec || 0);
+                        const lifecycleHintEl = document.getElementById('lifecycleHint');
+                        if (lifecycleHintEl) {
+                            const latestEvent = lifecycleEvents.length > 0 ? lifecycleEvents[lifecycleEvents.length - 1] : null;
+                            if (lifecyclePhase === 'initializing') {
+                                const pct = Number.isFinite(lifecycleStepProgressPct) ? Math.max(0, Math.min(100, lifecycleStepProgressPct)).toFixed(0) : '0';
+                                const stepPrefix = (lifecycleStepTotal > 0 && lifecycleStepIndex > 0) ? `Step ${lifecycleStepIndex}/${lifecycleStepTotal}` : 'Initializing';
+                                const eventMsg = latestEvent && latestEvent.message ? ` • ${latestEvent.message}` : '';
+                                lifecycleHintEl.textContent = `${stepPrefix} (${pct}%): ${lifecycleStep || stats.lifecycleMessage || 'Preparing workload resources'}${eventMsg}`;
+                            } else if (lifecyclePhase === 'running') {
+                                lifecycleHintEl.textContent = `Initialization completed in ${initializationDuration.toFixed(2)}s. Execution timer excludes preparation time.`;
+                            } else if (lifecyclePhase === 'failed') {
+                                lifecycleHintEl.textContent = stats.lifecycleMessage || 'Run failed.';
+                            } else {
+                                lifecycleHintEl.textContent = '';
+                            }
+                        }
 
                         // Keep total expected duration dynamic with active backend config data
                         if (stats.duration) {
@@ -3338,14 +3493,14 @@
                             targetSeconds = (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
                         }
 
-                        const displayElapsed = Math.min(elapsed, targetSeconds > 0 ? targetSeconds : elapsed);
+                        const displayElapsed = Math.min(executionElapsed, targetSeconds > 0 ? targetSeconds : executionElapsed);
                         const timeStr = formatTime(displayElapsed);
                         document.getElementById('timerDisplay').textContent = `${timeStr} / ${formatTime(targetSeconds)}`;
 
-                        if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((elapsed / targetSeconds) * 100, 100) + "%";
+                        if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((executionElapsed / targetSeconds) * 100, 100) + "%";
 
                         // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
-                        if (stats.insertOps !== undefined) {
+                        if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
                             const updateLatRow = (id, data) => {
                                 try {
                                     if (!data) return;
@@ -3483,7 +3638,7 @@
                             lastKnownWaiting = stats.isWaiting;
                             globalMarkers.push(currentMarker);
 
-                            histLabels.push(formatTime(elapsed));
+                            histLabels.push(formatTime(executionElapsed));
 
                             histRates.total.push(rTotal);
                             histRates.find.push(rFind);
@@ -3542,24 +3697,27 @@
 
                         // === 2. HANDLE STOPPING / FINISHED STATE ===
                         if (!stats.isRunning) {
-                            badge.textContent = "FINISHED";
-                            badge.style.background = "rgba(255,255,255,0.2)";
-                            badge.style.color = "white";
+                            const isFailed = lifecyclePhase === 'failed';
+                            badge.textContent = isFailed ? "FAILED" : "FINISHED";
+                            badge.style.background = isFailed ? colors.red : "rgba(255,255,255,0.2)";
+                            badge.style.color = isFailed ? "white" : "white";
                             document.getElementById('activeActions').style.display = 'none';
                             document.getElementById('finishActions').style.display = 'block';
 
                             const iterBadge = document.getElementById('iterationBadge');
-                            iterBadge.textContent = `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
-                            iterBadge.style.background = 'var(--p-forest)';
+                            iterBadge.textContent = isFailed
+                                ? `FAILED DURING ${lifecyclePhase.toUpperCase()}${stats.lifecycleMessage ? ': ' + stats.lifecycleMessage : ''}`
+                                : `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
+                            iterBadge.style.background = isFailed ? colors.red : 'var(--p-forest)';
                             iterBadge.style.display = 'block';
 
-                            if (elapsed >= targetSeconds && targetSeconds > 0) {
+                            if (executionElapsed >= targetSeconds && targetSeconds > 0) {
                                 document.getElementById('progressBar').style.width = "100%";
                                 document.getElementById('timerDisplay').textContent = `${formatTime(targetSeconds)} / ${formatTime(targetSeconds)}`;
                             }
 
                             // === 3. INJECT THE ZERO-DATA POINT TO SMOOTHLY END THE GRAPHS ===
-                            histLabels.push(formatTime(elapsed));
+                            histLabels.push(formatTime(executionElapsed));
 
                             histRates.total.push(0);
                             histRates.find.push(0);
@@ -3606,7 +3764,7 @@
                             histLatTimelineP99.aggregate.push(null);
                             histLatTimelineP99.transaction.push(null);
 
-                            globalMarkers.push({ text: "Finished", color: colors.forest });
+                            globalMarkers.push({ text: isFailed ? "Failed" : "Finished", color: isFailed ? colors.red : colors.forest });
 
                             const finalMaxIdx = histRates.find.length - 1;
                             const scrubber = document.getElementById('timeScrubber');
@@ -3619,11 +3777,12 @@
                             // ================================================================
 
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
-                            const safeElapsed = Math.max(1, elapsed);
+                            const safeElapsed = Math.max(1, executionElapsed);
 
                             finalReportData = {
                                 generated_at: new Date().toISOString(),
-                                duration_seconds: elapsed.toFixed(2),
+                                duration_seconds: executionElapsed.toFixed(2),
+                                initialization_duration_seconds: initializationDuration.toFixed(2),
                                 total_operations: totalOps,
                                 average_throughput_ops_sec: (totalOps / safeElapsed).toFixed(2),
                                 average_throughput_per_op: {
@@ -3661,27 +3820,44 @@
                             clearInterval(pollInterval);
                             return;
                         } else {
-                            badge.textContent = "RUNNING";
-                            badge.style.background = "var(--p-aqua)";
-                            badge.style.color = "var(--p-night)";
-
-                            let badgeText = `ITERATION ${stats.currentIteration || 1} / ${stats.totalIterations || 1}`;
-                            if (stats.isWaiting) {
-                                badgeText += ` (WAITING: ${stats.intervalDelay})`;
+                            if (lifecyclePhase === 'initializing') {
+                                badge.textContent = "INITIALIZING";
+                                badge.style.background = "var(--p-sunrise)";
+                                badge.style.color = "var(--p-night)";
+                                const stepPrefix = (lifecycleStepTotal > 0 && lifecycleStepIndex > 0) ? `[${lifecycleStepIndex}/${lifecycleStepTotal}] ` : '';
+                                const pct = Number.isFinite(lifecycleStepProgressPct) ? ` (${Math.max(0, Math.min(100, lifecycleStepProgressPct)).toFixed(0)}%)` : '';
+                                const msg = stats.lifecycleMessage || 'Preparing workload resources';
+                                document.getElementById('iterationBadge').textContent = `${stepPrefix}${lifecycleStep || msg}${pct}`;
                                 document.getElementById('iterationBadge').style.background = 'var(--p-sunrise)';
+                                document.getElementById('iterationBadge').style.display = 'block';
                             } else {
-                                document.getElementById('iterationBadge').style.background = 'var(--p-amethyst)';
+                                badge.textContent = "RUNNING";
+                                badge.style.background = "var(--p-aqua)";
+                                badge.style.color = "var(--p-night)";
+
+                                let badgeText = `ITERATION ${stats.currentIteration || 1} / ${stats.totalIterations || 1}`;
+                                if (stats.isWaiting) {
+                                    badgeText += ` (WAITING: ${stats.intervalDelay})`;
+                                    document.getElementById('iterationBadge').style.background = 'var(--p-sunrise)';
+                                } else {
+                                    document.getElementById('iterationBadge').style.background = 'var(--p-amethyst)';
+                                }
+                                document.getElementById('iterationBadge').textContent = badgeText;
+                                document.getElementById('iterationBadge').style.display = 'block';
                             }
-                            document.getElementById('iterationBadge').textContent = badgeText;
-                            document.getElementById('iterationBadge').style.display = 'block';
                         }
+
+                        if (lastLifecyclePhase === 'initializing' && lifecyclePhase === 'running') {
+                            globalMarkers.push({ text: 'Exec Start', color: colors.aqua });
+                        }
+                        lastLifecyclePhase = lifecyclePhase;
                     })
                     .catch(err => {
                         console.error("Polling error:", err);
                         if (err.message && err.message.includes("Unexpected end of JSON")) {
                             console.log("Ignored partial JSON load.");
                         } else {
-                            showError("UI Render Error: " + err.message);
+                            showError("UI Render Error: " + err.message + ". The backend may have stopped unexpectedly; check the terminal log for the first panic/error.");
                         }
                     });
             }, currentRefreshRate);

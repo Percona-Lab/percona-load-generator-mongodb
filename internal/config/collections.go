@@ -108,12 +108,8 @@ func LoadCollections(path string, loadDefault bool) (*CollectionsFile, error) {
 		allCollections = append(allCollections, loaded.Collections...)
 	}
 
-	// --- VALIDATION ---
-	// Ensure we didn't load an empty config due to JSON key mismatch
-	for i, col := range allCollections {
-		if col.DatabaseName == "" || col.Name == "" {
-			return nil, fmt.Errorf("loaded collection at index %d has empty 'database' or 'collection' name. Check your JSON keys: must be 'database' and 'collection' (lowercase)", i)
-		}
+	if err := ValidateCollectionDefinitions(allCollections); err != nil {
+		return nil, err
 	}
 
 	return &CollectionsFile{Collections: allCollections}, nil
@@ -148,4 +144,61 @@ func parseCollectionsBytes(b []byte) (*CollectionsFile, error) {
 	}
 
 	return nil, fmt.Errorf("invalid collections format")
+}
+
+func ParseCollectionsBytes(b []byte) (*CollectionsFile, error) {
+	return parseCollectionsBytes(b)
+}
+
+func ValidateCollectionDefinitions(cols []CollectionDefinition) error {
+	seenNamespaces := make(map[string]int, len(cols))
+
+	for i, col := range cols {
+		if strings.TrimSpace(col.DatabaseName) == "" || strings.TrimSpace(col.Name) == "" {
+			return fmt.Errorf("loaded collection at index %d has empty 'database' or 'collection' name. Check your JSON keys: must be 'database' and 'collection' (lowercase)", i)
+		}
+
+		nsKey := strings.ToLower(strings.TrimSpace(col.DatabaseName)) + "." + strings.ToLower(strings.TrimSpace(col.Name))
+		if prev, ok := seenNamespaces[nsKey]; ok {
+			return fmt.Errorf("duplicate namespace %q at index %d (already declared at index %d)", col.DatabaseName+"."+col.Name, i, prev)
+		}
+		seenNamespaces[nsKey] = i
+
+		for idxPos, idx := range col.Indexes {
+			if len(idx.Keys) == 0 {
+				return fmt.Errorf("collection %q has invalid index at position %d: index keys cannot be empty", col.Name, idxPos)
+			}
+		}
+		if err := validateFieldConstraints(col.Fields, ""); err != nil {
+			return fmt.Errorf("collection %q field validation failed: %w", col.DatabaseName+"."+col.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func validateFieldConstraints(fields map[string]CollectionField, prefix string) error {
+	for name, field := range fields {
+		path := name
+		if prefix != "" {
+			path = prefix + "." + name
+		}
+		if field.Min != nil && field.Max != nil && *field.Min > *field.Max {
+			return fmt.Errorf("field %q has invalid min/max: min (%d) is greater than max (%d)", path, *field.Min, *field.Max)
+		}
+		if field.MinLength > 0 && field.MaxLength > 0 && field.MinLength > field.MaxLength {
+			return fmt.Errorf("field %q has invalid minLength/maxLength: minLength (%d) is greater than maxLength (%d)", path, field.MinLength, field.MaxLength)
+		}
+		if len(field.Fields) > 0 {
+			if err := validateFieldConstraints(field.Fields, path); err != nil {
+				return err
+			}
+		}
+		if field.Items != nil {
+			if err := validateFieldConstraints(map[string]CollectionField{"[]": *field.Items}, path); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

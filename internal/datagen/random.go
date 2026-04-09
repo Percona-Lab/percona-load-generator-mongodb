@@ -88,7 +88,14 @@ func RandomValueWithFaker(def config.CollectionField, faker *gofakeit.Faker) int
 		if def.Max != nil {
 			max = *def.Max
 		}
-		return int32(rng.Intn(max-min+1) + min)
+		if max < min {
+			min, max = max, min
+		}
+		span := max - min + 1
+		if span <= 0 {
+			return int32(min)
+		}
+		return int32(rng.Intn(span) + min)
 
 	case "long", "int64":
 		return rng.Int63()

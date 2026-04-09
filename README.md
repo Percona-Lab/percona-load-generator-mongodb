@@ -99,6 +99,26 @@ Quick access:
 * Includes `executionStats` vs `queryPlanner` guidance, severity-based explain eligibility, filtering counters, and expected outcomes
 * Includes query traceability fields so each finding can be mapped to a concrete query source/definition
 * Includes concise findings cards + Explore drawer workflow with execution-plan stage flow and technical details tabs
+* Includes mixed sharded/non-sharded runtime support with per-collection auto detection and explicit sharding strategy controls in the UI
+
+### 6. Workload Lifecycle & Timing Semantics
+
+PLGM now exposes an explicit lifecycle so users can distinguish preparation from measured workload execution:
+
+* `initializing`: collection setup, index creation, sharding/runtime preparation, optional seeding
+* `running`: actual query workload execution
+* `completed` / `failed`: terminal states
+
+Important timing behavior:
+
+* Initialization time is tracked separately and is **not** treated as execution runtime
+* Execution timer and progress bar start from the execution phase
+* During initialization, the UI shows progress context (step name, progress %, and recent activity events)
+
+Current limitation:
+
+* Initialization progress is structured and user-visible, but still coarse-grained (step/event based)
+* It is not yet per-index/per-shard real-time streaming
 
 ## The Interactive UI
 
@@ -681,6 +701,24 @@ If you point to a folder, plgm will scan and merge **all** `.json` files found i
 export PLGM_COLLECTIONS_PATH="./resources/custom_collections/"
 ```
 
+#### Single-File Multi-Definition Format
+When using a single file, plgm supports both legacy array format and wrapped multi-definition format:
+
+- Collections:
+  - `[{...}]`
+  - `{"collections":[...]}`
+- Queries:
+  - `[{...}]`
+  - `{"queries":[...]}`
+
+For multi-collection workloads, each query must identify its target collection (and database when needed). plgm validates query-to-collection mapping before execution and fails early on unknown or ambiguous references.
+Using the same collection name in different databases is supported (for example `db1.orders` and `db2.orders`).
+
+Example files:
+
+- [`resources/collections/multi_collections.json`](./resources/collections/multi_collections.json)
+- [`resources/queries/multi_queries.json`](./resources/queries/multi_queries.json)
+
 #### Default Workload Filtering
 When using **Directory Mode**, the behavior depends on the `PLGM_DEFAULT_WORKLOAD` setting:
 
@@ -734,6 +772,9 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `insights_explain_workers` | `PLGM_INSIGHTS_EXPLAIN_WORKERS` | Post-run explain worker count | `1` |
 | `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retry count for explain timeout/failure | `1` |
 | `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Backoff between explain retries (ms) | `150` |
+| **Sharding Strategy** | | | |
+| `sharding_mode` | `PLGM_SHARDING_MODE` | Per-collection sharding behavior: `auto`, `force_on`, `force_off` | `auto` |
+| `sharding_skip_generic_without_config` | `PLGM_SHARDING_SKIP_GENERIC_WITHOUT_CONFIG` | Skip generic sharding setup for collections without `shardConfig` (recommended for mixed workloads) | `true` |
 | **Workload Control** | | | |
 | `concurrency` | `PLGM_CONCURRENCY` | Number of active worker goroutines | `50` |
 | `duration` | `PLGM_DURATION` | Test duration (Go duration string) | `5m`, `60s` |
@@ -789,7 +830,7 @@ When executed, plgm performs the following steps:
     * Spawns the configured number of **Active Workers**.
     * Continuously generates and executes queries (Find, Insert, Update, Delete, Aggregate, Upsert) based on your configured ratios.
     * Generates realistic BSON data for Inserts and Updates (supports recursion and complex schemas).
-    * Workers pick a random collection from the provided list for every operation.
+    * Workers pick a random collection from the provided list for every operation, then route query execution using queries bound to that same database+collection.
 4.  **Reporting:**
     * Outputs a real-time status report every N seconds (configurable).
     * Prints a detailed summary table at the end of the run.

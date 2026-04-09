@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -263,7 +264,8 @@ func TestGenerateFallbackQuery(t *testing.T) {
 func TestSelectRandomQueryByType(t *testing.T) {
 	rng := rand.New(rand.NewSource(13))
 	col := config.CollectionDefinition{
-		Name: "users",
+		DatabaseName: "appdb",
+		Name:         "users",
 		Fields: map[string]config.CollectionField{
 			"user_id": {Type: "int"},
 		},
@@ -272,8 +274,9 @@ func TestSelectRandomQueryByType(t *testing.T) {
 
 	queryMap := map[string][]config.QueryDefinition{
 		"find": {
-			{Collection: "users", Operation: "find", Filter: map[string]interface{}{"a": 1}},
-			{Collection: "users", Operation: "find", Filter: map[string]interface{}{"a": 2}},
+			{Database: "appdb", Collection: "users", Operation: "find", Filter: map[string]interface{}{"a": 1}},
+			{Database: "otherdb", Collection: "users", Operation: "find", Filter: map[string]interface{}{"a": 2}},
+			{Database: "appdb", Collection: "orders", Operation: "find", Filter: map[string]interface{}{"a": 3}},
 		},
 	}
 
@@ -281,8 +284,8 @@ func TestSelectRandomQueryByType(t *testing.T) {
 	if !ok || got.Operation != "find" {
 		t.Fatalf("expected a configured find query, got %+v ok=%v", got, ok)
 	}
-	if !reflect.DeepEqual(got.Filter, map[string]interface{}{"a": 1}) && !reflect.DeepEqual(got.Filter, map[string]interface{}{"a": 2}) {
-		t.Fatalf("unexpected selected query: %+v", got)
+	if !reflect.DeepEqual(got.Filter, map[string]interface{}{"a": 1}) {
+		t.Fatalf("expected query matched by db+collection, got %+v", got)
 	}
 
 	fallback, ok := selectRandomQueryByType(nil, nil, "updateOne", map[string][]config.QueryDefinition{}, col, false, rng, "user_id", cfg)
@@ -352,6 +355,103 @@ func TestBuildOrderedShardKey(t *testing.T) {
 	}
 }
 
+func TestResolveShardKeyDoc(t *testing.T) {
+	t.Run("defaults_to_patch_key_when_shard_config_missing", func(t *testing.T) {
+		doc, isHashed, err := resolveShardKeyDoc(config.CollectionDefinition{Name: "orders"}, "order_id")
+		if err != nil {
+			t.Fatalf("resolveShardKeyDoc() error = %v", err)
+		}
+		if isHashed {
+			t.Fatalf("expected range shard key by default")
+		}
+		if len(doc) != 1 || doc[0].Key != "order_id" || doc[0].Value != 1 {
+			t.Fatalf("unexpected default shard key doc: %+v", doc)
+		}
+	})
+
+	t.Run("supports_hashed_shard_config", func(t *testing.T) {
+		col := config.CollectionDefinition{
+			Name: "orders",
+			ShardConfig: &config.ShardConfig{
+				Key: map[string]interface{}{"order_id": "hashed"},
+			},
+		}
+		doc, isHashed, err := resolveShardKeyDoc(col, "order_id")
+		if err != nil {
+			t.Fatalf("resolveShardKeyDoc() error = %v", err)
+		}
+		if !isHashed {
+			t.Fatalf("expected hashed flag")
+		}
+		if len(doc) != 1 || doc[0].Key != "order_id" || doc[0].Value != "hashed" {
+			t.Fatalf("unexpected hashed shard key doc: %+v", doc)
+		}
+	})
+
+	t.Run("errors_when_patch_key_empty", func(t *testing.T) {
+		_, _, err := resolveShardKeyDoc(config.CollectionDefinition{Name: "orders"}, "")
+		if err == nil {
+			t.Fatalf("expected error for empty patch key")
+		}
+	})
+}
+
+func TestEnsureGenericShardingRejectsNilDatabase(t *testing.T) {
+	err := ensureGenericSharding(context.Background(), nil, config.CollectionDefinition{Name: "orders"}, &config.AppConfig{})
+	if err == nil || !strings.Contains(err.Error(), "database handle is nil") {
+		t.Fatalf("expected nil db error, got %v", err)
+	}
+}
+
+func TestShouldApplyGenericSharding(t *testing.T) {
+	colWithConfig := config.CollectionDefinition{
+		DatabaseName: "bench",
+		Name:         "orders",
+		ShardConfig:  &config.ShardConfig{Key: map[string]interface{}{"order_id": 1}},
+	}
+	colWithoutConfig := config.CollectionDefinition{
+		DatabaseName: "bench",
+		Name:         "events",
+	}
+
+	tests := []struct {
+		name       string
+		mode       string
+		skipNoCfg  bool
+		isMongos   bool
+		col        config.CollectionDefinition
+		wantApply  bool
+		wantErrHas string
+	}{
+		{name: "force_off_always_skips", mode: "force_off", skipNoCfg: false, isMongos: true, col: colWithConfig, wantApply: false},
+		{name: "auto_skips_non_mongos", mode: "auto", skipNoCfg: false, isMongos: false, col: colWithConfig, wantApply: false},
+		{name: "auto_applies_on_mongos_when_config_present", mode: "auto", skipNoCfg: true, isMongos: true, col: colWithConfig, wantApply: true},
+		{name: "auto_skips_when_no_config_and_skip_enabled", mode: "auto", skipNoCfg: true, isMongos: true, col: colWithoutConfig, wantApply: false},
+		{name: "auto_applies_when_no_config_and_skip_disabled", mode: "auto", skipNoCfg: false, isMongos: true, col: colWithoutConfig, wantApply: true},
+		{name: "force_on_requires_mongos", mode: "force_on", skipNoCfg: false, isMongos: false, col: colWithConfig, wantErrHas: "requires mongos topology"},
+		{name: "force_on_conflict_with_skip_without_config", mode: "force_on", skipNoCfg: true, isMongos: true, col: colWithoutConfig, wantErrHas: "conflicts with sharding_skip_generic_without_config=true"},
+		{name: "force_on_applies_on_mongos", mode: "force_on", skipNoCfg: false, isMongos: true, col: colWithConfig, wantApply: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotApply, err := shouldApplyGenericSharding(tc.mode, tc.skipNoCfg, tc.isMongos, tc.col)
+			if tc.wantErrHas != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrHas) {
+					t.Fatalf("expected error containing %q, got %v", tc.wantErrHas, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotApply != tc.wantApply {
+				t.Fatalf("apply=%v, want %v", gotApply, tc.wantApply)
+			}
+		})
+	}
+}
+
 func TestRunWorkloadDurationNonPositiveRunsQueriesOnce(t *testing.T) {
 	ensureCalls := 0
 	runOnceCalled := false
@@ -381,10 +481,10 @@ func TestRunWorkloadDurationNonPositiveRunsQueriesOnce(t *testing.T) {
 		DebugMode: true,
 	}
 	cols := []config.CollectionDefinition{
-		{Name: "warn_col"},
-		{Name: "ok_col"},
+		{Name: "warn_col", DatabaseName: "benchdb"},
+		{Name: "ok_col", DatabaseName: "benchdb"},
 	}
-	queries := []config.QueryDefinition{{Operation: "find"}}
+	queries := []config.QueryDefinition{{Name: "find_warn_col", Database: "benchdb", Collection: "warn_col", Operation: "find", Filter: map[string]interface{}{}}}
 
 	if err := RunWorkload(context.Background(), nil, cols, queries, cfg); err != nil {
 		t.Fatalf("RunWorkload() error = %v", err)
@@ -394,6 +494,30 @@ func TestRunWorkloadDurationNonPositiveRunsQueriesOnce(t *testing.T) {
 	}
 	if !runOnceCalled {
 		t.Fatalf("expected runAllQueriesOnceFn to be called")
+	}
+}
+
+func TestRunWorkloadForceOnTreatsShardingErrorsAsFatal(t *testing.T) {
+	withMongoSeams(t, mongoSeams{
+		ensureGenericSharding: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+			return errors.New("simulated force_on failure")
+		},
+		runAllQueriesOnce: func(ctx context.Context, db *mongo.Database, queries []config.QueryDefinition, debug bool) error {
+			t.Fatalf("runAllQueriesOnce should not execute when force_on sharding setup fails")
+			return nil
+		},
+	})
+
+	cfg := &config.AppConfig{
+		Duration:     "0s",
+		ShardingMode: "force_on",
+	}
+	cols := []config.CollectionDefinition{{Name: "orders", DatabaseName: "bench"}}
+	queries := []config.QueryDefinition{{Name: "q1", Database: "bench", Collection: "orders", Operation: "find", Filter: map[string]interface{}{}}}
+
+	err := RunWorkload(context.Background(), nil, cols, queries, cfg)
+	if err == nil || !strings.Contains(err.Error(), "sharding setup failed") {
+		t.Fatalf("expected fatal sharding error for force_on, got %v", err)
 	}
 }
 
@@ -430,10 +554,10 @@ func TestRunWorkloadDurationPositiveBuildsWorkloadConfig(t *testing.T) {
 		AggregatePercent:   3,
 		TransactionPercent: 2,
 	}
-	cols := []config.CollectionDefinition{{Name: "users"}}
+	cols := []config.CollectionDefinition{{Name: "users", DatabaseName: "appdb"}}
 	queries := []config.QueryDefinition{
-		{Operation: "find", Collection: "users"},
-		{Operation: "updateOne", Collection: "users"},
+		{Name: "find_users", Database: "appdb", Operation: "find", Collection: "users", Filter: map[string]interface{}{}},
+		{Name: "update_users", Database: "appdb", Operation: "updateOne", Collection: "users", Filter: map[string]interface{}{}, Update: map[string]interface{}{"$set": map[string]interface{}{"a": 1}}},
 	}
 
 	if err := RunWorkload(context.Background(), nil, cols, queries, cfg); err != nil {
@@ -462,6 +586,43 @@ func TestRunWorkloadInvalidDurationReturnsError(t *testing.T) {
 	err := RunWorkload(context.Background(), nil, nil, nil, cfg)
 	if err == nil {
 		t.Fatalf("expected duration parse error")
+	}
+}
+
+func TestRunWorkloadFailsWhenQueryReferencesUnknownCollection(t *testing.T) {
+	cfg := &config.AppConfig{Duration: "0s"}
+	collections := []config.CollectionDefinition{
+		{DatabaseName: "db1", Name: "orders"},
+	}
+	queries := []config.QueryDefinition{
+		{Name: "find_missing", Collection: "missing", Operation: "find", Filter: map[string]interface{}{}},
+	}
+
+	err := RunWorkload(context.Background(), nil, collections, queries, cfg)
+	if err == nil || !strings.Contains(err.Error(), "unknown collection") {
+		t.Fatalf("expected unknown collection validation error, got %v", err)
+	}
+}
+
+func TestRunContinuousWorkloadReturnsErrorWhenWorkerPanics(t *testing.T) {
+	wCfg := workloadConfig{
+		appConfig: &config.AppConfig{
+			StatusRefreshRateSec: 1,
+			WebUI:                config.WebUIConfig{Enabled: true},
+		},
+		concurrency:    1,
+		duration:       100 * time.Millisecond,
+		collections:    nil, // triggers panic path in worker (random selection from empty slice)
+		maxInsertCache: 8,
+		collector:      stats.NewCollector(),
+	}
+
+	err := runContinuousWorkload(context.Background(), wCfg)
+	if err == nil {
+		t.Fatalf("expected panic-derived error from worker path")
+	}
+	if !strings.Contains(err.Error(), "panic in worker") {
+		t.Fatalf("expected worker panic context in error, got %v", err)
 	}
 }
 

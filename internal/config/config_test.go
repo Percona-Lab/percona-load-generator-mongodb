@@ -31,6 +31,9 @@ func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	if cfg.InsightsExplainWorkers != 1 || cfg.InsightsExplainRetries != 1 || cfg.InsightsExplainBackoffMS != 150 || cfg.InsightsExplainSeverityMode != "high_only" || cfg.InsightsExplainVerbosity != "executionStats" {
 		t.Fatalf("expected explain defaults workers=1 retries=1 backoff=150 mode=high_only verbosity=executionStats, got workers=%d retries=%d backoff=%d mode=%q verbosity=%q", cfg.InsightsExplainWorkers, cfg.InsightsExplainRetries, cfg.InsightsExplainBackoffMS, cfg.InsightsExplainSeverityMode, cfg.InsightsExplainVerbosity)
 	}
+	if cfg.ShardingMode != "auto" || !cfg.ShardingSkipGenericWithoutConfig {
+		t.Fatalf("expected sharding defaults mode=auto skip_without_config=true, got mode=%q skip=%v", cfg.ShardingMode, cfg.ShardingSkipGenericWithoutConfig)
+	}
 }
 
 func TestLoadAppConfigWithYAMLAndEnvOverrides(t *testing.T) {
@@ -178,5 +181,51 @@ func TestApplyBaseDefaultsNormalizesUnknownExplainVerbosity(t *testing.T) {
 	applyBaseDefaults(cfg)
 	if cfg.InsightsExplainVerbosity != "executionStats" {
 		t.Fatalf("expected invalid explain verbosity to normalize to executionStats, got %q", cfg.InsightsExplainVerbosity)
+	}
+}
+
+func TestNormalizeShardingMode(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "", want: "auto"},
+		{in: "AUTO", want: "auto"},
+		{in: "force_on", want: "force_on"},
+		{in: "FORCE_OFF", want: "force_off"},
+		{in: "unexpected", want: "auto"},
+	}
+
+	for _, tc := range tests {
+		if got := NormalizeShardingMode(tc.in); got != tc.want {
+			t.Fatalf("NormalizeShardingMode(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestValidateShardingConfig(t *testing.T) {
+	err := ValidateShardingConfig(&AppConfig{ShardingMode: "force_on", ShardingSkipGenericWithoutConfig: true})
+	if err == nil {
+		t.Fatalf("expected conflict error for force_on + skip_generic_without_config")
+	}
+
+	if err := ValidateShardingConfig(&AppConfig{ShardingMode: "auto", ShardingSkipGenericWithoutConfig: true}); err != nil {
+		t.Fatalf("unexpected error for valid sharding config: %v", err)
+	}
+}
+
+func TestApplyEnvOverridesShardingSettings(t *testing.T) {
+	cfg := &AppConfig{}
+	t.Setenv("PLGM_SHARDING_MODE", "force_off")
+	t.Setenv("PLGM_SHARDING_SKIP_GENERIC_WITHOUT_CONFIG", "true")
+
+	_ = applyEnvOverrides(cfg)
+	applyBaseDefaults(cfg)
+
+	if cfg.ShardingMode != "force_off" {
+		t.Fatalf("expected sharding mode force_off from env, got %q", cfg.ShardingMode)
+	}
+	if !cfg.ShardingSkipGenericWithoutConfig {
+		t.Fatalf("expected sharding skip-without-config true from env")
 	}
 }

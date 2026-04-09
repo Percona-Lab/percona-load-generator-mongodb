@@ -43,19 +43,37 @@ import (
 var staticFiles embed.FS
 
 type WebServer struct {
-	mu               sync.Mutex
-	IsRunning        bool
-	LastError        string
-	CurrentStats     *stats.Collector
-	ActiveCancel     context.CancelFunc
-	AppConfig        *config.AppConfig
-	CurrentIteration int
-	TotalIterations  int
-	IsWaiting        bool
-	IntervalStr      string
-	RunID            int64
-	InsightsCache    *stats.InsightsReport
-	ShapeTrendBase   map[string]float64
+	mu                sync.Mutex
+	IsRunning         bool
+	LastError         string
+	CurrentStats      *stats.Collector
+	ActiveCancel      context.CancelFunc
+	AppConfig         *config.AppConfig
+	CurrentIteration  int
+	TotalIterations   int
+	IsWaiting         bool
+	IntervalStr       string
+	RunID             int64
+	InsightsCache     *stats.InsightsReport
+	ShapeTrendBase    map[string]float64
+	LifecyclePhase    string
+	LifecycleMessage  string
+	LifecycleStep     string
+	LifecycleStepIdx  int
+	LifecycleStepTot  int
+	LifecycleStepDone int
+	LifecycleStepWork int
+	InitStartedAt     time.Time
+	ExecStartedAt     time.Time
+	CompletedAt       time.Time
+	InitDurationSec   float64
+	LifecycleEvents   []lifecycleEvent
+}
+
+type lifecycleEvent struct {
+	At       string `json:"at"`
+	Category string `json:"category"`
+	Message  string `json:"message"`
 }
 
 var (
@@ -74,6 +92,70 @@ func NewServer(cfg *config.AppConfig) *WebServer {
 	return &WebServer{
 		AppConfig:      cfg,
 		ShapeTrendBase: make(map[string]float64),
+		LifecyclePhase: "idle",
+	}
+}
+
+func (s *WebServer) setLifecyclePhaseLocked(phase, message string) {
+	prev := s.LifecyclePhase
+	s.LifecyclePhase = phase
+	s.LifecycleMessage = strings.TrimSpace(message)
+	now := time.Now()
+	switch phase {
+	case "initializing":
+		if s.InitStartedAt.IsZero() {
+			s.InitStartedAt = now
+		}
+	case "running":
+		if s.ExecStartedAt.IsZero() {
+			s.ExecStartedAt = now
+			if !s.InitStartedAt.IsZero() {
+				s.InitDurationSec = s.ExecStartedAt.Sub(s.InitStartedAt).Seconds()
+			}
+		}
+	case "completed", "failed":
+		s.CompletedAt = now
+	}
+	if prev != phase && phase != "" {
+		s.addLifecycleEventLocked("phase", fmt.Sprintf("Phase changed: %s", phase))
+	}
+}
+
+func (s *WebServer) setLifecycleStepLocked(step string, idx, total int) {
+	s.LifecycleStep = strings.TrimSpace(step)
+	s.LifecycleStepIdx = idx
+	s.LifecycleStepTot = total
+	s.LifecycleStepDone = 0
+	s.LifecycleStepWork = 0
+}
+
+func (s *WebServer) setLifecycleStepProgressLocked(done, work int) {
+	if done < 0 {
+		done = 0
+	}
+	if work < 0 {
+		work = 0
+	}
+	s.LifecycleStepDone = done
+	s.LifecycleStepWork = work
+}
+
+func (s *WebServer) addLifecycleEventLocked(category, message string) {
+	category = strings.TrimSpace(category)
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return
+	}
+	if category == "" {
+		category = "info"
+	}
+	s.LifecycleEvents = append(s.LifecycleEvents, lifecycleEvent{
+		At:       time.Now().Format(time.RFC3339),
+		Category: category,
+		Message:  message,
+	})
+	if len(s.LifecycleEvents) > 12 {
+		s.LifecycleEvents = s.LifecycleEvents[len(s.LifecycleEvents)-12:]
 	}
 }
 
@@ -183,6 +265,18 @@ func explainCollectionsFormatError(raw []byte, wrappedErr error, arrErr error) s
 	return base
 }
 
+func explainQueriesFormatError(raw []byte, wrappedErr error, arrErr error) string {
+	body := string(raw)
+	base := "invalid queries format: expected either [{...}] or {\"queries\":[...]} with query definitions"
+	if strings.Contains(body, "\"query\"") && !strings.Contains(body, "\"queries\"") {
+		base = "invalid queries format: use top-level key 'queries' (plural) when using wrapped format"
+	}
+	if wrappedErr != nil || arrErr != nil {
+		base = fmt.Sprintf("%s (wrapper parse: %v; array parse: %v)", base, wrappedErr, arrErr)
+	}
+	return base
+}
+
 func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeStartError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -198,6 +292,17 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.IsRunning = true
 	s.RunID++
 	s.InsightsCache = nil
+	s.LastError = ""
+	s.InitStartedAt = time.Now()
+	s.ExecStartedAt = time.Time{}
+	s.CompletedAt = time.Time{}
+	s.InitDurationSec = 0
+	s.LifecycleEvents = nil
+	s.setLifecyclePhaseLocked("initializing", "Preparing workload resources")
+	s.setLifecycleStepLocked("Reading configuration", 1, 5)
+	s.setLifecycleStepProgressLocked(1, 1)
+	s.addLifecycleEventLocked("phase", "Initialization started")
+	s.addLifecycleEventLocked("config", "Reading run configuration and validating inputs")
 
 	baseCfg := *s.AppConfig
 	s.mu.Unlock()
@@ -270,6 +375,14 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainWorkers = parseInt(r.FormValue("insights_explain_workers"), cfg.InsightsExplainWorkers)
 	cfg.InsightsExplainRetries = parseInt(r.FormValue("insights_explain_retries"), cfg.InsightsExplainRetries)
 	cfg.InsightsExplainBackoffMS = parseInt(r.FormValue("insights_explain_backoff_ms"), cfg.InsightsExplainBackoffMS)
+	if mode := r.FormValue("sharding_mode"); mode != "" {
+		cfg.ShardingMode = config.NormalizeShardingMode(mode)
+	} else {
+		cfg.ShardingMode = config.NormalizeShardingMode(cfg.ShardingMode)
+	}
+	if _, ok := r.Form["sharding_skip_generic_without_config"]; ok {
+		cfg.ShardingSkipGenericWithoutConfig = r.FormValue("sharding_skip_generic_without_config") == "true" || r.FormValue("sharding_skip_generic_without_config") == "on"
+	}
 
 	cfg.ConnectionParams.ConnectionTimeout = parseInt(r.FormValue("connection_timeout"), cfg.ConnectionParams.ConnectionTimeout)
 	cfg.ConnectionParams.ServerSelectionTimeout = parseInt(r.FormValue("server_selection_timeout"), cfg.ConnectionParams.ServerSelectionTimeout)
@@ -335,36 +448,28 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				writeStartError(w, http.StatusBadRequest, "failed to read uploaded collections_file: "+readErr.Error())
 				return
 			}
-			var wrapped config.CollectionsFile
-			wrappedErr := json.Unmarshal(b, &wrapped)
-			if wrappedErr == nil && len(wrapped.Collections) > 0 {
-				customCollections = &wrapped
-			} else {
+			parsed, parseErr := config.ParseCollectionsBytes(b)
+			if parseErr != nil {
+				var wrapped config.CollectionsFile
+				wrappedErr := json.Unmarshal(b, &wrapped)
 				var arr []config.CollectionDefinition
 				arrErr := json.Unmarshal(b, &arr)
-				if arrErr == nil && len(arr) > 0 {
-					customCollections = &config.CollectionsFile{Collections: arr}
-				} else {
-					parseMsg := explainCollectionsFormatError(b, wrappedErr, arrErr)
-					s.abortRun("Failed to parse custom collections_file: " + parseMsg)
-					writeStartError(w, http.StatusBadRequest, parseMsg)
-					return
-				}
+				parseMsg := explainCollectionsFormatError(b, wrappedErr, arrErr)
+				s.abortRun("Failed to parse custom collections_file: " + parseMsg)
+				writeStartError(w, http.StatusBadRequest, parseMsg)
+				return
 			}
+			customCollections = parsed
 
-			if customCollections != nil {
-				for i, col := range customCollections.Collections {
-					if col.DatabaseName == "" || col.Name == "" {
-						msg := fmt.Sprintf("invalid collections format: item %d is missing required keys 'database' or 'collection'", i)
-						body := string(b)
-						if strings.Contains(body, "\"databaseName\"") || strings.Contains(body, "\"collectionName\"") {
-							msg = "invalid collections format: use keys 'database' and 'collection' (not 'databaseName'/'collectionName')"
-						}
-						s.abortRun(msg)
-						writeStartError(w, http.StatusBadRequest, msg)
-						return
-					}
+			if err := config.ValidateCollectionDefinitions(customCollections.Collections); err != nil {
+				msg := err.Error()
+				body := string(b)
+				if strings.Contains(body, "\"databaseName\"") || strings.Contains(body, "\"collectionName\"") {
+					msg = "invalid collections format: use keys 'database' and 'collection' (not 'databaseName'/'collectionName')"
 				}
+				s.abortRun("Failed to validate custom collections_file: " + msg)
+				writeStartError(w, http.StatusBadRequest, msg)
+				return
 			}
 		}
 
@@ -377,24 +482,30 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				writeStartError(w, http.StatusBadRequest, "failed to read uploaded queries_file: "+readErr.Error())
 				return
 			}
-			var defs []config.QueryDefinition
-			if err := json.Unmarshal(b, &defs); err == nil && len(defs) > 0 {
+			parsed, parseErr := config.ParseQueriesBytes(b)
+			if parseErr == nil {
 				sourceFile := "uploaded_queries.json"
 				if queryHeader != nil && strings.TrimSpace(queryHeader.Filename) != "" {
 					sourceFile = queryHeader.Filename
 				}
-				for i := range defs {
-					defs[i].SourceType = "uploaded_file"
-					defs[i].SourceFile = sourceFile
-					defs[i].WorkloadName = "custom_workload"
-					defs[i].DefinitionIndex = i
+				for i := range parsed.Queries {
+					parsed.Queries[i].SourceType = "uploaded_file"
+					parsed.Queries[i].SourceFile = sourceFile
+					parsed.Queries[i].WorkloadName = "custom_workload"
+					parsed.Queries[i].DefinitionIndex = i
 				}
-				customQueries = &config.QueriesFile{Queries: defs}
+				if err := config.NormalizeAndValidateQueries(parsed.Queries); err != nil {
+					s.abortRun("Failed to validate custom queries_file: " + err.Error())
+					writeStartError(w, http.StatusBadRequest, err.Error())
+					return
+				}
+				customQueries = parsed
 			} else {
-				msg := "invalid queries format: expected JSON array of query definitions"
-				if err != nil {
-					msg = fmt.Sprintf("%s (%v)", msg, err)
-				}
+				var wrapped config.QueriesFile
+				wrappedErr := json.Unmarshal(b, &wrapped)
+				var arr []config.QueryDefinition
+				arrErr := json.Unmarshal(b, &arr)
+				msg := explainQueriesFormatError(b, wrappedErr, arrErr)
 				s.abortRun("Failed to parse custom queries_file: " + msg)
 				writeStartError(w, http.StatusBadRequest, msg)
 				return
@@ -429,6 +540,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if cfg.Duration == "" {
 		cfg.Duration = "10s"
 	}
+	if err := config.ValidateShardingConfig(cfg); err != nil {
+		s.abortRun("Invalid sharding settings: " + err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -436,6 +552,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	// EXECUTION BRANCH 1: RAW INJECTOR
 	// -----------------------------------------------------------------------
 	if cfg.RawInjector.Enabled {
+		s.mu.Lock()
+		s.setLifecycleStepLocked("Connecting raw injector", 1, 1)
+		s.mu.Unlock()
 		dbName := cfg.RawInjector.DBName
 		if dbName == "" {
 			dbName = "plgm_injector"
@@ -467,12 +586,31 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					msg := fmt.Sprintf("Raw Injector crashed unexpectedly: %v", r)
+					log.Println("UI Run Panic:", msg)
+					s.mu.Lock()
+					s.LastError = msg
+					s.IsRunning = false
+					s.setLifecyclePhaseLocked("failed", "Raw injector crashed unexpectedly")
+					s.mu.Unlock()
+				}
+			}()
 			defer disconnectFn(benchConn, context.Background())
 			defer func() {
 				s.mu.Lock()
 				s.IsRunning = false
+				if s.LastError == "" {
+					s.setLifecyclePhaseLocked("completed", "Raw injector run completed")
+				}
 				s.mu.Unlock()
 			}()
+
+			s.mu.Lock()
+			s.setLifecyclePhaseLocked("initializing", "Preparing raw injector execution")
+			s.setLifecycleStepLocked("Starting injector workers", 1, 1)
+			s.mu.Unlock()
 
 			intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
 
@@ -493,6 +631,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 						log.Println("UI Run Error:", msg)
 						s.mu.Lock()
 						s.LastError = msg
+						s.setLifecyclePhaseLocked("failed", "Raw injector execution failed")
 						s.mu.Unlock()
 						break
 					}
@@ -518,6 +657,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	// -----------------------------------------------------------------------
 	var collectionsCfg *config.CollectionsFile
 	var loadErr error
+	s.mu.Lock()
+	s.setLifecycleStepLocked("Loading collections", 1, 5)
+	s.setLifecycleStepProgressLocked(0, 1)
+	s.addLifecycleEventLocked("init", "Loading collection definitions")
+	s.mu.Unlock()
 
 	if customCollections != nil {
 		collectionsCfg = customCollections
@@ -533,6 +677,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var queriesCfg *config.QueriesFile
+	s.mu.Lock()
+	s.setLifecycleStepLocked("Loading queries", 2, 5)
+	s.setLifecycleStepProgressLocked(0, 1)
+	s.addLifecycleEventLocked("init", "Loading query definitions")
+	s.mu.Unlock()
 	if customQueries != nil {
 		queriesCfg = customQueries
 	} else {
@@ -555,18 +704,34 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validCollections := make(map[string]bool)
-	for _, col := range collectionsCfg.Collections {
-		validCollections[col.Name] = true
+	if err := config.ValidateCollectionDefinitions(collectionsCfg.Collections); err != nil {
+		s.abortRun("Collection validation failed: " + err.Error())
+		cancel()
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	var filteredQueries []config.QueryDefinition
-	for _, q := range queriesCfg.Queries {
-		if validCollections[q.Collection] {
-			filteredQueries = append(filteredQueries, q)
-		}
+
+	if err := config.NormalizeAndValidateQueries(queriesCfg.Queries); err != nil {
+		s.abortRun("Query validation failed: " + err.Error())
+		cancel()
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	queriesCfg.Queries = filteredQueries
+
+	boundQueries, bindErr := config.ValidateAndBindQueriesToCollections(queriesCfg.Queries, collectionsCfg.Collections)
+	if bindErr != nil {
+		s.abortRun("Query-to-collection validation failed: " + bindErr.Error())
+		cancel()
+		writeStartError(w, http.StatusBadRequest, bindErr.Error())
+		return
+	}
+	queriesCfg.Queries = boundQueries
 	dbName := collectionsCfg.Collections[0].DatabaseName
+	s.mu.Lock()
+	s.setLifecycleStepLocked("Connecting to database", 3, 5)
+	s.setLifecycleStepProgressLocked(0, 1)
+	s.addLifecycleEventLocked("init", fmt.Sprintf("Connecting to database %q", dbName))
+	s.mu.Unlock()
 
 	benchConn, connectErr := connectFn(ctx, cfg, dbName)
 	if connectErr != nil {
@@ -595,42 +760,112 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				msg := fmt.Sprintf("Workload crashed unexpectedly: %v", r)
+				log.Println("UI Run Panic:", msg)
+				s.mu.Lock()
+				s.LastError = msg
+				s.IsRunning = false
+				s.setLifecyclePhaseLocked("failed", "Initialization or workload execution crashed unexpectedly")
+				s.mu.Unlock()
+			}
+		}()
 		defer disconnectFn(benchConn, context.Background())
 		defer func() {
 			s.mu.Lock()
 			s.IsRunning = false
+			if s.LastError == "" {
+				s.setLifecyclePhaseLocked("completed", "Workload completed")
+			}
 			s.mu.Unlock()
 		}()
 
+		s.mu.Lock()
+		s.setLifecycleStepLocked("Preparing collections", 4, 5)
+		s.setLifecycleStepProgressLocked(0, len(collectionsCfg.Collections))
+		s.addLifecycleEventLocked("init", fmt.Sprintf("Preparing %d collections", len(collectionsCfg.Collections)))
+		s.mu.Unlock()
 		if err := createCollectionsFn(ctx, benchConn.Database, collectionsCfg, cfg.DropCollections); err != nil {
 			msg := fmt.Sprintf("Failed to create collections: %v", err)
 			log.Println("UI Run Error:", msg)
 			s.mu.Lock()
 			s.LastError = msg
+			s.setLifecyclePhaseLocked("failed", "Initialization failed while creating collections")
 			s.mu.Unlock()
 			return
 		}
+		s.mu.Lock()
+		s.setLifecycleStepProgressLocked(len(collectionsCfg.Collections), len(collectionsCfg.Collections))
+		s.addLifecycleEventLocked("init", fmt.Sprintf("Collections ready: %d", len(collectionsCfg.Collections)))
+		s.mu.Unlock()
+
+		s.mu.Lock()
+		s.setLifecycleStepLocked("Creating indexes", 5, 5)
+		totalIndexes := 0
+		for _, col := range collectionsCfg.Collections {
+			totalIndexes += len(col.Indexes)
+		}
+		if totalIndexes <= 0 {
+			totalIndexes = 1
+		}
+		s.setLifecycleStepProgressLocked(0, totalIndexes)
+		s.addLifecycleEventLocked("init", fmt.Sprintf("Starting index creation across %d collections", len(collectionsCfg.Collections)))
+		s.mu.Unlock()
 		if err := createIndexesFn(ctx, benchConn.Database, collectionsCfg); err != nil {
 			msg := fmt.Sprintf("Failed to create indexes: %v", err)
 			log.Println("UI Run Error:", msg)
 			s.mu.Lock()
 			s.LastError = msg
+			s.setLifecyclePhaseLocked("failed", "Initialization failed while creating indexes")
 			s.mu.Unlock()
 			return
 		}
+		s.mu.Lock()
+		totalIndexes = 0
+		for _, col := range collectionsCfg.Collections {
+			totalIndexes += len(col.Indexes)
+		}
+		if totalIndexes <= 0 {
+			totalIndexes = 1
+		}
+		s.setLifecycleStepProgressLocked(totalIndexes, totalIndexes)
+		s.addLifecycleEventLocked("init", "Index creation finished")
+		s.mu.Unlock()
 
 		if !cfg.SkipSeed && cfg.DocumentsCount > 0 {
+			s.mu.Lock()
+			s.setLifecycleStepLocked("Seeding initial data", 5, 5)
+			s.setLifecycleStepProgressLocked(0, len(collectionsCfg.Collections))
+			s.addLifecycleEventLocked("init", fmt.Sprintf("Seeding up to %d documents per collection", cfg.DocumentsCount))
+			s.mu.Unlock()
+			seeded := 0
 			for _, col := range collectionsCfg.Collections {
 				if err := insertRandomDocsFn(ctx, benchConn.Database, col, cfg.DocumentsCount, cfg); err != nil {
 					msg := fmt.Sprintf("Failed during data seeding: %v", err)
 					log.Println("UI Run Error:", msg)
 					s.mu.Lock()
 					s.LastError = msg
+					s.setLifecyclePhaseLocked("failed", "Initialization failed while seeding data")
 					s.mu.Unlock()
 					return
 				}
+				seeded++
+				s.mu.Lock()
+				s.setLifecycleStepProgressLocked(seeded, len(collectionsCfg.Collections))
+				s.mu.Unlock()
 			}
+			s.mu.Lock()
+			s.addLifecycleEventLocked("init", "Data seeding completed")
+			s.mu.Unlock()
 		}
+
+		s.mu.Lock()
+		s.setLifecyclePhaseLocked("initializing", "Finalizing execution setup")
+		s.setLifecycleStepLocked("Applying sharding and runtime setup", 5, 5)
+		s.setLifecycleStepProgressLocked(0, len(collectionsCfg.Collections))
+		s.addLifecycleEventLocked("init", fmt.Sprintf("Applying sharding/runtime setup for %d collections", len(collectionsCfg.Collections)))
+		s.mu.Unlock()
 
 		intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
 
@@ -651,6 +886,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 					log.Println("UI Run Error:", msg)
 					s.mu.Lock()
 					s.LastError = msg
+					s.setLifecyclePhaseLocked("failed", "Execution failed")
 					s.mu.Unlock()
 					break
 				}
@@ -673,7 +909,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 func (s *WebServer) abortRun(reason string) {
 	log.Println("Run aborted:", reason)
 	s.mu.Lock()
+	s.LastError = reason
 	s.IsRunning = false
+	s.setLifecyclePhaseLocked("failed", reason)
 	s.mu.Unlock()
 }
 
@@ -689,6 +927,7 @@ func (s *WebServer) handleStop(w http.ResponseWriter, r *http.Request) {
 	if s.IsRunning && s.ActiveCancel != nil {
 		s.ActiveCancel()
 		s.IsRunning = false
+		s.setLifecyclePhaseLocked("failed", "Run stopped by user")
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -708,29 +947,163 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	totIter := s.TotalIterations
 	isWait := s.IsWaiting
 	intStr := s.IntervalStr
+	lifecyclePhase := s.LifecyclePhase
+	lifecycleMessage := s.LifecycleMessage
+	lifecycleStep := s.LifecycleStep
+	lifecycleStepIdx := s.LifecycleStepIdx
+	lifecycleStepTot := s.LifecycleStepTot
+	lifecycleStepDone := s.LifecycleStepDone
+	lifecycleStepWork := s.LifecycleStepWork
+	initStartedAt := s.InitStartedAt
+	execStartedAt := s.ExecStartedAt
+	completedAt := s.CompletedAt
+	initDurationSec := s.InitDurationSec
+	lifecycleEvents := append([]lifecycleEvent(nil), s.LifecycleEvents...)
 	s.mu.Unlock()
+
+	now := time.Now()
+	findOps := uint64(0)
+	insertOps := uint64(0)
+	upsertOps := uint64(0)
+	updateOps := uint64(0)
+	deleteOps := uint64(0)
+	aggOps := uint64(0)
+	if collector != nil {
+		findOps = atomic.LoadUint64(&collector.FindOps)
+		insertOps = atomic.LoadUint64(&collector.InsertOps)
+		upsertOps = atomic.LoadUint64(&collector.UpsertOps)
+		updateOps = atomic.LoadUint64(&collector.UpdateOps)
+		deleteOps = atomic.LoadUint64(&collector.DeleteOps)
+		aggOps = atomic.LoadUint64(&collector.AggOps)
+	}
+	totalOps := findOps + insertOps + upsertOps + updateOps + deleteOps + aggOps
+	if running && lifecyclePhase == "initializing" && totalOps > 0 {
+		s.mu.Lock()
+		if s.LifecyclePhase == "initializing" {
+			s.setLifecyclePhaseLocked("running", "Executing workload")
+			s.LifecycleStep = ""
+			s.LifecycleStepIdx = 0
+			s.LifecycleStepTot = 0
+			s.LifecycleStepDone = 0
+			s.LifecycleStepWork = 0
+			s.addLifecycleEventLocked("phase", "Execution phase started")
+			lifecyclePhase = s.LifecyclePhase
+			lifecycleMessage = s.LifecycleMessage
+			lifecycleStep = s.LifecycleStep
+			lifecycleStepIdx = s.LifecycleStepIdx
+			lifecycleStepTot = s.LifecycleStepTot
+			lifecycleStepDone = s.LifecycleStepDone
+			lifecycleStepWork = s.LifecycleStepWork
+			lifecycleEvents = append([]lifecycleEvent(nil), s.LifecycleEvents...)
+			execStartedAt = s.ExecStartedAt
+			initDurationSec = s.InitDurationSec
+		}
+		s.mu.Unlock()
+	}
+	execElapsedSec := 0.0
+	switch lifecyclePhase {
+	case "running":
+		if !execStartedAt.IsZero() {
+			execElapsedSec = now.Sub(execStartedAt).Seconds()
+		}
+	case "completed", "failed":
+		if !execStartedAt.IsZero() {
+			end := completedAt
+			if end.IsZero() {
+				end = now
+			}
+			execElapsedSec = end.Sub(execStartedAt).Seconds()
+		}
+	}
+	if execElapsedSec < 0 {
+		execElapsedSec = 0
+	}
+	if initDurationSec <= 0 && !initStartedAt.IsZero() && !execStartedAt.IsZero() {
+		initDurationSec = execStartedAt.Sub(initStartedAt).Seconds()
+	}
+	stepProgressPct := 0.0
+	if lifecycleStepWork > 0 {
+		stepProgressPct = (float64(lifecycleStepDone) / float64(lifecycleStepWork)) * 100.0
+		if stepProgressPct > 100 {
+			stepProgressPct = 100
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if collector == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{"isRunning": false})
+		if lifecyclePhase == "" {
+			lifecyclePhase = "idle"
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"isRunning":                 running,
+			"lastError":                 lastErr,
+			"lifecyclePhase":            lifecyclePhase,
+			"lifecycleMessage":          lifecycleMessage,
+			"lifecycleStep":             lifecycleStep,
+			"lifecycleStepIndex":        lifecycleStepIdx,
+			"lifecycleStepTotal":        lifecycleStepTot,
+			"lifecycleStepDone":         lifecycleStepDone,
+			"lifecycleStepWork":         lifecycleStepWork,
+			"lifecycleStepProgressPct":  stepProgressPct,
+			"lifecycleRecentEvents":     lifecycleEvents,
+			"initializationDurationSec": initDurationSec,
+			"executionElapsedSec":       execElapsedSec,
+			"lifecycle": map[string]interface{}{
+				"phase":                       lifecyclePhase,
+				"message":                     lifecycleMessage,
+				"step":                        lifecycleStep,
+				"step_index":                  lifecycleStepIdx,
+				"step_total":                  lifecycleStepTot,
+				"step_done":                   lifecycleStepDone,
+				"step_work":                   lifecycleStepWork,
+				"step_progress_pct":           stepProgressPct,
+				"initialization_duration_sec": initDurationSec,
+				"execution_elapsed_sec":       execElapsedSec,
+				"recent_events":               lifecycleEvents,
+			},
+		})
 		return
 	}
 
 	statsResp := map[string]interface{}{
-		"isRunning":        running,
-		"lastError":        lastErr,
-		"duration":         durationStr,
-		"currentIteration": curIter,
-		"totalIterations":  totIter,
-		"isWaiting":        isWait,
-		"intervalDelay":    intStr,
+		"isRunning":                 running,
+		"lastError":                 lastErr,
+		"duration":                  durationStr,
+		"currentIteration":          curIter,
+		"totalIterations":           totIter,
+		"isWaiting":                 isWait,
+		"intervalDelay":             intStr,
+		"lifecyclePhase":            lifecyclePhase,
+		"lifecycleMessage":          lifecycleMessage,
+		"lifecycleStep":             lifecycleStep,
+		"lifecycleStepIndex":        lifecycleStepIdx,
+		"lifecycleStepTotal":        lifecycleStepTot,
+		"lifecycleStepDone":         lifecycleStepDone,
+		"lifecycleStepWork":         lifecycleStepWork,
+		"lifecycleStepProgressPct":  stepProgressPct,
+		"lifecycleRecentEvents":     lifecycleEvents,
+		"initializationDurationSec": initDurationSec,
+		"executionElapsedSec":       execElapsedSec,
+		"lifecycle": map[string]interface{}{
+			"phase":                       lifecyclePhase,
+			"message":                     lifecycleMessage,
+			"step":                        lifecycleStep,
+			"step_index":                  lifecycleStepIdx,
+			"step_total":                  lifecycleStepTot,
+			"step_done":                   lifecycleStepDone,
+			"step_work":                   lifecycleStepWork,
+			"step_progress_pct":           stepProgressPct,
+			"initialization_duration_sec": initDurationSec,
+			"execution_elapsed_sec":       execElapsedSec,
+			"recent_events":               lifecycleEvents,
+		},
 
-		"findOps":   atomic.LoadUint64(&collector.FindOps),
-		"insertOps": atomic.LoadUint64(&collector.InsertOps),
-		"upsertOps": atomic.LoadUint64(&collector.UpsertOps),
-		"updateOps": atomic.LoadUint64(&collector.UpdateOps),
-		"deleteOps": atomic.LoadUint64(&collector.DeleteOps),
-		"aggOps":    atomic.LoadUint64(&collector.AggOps),
+		"findOps":   findOps,
+		"insertOps": insertOps,
+		"upsertOps": upsertOps,
+		"updateOps": updateOps,
+		"deleteOps": deleteOps,
+		"aggOps":    aggOps,
 
 		"findLatAvg":   collector.FindHist.GetAverage(),
 		"insertLatAvg": collector.InsertHist.GetAverage(),

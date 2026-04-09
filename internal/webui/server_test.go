@@ -166,20 +166,209 @@ func TestHandleStartCustomCollectionsWrongKeysReturnsActionableError(t *testing.
 	rec := httptest.NewRecorder()
 
 	s.handleStart(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d body=%s", rec.Code, rec.Body.String())
-	}
-	var payload map[string]interface{}
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("expected JSON error payload, got decode error: %v body=%s", err, rec.Body.String())
-	}
-	if payload["status"] != "error" {
-		t.Fatalf("expected error status, got %+v", payload)
-	}
-	msg, _ := payload["message"].(string)
+	assertStartErrorResponse(t, rec, http.StatusBadRequest, "databaseName")
+	msg := decodeJSONMap(t, rec.Body.Bytes())["message"].(string)
 	if !strings.Contains(msg, "databaseName") || !strings.Contains(msg, "database") {
 		t.Fatalf("expected actionable key-mismatch message, got %q", msg)
+	}
+}
+
+func TestHandleStartCustomCollectionsInvalidRangeReturnsActionableError(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	if err := w.WriteField("default_workload", "false"); err != nil {
+		t.Fatalf("write field: %v", err)
+	}
+	part, err := w.CreateFormFile("collections_file", "collections.json")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := part.Write([]byte(`{"collections":[{"database":"shop","collection":"orders","fields":{"amount":{"type":"int","min":100,"max":1}}}]}`)); err != nil {
+		t.Fatalf("write file content: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/start", &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	s.handleStart(rec, req)
+	assertStartErrorResponse(t, rec, http.StatusBadRequest, "invalid min/max")
+	msg := decodeJSONMap(t, rec.Body.Bytes())["message"].(string)
+	if !strings.Contains(msg, "invalid min/max") {
+		t.Fatalf("expected actionable min/max validation message, got %q", msg)
+	}
+}
+
+func TestHandleStartMalformedUploadsReturnUICompatibleErrorPayload(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+
+	tests := []struct {
+		name            string
+		files           map[string]string
+		wantStatusCode  int
+		wantMessageLike string
+	}{
+		{
+			name: "malformed_collections_json",
+			files: map[string]string{
+				"collections_file": `{"collections":[{"database":"shop","collection":"orders","fields":{}}`,
+				"queries_file":     `[{"name":"find_orders","collection":"orders","operation":"find","filter":{}}]`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "invalid collections format",
+		},
+		{
+			name: "malformed_queries_json",
+			files: map[string]string{
+				"collections_file": `[{"database":"shop","collection":"orders","fields":{}}]`,
+				"queries_file":     `{"queries":[{"name":"find_orders","collection":"orders","operation":"find","filter":{}}`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "invalid queries format",
+		},
+		{
+			name: "queries_wrong_wrapped_key",
+			files: map[string]string{
+				"collections_file": `[{"database":"shop","collection":"orders","fields":{}}]`,
+				"queries_file":     `{"query":[{"name":"find_orders","collection":"orders","operation":"find","filter":{}}]}`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "queries format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, rec := newMultipartRequest(t, map[string]string{
+				"default_workload": "false",
+			}, tc.files)
+
+			s.handleStart(rec, req)
+			assertStartErrorResponse(t, rec, tc.wantStatusCode, tc.wantMessageLike)
+		})
+	}
+}
+
+func TestHandleStartSemanticUploadValidationErrorsReturnUICompatiblePayload(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+
+	tests := []struct {
+		name            string
+		files           map[string]string
+		wantStatusCode  int
+		wantMessageLike string
+	}{
+		{
+			name: "query_missing_operation",
+			files: map[string]string{
+				"collections_file": `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`,
+				"queries_file":     `{"queries":[{"name":"bad_query","collection":"orders","filter":{}}]}`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "invalid query operation",
+		},
+		{
+			name: "query_references_unknown_collection",
+			files: map[string]string{
+				"collections_file": `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`,
+				"queries_file":     `{"queries":[{"name":"find_missing","collection":"customers","operation":"find","filter":{}}]}`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "unknown collection",
+		},
+		{
+			name: "ambiguous_collection_without_database",
+			files: map[string]string{
+				"collections_file": `{"collections":[{"database":"shop_a","collection":"orders","fields":{}},{"database":"shop_b","collection":"orders","fields":{}}]}`,
+				"queries_file":     `{"queries":[{"name":"ambiguous_orders","collection":"orders","operation":"find","filter":{}}]}`,
+			},
+			wantStatusCode:  http.StatusBadRequest,
+			wantMessageLike: "exists in multiple databases",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req, rec := newMultipartRequest(t, map[string]string{
+				"default_workload": "false",
+			}, tc.files)
+
+			s.handleStart(rec, req)
+			assertStartErrorResponse(t, rec, tc.wantStatusCode, tc.wantMessageLike)
+		})
+	}
+}
+
+func TestHandleStartRejectsConflictingShardingSettings(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+	req, rec := newMultipartRequest(t, map[string]string{
+		"default_workload":                     "false",
+		"sharding_mode":                        "force_on",
+		"sharding_skip_generic_without_config": "true",
+	}, map[string]string{
+		"collections_file": `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`,
+		"queries_file":     `{"queries":[{"name":"find_orders","collection":"orders","operation":"find","filter":{}}]}`,
+	})
+
+	s.handleStart(rec, req)
+	assertStartErrorResponse(t, rec, http.StatusBadRequest, "sharding_mode=force_on conflicts")
+}
+
+func TestHandleStartSuccessWithDuplicateCollectionNamesAcrossDatabasesAndExplicitQueryDatabase(t *testing.T) {
+	connectedDBName := ""
+	runWorkloadCalled := make(chan []config.QueryDefinition, 1)
+
+	withWebUISeams(t, webuiSeams{
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			connectedDBName = dbName
+			return &db.Connection{}, nil
+		},
+		disconnect: func(c *db.Connection, ctx context.Context) {},
+		createCollections: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile, drop bool) error {
+			return nil
+		},
+		createIndexes: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile) error {
+			return nil
+		},
+		runWorkload: func(ctx context.Context, database *driverMongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
+			runWorkloadCalled <- append([]config.QueryDefinition(nil), queries...)
+			return nil
+		},
+	})
+
+	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	req, rec := newMultipartRequest(t,
+		map[string]string{"default_workload": "false"},
+		map[string]string{
+			"collections_file": `{"collections":[{"database":"shop_a","collection":"orders","fields":{}},{"database":"shop_b","collection":"orders","fields":{}}]}`,
+			"queries_file":     `{"queries":[{"name":"find_orders_a","database":"shop_a","collection":"orders","operation":"find","filter":{}},{"name":"find_orders_b","database":"shop_b","collection":"orders","operation":"find","filter":{}}]}`,
+		},
+	)
+	s.handleStart(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case queries := <-runWorkloadCalled:
+		if len(queries) != 2 {
+			t.Fatalf("expected 2 bound queries, got %+v", queries)
+		}
+		if queries[0].Database == queries[1].Database {
+			t.Fatalf("expected queries to remain bound to different databases, got %+v", queries)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected runWorkload to be called")
+	}
+
+	if connectedDBName != "shop_a" {
+		t.Fatalf("expected initial DB connection from first collection, got %q", connectedDBName)
 	}
 }
 
@@ -220,6 +409,9 @@ func TestHandleStats(t *testing.T) {
 
 	t.Run("without_collector", func(t *testing.T) {
 		s.CurrentStats = nil
+		s.IsRunning = true
+		s.LifecyclePhase = "initializing"
+		s.LifecycleMessage = "Preparing workload resources"
 		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		rec := httptest.NewRecorder()
 		s.handleStats(rec, req)
@@ -230,8 +422,18 @@ func TestHandleStats(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("decode stats: %v", err)
 		}
-		if payload["isRunning"] != false {
-			t.Fatalf("expected isRunning=false without collector, got %+v", payload)
+		if payload["isRunning"] != true {
+			t.Fatalf("expected isRunning=true during initialization without collector, got %+v", payload)
+		}
+		if payload["lifecyclePhase"] != "initializing" {
+			t.Fatalf("expected lifecyclePhase=initializing, got %+v", payload["lifecyclePhase"])
+		}
+		lifecycle, ok := payload["lifecycle"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected structured lifecycle payload, got %+v", payload["lifecycle"])
+		}
+		if lifecycle["phase"] != "initializing" {
+			t.Fatalf("expected lifecycle.phase=initializing, got %+v", lifecycle["phase"])
 		}
 	})
 
@@ -246,6 +448,8 @@ func TestHandleStats(t *testing.T) {
 		s.IsWaiting = true
 		s.IntervalStr = "1s"
 		s.AppConfig = &config.AppConfig{Duration: "7s"}
+		s.LifecyclePhase = "initializing"
+		s.InitStartedAt = time.Now().Add(-3 * time.Second)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 		rec := httptest.NewRecorder()
@@ -265,6 +469,37 @@ func TestHandleStats(t *testing.T) {
 		}
 		if payload["findOps"].(float64) != 1 {
 			t.Fatalf("expected findOps=1, got %v", payload["findOps"])
+		}
+		if payload["lifecyclePhase"] != "running" {
+			t.Fatalf("expected lifecycle to transition to running after first observed operations, got %v", payload["lifecyclePhase"])
+		}
+		if payload["executionElapsedSec"].(float64) < 0 {
+			t.Fatalf("expected non-negative executionElapsedSec, got %v", payload["executionElapsedSec"])
+		}
+		if _, ok := payload["lifecycleRecentEvents"]; !ok {
+			t.Fatalf("expected lifecycleRecentEvents in stats payload")
+		}
+	})
+
+	t.Run("exposes_last_error_for_runtime_failures", func(t *testing.T) {
+		c := stats.NewCollector()
+		s.CurrentStats = c
+		s.IsRunning = false
+		s.LastError = "Workload crashed: panic in worker 1"
+		s.AppConfig = &config.AppConfig{Duration: "7s"}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode stats payload: %v", err)
+		}
+		if payload["lastError"] != "Workload crashed: panic in worker 1" {
+			t.Fatalf("expected lastError to propagate, got %#v", payload["lastError"])
 		}
 	})
 }
@@ -317,6 +552,24 @@ func decodeJSONMap(t *testing.T, b []byte) map[string]interface{} {
 		t.Fatalf("decode JSON map: %v", err)
 	}
 	return m
+}
+
+func assertStartErrorResponse(t *testing.T, rec *httptest.ResponseRecorder, wantStatusCode int, wantMessageLike string) {
+	t.Helper()
+	if rec.Code != wantStatusCode {
+		t.Fatalf("expected status %d, got %d body=%s", wantStatusCode, rec.Code, rec.Body.String())
+	}
+	payload := decodeJSONMap(t, rec.Body.Bytes())
+	if payload["status"] != "error" {
+		t.Fatalf("expected payload status=error, got %+v", payload)
+	}
+	msg, _ := payload["message"].(string)
+	if strings.TrimSpace(msg) == "" {
+		t.Fatalf("expected non-empty error message, got %+v", payload)
+	}
+	if wantMessageLike != "" && !strings.Contains(strings.ToLower(msg), strings.ToLower(wantMessageLike)) {
+		t.Fatalf("expected message to contain %q, got %q", wantMessageLike, msg)
+	}
 }
 
 func waitUntil(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
@@ -408,8 +661,7 @@ func TestHandleStartSuccessWithLoadedConfigFlow(t *testing.T) {
 			loadedDefaultQueries = loadDefault
 			return &config.QueriesFile{
 				Queries: []config.QueryDefinition{
-					{Collection: "flights", Operation: "find"},
-					{Collection: "other", Operation: "find"},
+					{Name: "find_flights", Database: "benchdb", Collection: "flights", Operation: "find", Filter: map[string]interface{}{}},
 				},
 			}, nil
 		},
@@ -467,8 +719,8 @@ func TestHandleStartSuccessWithLoadedConfigFlow(t *testing.T) {
 
 	select {
 	case queries := <-runWorkloadCalled:
-		if len(queries) != 1 || queries[0].Collection != "flights" {
-			t.Fatalf("expected filtered queries for valid collection only, got %+v", queries)
+		if len(queries) != 1 || queries[0].Collection != "flights" || queries[0].Database != "benchdb" {
+			t.Fatalf("expected validated queries for flights/benchdb, got %+v", queries)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("expected runWorkload to be called")
@@ -530,7 +782,7 @@ func TestHandleStartSuccessWithUploadedCustomFilesSkipsLoaders(t *testing.T) {
 		map[string]string{"default_workload": "false"},
 		map[string]string{
 			"collections_file": `[{"database":"customdb","collection":"customcol","fields":{}}]`,
-			"queries_file":     `[{"collection":"customcol","operation":"find","filter":{}}]`,
+			"queries_file":     `[{"name":"find_customcol","collection":"customcol","operation":"find","filter":{}}]`,
 		},
 	)
 	s.handleStart(rec, req)
@@ -550,6 +802,86 @@ func TestHandleStartSuccessWithUploadedCustomFilesSkipsLoaders(t *testing.T) {
 	}
 	if connectedDBName != "customdb" {
 		t.Fatalf("expected dbName from uploaded custom collections, got %q", connectedDBName)
+	}
+}
+
+func TestHandleStartRejectsUnknownQueryCollectionReference(t *testing.T) {
+	withWebUISeams(t, webuiSeams{
+		loadCollections: func(path string, loadDefault bool) (*config.CollectionsFile, error) {
+			return &config.CollectionsFile{Collections: []config.CollectionDefinition{
+				{DatabaseName: "db1", Name: "orders", Fields: map[string]config.CollectionField{}},
+			}}, nil
+		},
+		loadQueries: func(path string, loadDefault bool) (*config.QueriesFile, error) {
+			return &config.QueriesFile{Queries: []config.QueryDefinition{
+				{Name: "find_missing", Collection: "missing", Operation: "find", Filter: map[string]interface{}{}},
+			}}, nil
+		},
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			t.Fatalf("connect should not be called when query validation fails")
+			return nil, nil
+		},
+	})
+
+	s := NewServer(&config.AppConfig{CollectionsPath: "ignored", QueriesPath: "ignored"})
+	req, rec := newMultipartRequest(t, map[string]string{"default_workload": "on"}, nil)
+	s.handleStart(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected JSON error response with 400 status, got %d", rec.Code)
+	}
+	payload := decodeJSONMap(t, rec.Body.Bytes())
+	if payload["status"] != "error" {
+		t.Fatalf("expected status=error, got %+v", payload)
+	}
+	msg, _ := payload["message"].(string)
+	if !strings.Contains(msg, "unknown collection") {
+		t.Fatalf("expected unknown collection error, got %q", msg)
+	}
+}
+
+func TestHandleStartSupportsWrappedQueriesFileUpload(t *testing.T) {
+	runCalled := make(chan []config.QueryDefinition, 1)
+	withWebUISeams(t, webuiSeams{
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			return &db.Connection{}, nil
+		},
+		disconnect: func(c *db.Connection, ctx context.Context) {},
+		createCollections: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile, drop bool) error {
+			return nil
+		},
+		createIndexes: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile) error {
+			return nil
+		},
+		runWorkload: func(ctx context.Context, database *driverMongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
+			runCalled <- append([]config.QueryDefinition(nil), queries...)
+			return nil
+		},
+	})
+
+	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	req, rec := newMultipartRequest(t,
+		map[string]string{"default_workload": "false"},
+		map[string]string{
+			"collections_file": `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`,
+			"queries_file":     `{"queries":[{"name":"find_orders","collection":"orders","operation":"find","filter":{}}]}`,
+		},
+	)
+	s.handleStart(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case got := <-runCalled:
+		if len(got) != 1 {
+			t.Fatalf("expected one query, got %+v", got)
+		}
+		if got[0].Database != "shop" {
+			t.Fatalf("expected database bound from collection definition, got %q", got[0].Database)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected runWorkload to be called")
 	}
 }
 

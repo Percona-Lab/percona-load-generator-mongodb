@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -67,6 +68,9 @@ type AppConfig struct {
 	InsightsExplainWorkers      int     `yaml:"insights_explain_workers"`
 	InsightsExplainRetries      int     `yaml:"insights_explain_retries"`
 	InsightsExplainBackoffMS    int     `yaml:"insights_explain_backoff_ms"`
+
+	ShardingMode                     string `yaml:"sharding_mode"`
+	ShardingSkipGenericWithoutConfig bool   `yaml:"sharding_skip_generic_without_config"`
 }
 
 type WebUIConfig struct {
@@ -127,6 +131,9 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 
 	// 4. Apply base safety limits (driver batch sizes, timeouts, etc.)
 	applyBaseDefaults(cfg)
+	if err := ValidateShardingConfig(cfg); err != nil {
+		return nil, err
+	}
 
 	// 5. Balance the mix percentages
 	normalizePercentages(cfg, overriddenStats)
@@ -179,6 +186,8 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.InsightsExplainWorkers = 1
 	cfg.InsightsExplainRetries = 1
 	cfg.InsightsExplainBackoffMS = 150
+	cfg.ShardingMode = "auto"
+	cfg.ShardingSkipGenericWithoutConfig = true
 }
 
 // applyBaseDefaults sets low-level engine safety limits & remaining UI limits
@@ -233,6 +242,7 @@ func applyBaseDefaults(cfg *AppConfig) {
 	if cfg.InsightsExplainBackoffMS < 0 {
 		cfg.InsightsExplainBackoffMS = 0
 	}
+	cfg.ShardingMode = NormalizeShardingMode(cfg.ShardingMode)
 
 	// Web UI Port
 	if cfg.WebUI.Port <= 0 {
@@ -617,8 +627,37 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 			cfg.InsightsExplainBackoffMS = n
 		}
 	}
+	if v := os.Getenv("PLGM_SHARDING_MODE"); v != "" {
+		cfg.ShardingMode = v
+	}
+	if v := os.Getenv("PLGM_SHARDING_SKIP_GENERIC_WITHOUT_CONFIG"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.ShardingSkipGenericWithoutConfig = b
+		}
+	}
 
 	return overrides
+}
+
+func ValidateShardingConfig(cfg *AppConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	if cfg.ShardingMode == "force_on" && cfg.ShardingSkipGenericWithoutConfig {
+		return fmt.Errorf("invalid sharding configuration: sharding_mode=force_on conflicts with sharding_skip_generic_without_config=true")
+	}
+	return nil
+}
+
+func NormalizeShardingMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "force_on":
+		return "force_on"
+	case "force_off":
+		return "force_off"
+	default:
+		return "auto"
+	}
 }
 
 func normalizePercentages(cfg *AppConfig, pinned map[string]bool) {

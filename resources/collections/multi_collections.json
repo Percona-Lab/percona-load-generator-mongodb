@@ -1,0 +1,49 @@
+{
+  "collections": [
+    {
+      "database": "ecommerce",
+      "collection": "orders",
+      "fields": {
+        "order_id": {"type": "int"},
+        "customer_id": {"type": "int"},
+        "status": {"type": "string", "enum": ["new", "paid", "shipped", "delivered"]},
+        "total_amount": {"type": "int"},
+        "shipping_city": {"type": "string", "provider": "city"},
+        "is_expedited_shipping": {"type": "bool"},
+        "items_count": {"type": "int"}
+      },
+      "indexes": [
+        {"keys": {"order_id": 1}},
+        {"keys": {"customer_id": 1, "status": 1}},
+        {"keys": {"is_expedited_shipping": 1, "status": 1}}
+      ]
+    },
+    {
+      "database": "ecommerce",
+      "collection": "customers",
+      "fields": {
+        "customer_id": {"type": "int"},
+        "email": {"type": "string", "provider": "email"},
+        "region": {"type": "string", "provider": "state"},
+        "lifetime_value": {"type": "int"}
+      },
+      "indexes": [
+        {"keys": {"customer_id": 1}},
+        {"keys": {"email": 1}}
+      ]
+    },
+    {
+      "database": "analytics",
+      "collection": "daily_rollups",
+      "fields": {
+        "day": {"type": "string"},
+        "region": {"type": "string"},
+        "orders": {"type": "int"},
+        "revenue": {"type": "int"}
+      },
+      "indexes": [
+        {"keys": {"day": 1, "region": 1}}
+      ]
+    }
+  ]
+}

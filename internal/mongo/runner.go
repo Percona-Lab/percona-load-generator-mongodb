@@ -287,7 +287,30 @@ func selectRandomQueryByType(ctx context.Context, db *mongo.Database, opType str
 		}
 		return config.QueryDefinition{}, false
 	}
-	return candidates[rng.Intn(len(candidates))], true
+
+	matched := make([]config.QueryDefinition, 0, len(candidates))
+	for _, q := range candidates {
+		if queryMatchesCollection(q, col) {
+			matched = append(matched, q)
+		}
+	}
+	if len(matched) == 0 {
+		if opType == "find" || opType == "updateOne" || opType == "updateMany" || opType == "deleteOne" || opType == "deleteMany" {
+			return generateFallbackQuery(ctx, db, opType, col, rng, filterField, cfg)
+		}
+		return config.QueryDefinition{}, false
+	}
+	return matched[rng.Intn(len(matched))], true
+}
+
+func queryMatchesCollection(q config.QueryDefinition, col config.CollectionDefinition) bool {
+	if !strings.EqualFold(strings.TrimSpace(q.Collection), strings.TrimSpace(col.Name)) {
+		return false
+	}
+	if strings.TrimSpace(q.Database) == "" {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(q.Database), strings.TrimSpace(col.DatabaseName))
 }
 
 func generateInsertQuery(col config.CollectionDefinition, rng *rand.Rand, cfg *config.AppConfig) config.QueryDefinition {
@@ -866,8 +889,23 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		return err
 	}
 
+	if err := config.ValidateCollectionDefinitions(collections); err != nil {
+		return err
+	}
+	if err := config.NormalizeAndValidateQueries(queries); err != nil {
+		return err
+	}
+	boundQueries, err := config.ValidateAndBindQueriesToCollections(queries, collections)
+	if err != nil {
+		return err
+	}
+	queries = boundQueries
+
 	for _, col := range collections {
 		if err := ensureGenericShardingFn(ctx, db, col, cfg); err != nil {
+			if config.NormalizeShardingMode(cfg.ShardingMode) == "force_on" {
+				return fmt.Errorf("sharding setup failed for %s.%s: %w", col.DatabaseName, col.Name, err)
+			}
 			log.Printf("Sharding setup warning for %s: %v", col.Name, err)
 		}
 	}
@@ -933,12 +971,38 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	workloadCtx, cancel := context.WithTimeout(ctx, wCfg.duration)
 	defer cancel()
 
+	var panicMu sync.Mutex
+	var panicErr error
+	reportPanic := func(where string, recovered interface{}) {
+		msg := fmt.Errorf("panic in %s: %v", where, recovered)
+		panicMu.Lock()
+		if panicErr == nil {
+			panicErr = msg
+		}
+		panicMu.Unlock()
+		log.Printf("[Workload Panic] %v", msg)
+		cancel()
+	}
+
 	for _, col := range wCfg.collections {
-		go insertDocumentProducer(workloadCtx, col, wCfg.maxInsertCache, wCfg.appConfig)
+		seedCol := col
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					reportPanic(fmt.Sprintf("insert producer for %s.%s", seedCol.DatabaseName, seedCol.Name), r)
+				}
+			}()
+			insertDocumentProducer(workloadCtx, seedCol, wCfg.maxInsertCache, wCfg.appConfig)
+		}()
 	}
 
 	monitorDone := make(chan struct{})
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				reportPanic("monitor goroutine", r)
+			}
+		}()
 		wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency, wCfg.appConfig.CSVExportEnabled, wCfg.appConfig.CSVExportAppend, wCfg.appConfig.CSVExportPath, wCfg.appConfig.WebUI.Enabled)
 	}()
 
@@ -946,12 +1010,28 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	for i := 1; i <= wCfg.concurrency; i++ {
 		wg.Add(1)
 		rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i)))
-		go independentWorker(workloadCtx, i, &wg, wCfg, rng)
+		workerID := i
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					reportPanic(fmt.Sprintf("worker %d", workerID), r)
+				}
+			}()
+			independentWorker(workloadCtx, workerID, &wg, wCfg, rng)
+		}()
 	}
 
 	<-workloadCtx.Done()
 	wg.Wait()
 	close(monitorDone)
+
+	panicMu.Lock()
+	err := panicErr
+	panicMu.Unlock()
+	if err != nil {
+		return err
+	}
+
 	wCfg.collector.PrintFinalSummary(wCfg.duration, wCfg.appConfig.WebUI.Enabled)
 	return nil
 }
@@ -1052,22 +1132,44 @@ func checkShardingStatus(ctx context.Context, db *mongo.Database, collectionName
 }
 
 func ensureGenericSharding(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+	if db == nil {
+		return fmt.Errorf("cannot ensure sharding: database handle is nil")
+	}
+	if cfg == nil {
+		cfg = &config.AppConfig{Concurrency: 1}
+	}
+	if cfg.Concurrency <= 0 {
+		cfg.Concurrency = 1
+	}
+
 	admin := db.Client().Database("admin")
 
 	// 1. Check if Cluster
 	var hello bson.M
 	if err := admin.RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+		if config.NormalizeShardingMode(cfg.ShardingMode) == "force_on" {
+			return fmt.Errorf("failed topology detection for sharding_mode=force_on: %w", err)
+		}
 		return nil
 	}
-	if hello["msg"] != "isdbgrid" {
+	isMongos := hello["msg"] == "isdbgrid"
+	shouldApply, decisionErr := shouldApplyGenericSharding(config.NormalizeShardingMode(cfg.ShardingMode), cfg.ShardingSkipGenericWithoutConfig, isMongos, col)
+	if decisionErr != nil {
+		return decisionErr
+	}
+	if !shouldApply {
 		return nil
 	}
 
-	dbName := db.Name()
+	dbName := strings.TrimSpace(col.DatabaseName)
+	if dbName == "" {
+		dbName = db.Name()
+	}
+	targetDB := db.Client().Database(dbName)
 	ns := fmt.Sprintf("%s.%s", dbName, col.Name)
 
 	// 2. Is it sharded? Do chunks exist?
-	isSharded, chunkCount, _ := checkShardingStatus(ctx, db, col.Name)
+	isSharded, chunkCount, _ := checkShardingStatus(ctx, targetDB, col.Name)
 
 	// If it is already sharded AND has more than 1 chunk, assume setup is done.
 	if !cfg.DropCollections && isSharded && chunkCount > 1 {
@@ -1079,17 +1181,10 @@ func ensureGenericSharding(ctx context.Context, db *mongo.Database, col config.C
 		return nil
 	}
 
-	isHashed := false
-	if col.ShardConfig != nil {
-		for _, v := range col.ShardConfig.Key {
-			if vStr, ok := v.(string); ok && vStr == "hashed" {
-				isHashed = true
-			}
-			break
-		}
+	shardKeyDoc, isHashed, err := resolveShardKeyDoc(col, patchKey)
+	if err != nil {
+		return fmt.Errorf("invalid shard key config for %s: %w", ns, err)
 	}
-
-	shardKeyDoc := buildOrderedShardKey(col, col.ShardConfig.Key, isHashed)
 
 	// 4. Enable Sharding on DB
 	_ = admin.RunCommand(ctx, bson.D{{Key: "enableSharding", Value: dbName}}).Err()
@@ -1173,6 +1268,52 @@ func ensureGenericSharding(ctx context.Context, db *mongo.Database, col config.C
 		}
 	}
 	return nil
+}
+
+func resolveShardKeyDoc(col config.CollectionDefinition, patchKey string) (bson.D, bool, error) {
+	if strings.TrimSpace(patchKey) == "" {
+		return nil, false, fmt.Errorf("patch key is empty")
+	}
+	if col.ShardConfig == nil || len(col.ShardConfig.Key) == 0 {
+		return bson.D{{Key: patchKey, Value: 1}}, false, nil
+	}
+	isHashed := false
+	for _, v := range col.ShardConfig.Key {
+		if vStr, ok := v.(string); ok && strings.EqualFold(vStr, "hashed") {
+			isHashed = true
+		}
+		break
+	}
+	return buildOrderedShardKey(col, col.ShardConfig.Key, isHashed), isHashed, nil
+}
+
+func shouldApplyGenericSharding(mode string, skipWithoutConfig bool, isMongos bool, col config.CollectionDefinition) (bool, error) {
+	hasShardConfig := col.ShardConfig != nil && len(col.ShardConfig.Key) > 0
+	ns := strings.TrimSpace(col.DatabaseName) + "." + strings.TrimSpace(col.Name)
+	if strings.HasPrefix(ns, ".") {
+		ns = strings.TrimPrefix(ns, ".")
+	}
+
+	switch mode {
+	case "force_off":
+		return false, nil
+	case "force_on":
+		if !isMongos {
+			return false, fmt.Errorf("sharding_mode=force_on requires mongos topology for %s", ns)
+		}
+		if skipWithoutConfig && !hasShardConfig {
+			return false, fmt.Errorf("invalid sharding setup for %s: sharding_mode=force_on conflicts with sharding_skip_generic_without_config=true when shardConfig is missing", ns)
+		}
+		return true, nil
+	default: // auto
+		if !isMongos {
+			return false, nil
+		}
+		if skipWithoutConfig && !hasShardConfig {
+			return false, nil
+		}
+		return true, nil
+	}
 }
 
 func listShards(ctx context.Context, admin *mongo.Database) ([]string, error) {

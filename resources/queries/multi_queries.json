@@ -1,0 +1,78 @@
+{
+  "queries": [
+    {
+      "name": "orders_find_by_customer",
+      "database": "ecommerce",
+      "collection": "orders",
+      "operation": "find",
+      "filter": {
+        "customer_id": "<int>",
+        "status": "<string>"
+      },
+      "projection": {
+        "order_id": 1,
+        "customer_id": 1,
+        "status": 1,
+        "total_amount": 1,
+        "_id": 0
+      },
+      "limit": 10
+    },
+    {
+      "name": "orders_aggregate_top_cities",
+      "database": "ecommerce",
+      "collection": "orders",
+      "operation": "aggregate",
+      "pipeline": [
+        {"$match": {"is_expedited_shipping": true}},
+        {"$group": {"_id": "$shipping_city", "total_revenue": {"$sum": "$total_amount"}, "avg_items": {"$avg": "$items_count"}}},
+        {"$sort": {"total_revenue": -1}},
+        {"$limit": 5}
+      ]
+    },
+    {
+      "name": "orders_update_status",
+      "database": "ecommerce",
+      "collection": "orders",
+      "operation": "updateOne",
+      "filter": {
+        "order_id": "<int>"
+      },
+      "update": {
+        "$set": {
+          "status": "shipped"
+        }
+      }
+    },
+    {
+      "name": "customers_find_region",
+      "database": "ecommerce",
+      "collection": "customers",
+      "operation": "find",
+      "filter": {
+        "region": "<string>"
+      },
+      "projection": {
+        "customer_id": 1,
+        "email": 1,
+        "region": 1,
+        "_id": 0
+      },
+      "limit": 20
+    },
+    {
+      "name": "customers_update_ltv",
+      "database": "ecommerce",
+      "collection": "customers",
+      "operation": "update",
+      "filter": {
+        "customer_id": "<int>"
+      },
+      "update": {
+        "$inc": {
+          "lifetime_value": 5
+        }
+      }
+    }
+  ]
+}

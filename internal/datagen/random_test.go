@@ -127,3 +127,22 @@ func TestRandomValueWithInvalidStringProviderFallsBackToVal(t *testing.T) {
 		t.Fatalf("expected fallback val, got %v", got)
 	}
 }
+
+func TestRandomValueWithFakerIntRangeHandlesInvertedBounds(t *testing.T) {
+	min, max := 20, 10
+	faker := gofakeit.New(7)
+
+	got := RandomValueWithFaker(config.CollectionField{
+		Type: "int",
+		Min:  &min,
+		Max:  &max,
+	}, faker)
+
+	v, ok := got.(int32)
+	if !ok {
+		t.Fatalf("expected int32, got %T", got)
+	}
+	if int(v) < 10 || int(v) > 20 {
+		t.Fatalf("expected value to be normalized to swapped range [10..20], got %d", v)
+	}
+}
