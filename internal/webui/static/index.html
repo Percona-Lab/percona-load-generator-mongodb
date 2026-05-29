@@ -1274,6 +1274,19 @@
             cursor: pointer;
         }
 
+        .zoom-range-label {
+            min-width: 190px;
+            text-align: center;
+            font-size: 11px !important;
+            text-transform: none !important;
+            letter-spacing: 0.1px !important;
+            color: var(--text-secondary);
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 5px 10px;
+        }
+
         .btn-live {
             background: var(--bg);
             border: 1px solid var(--border);
@@ -1397,6 +1410,8 @@
             <div class="time-machine-bar">
                 <span>Time Machine</span>
                 <input type="range" id="timeScrubber" min="0" max="0" value="0" step="1">
+                <span id="zoomRangeLabel" class="zoom-range-label">Drag a graph to zoom</span>
+                <button id="resetZoomBtn" class="btn-live" style="display:none;" onclick="resetChartZoom()">Reset Zoom</button>
                 <button id="liveBtn" class="btn-live active" onclick="goToLive()">Back to Live</button>
             </div>
 
@@ -2257,6 +2272,15 @@
         let latencyMetricVisibility = { avg: true, p95: false, p99: true };
         let latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
         let isLiveMode = true;
+        let zoomState = {
+            active: false,
+            start: 0,
+            end: 0,
+            dragging: false,
+            dragStart: 0,
+            dragEnd: 0,
+            sourceCanvasId: ''
+        };
 
         let throughputChart, latencyChart, latencyTimelineChart, donutChart;
         let sparkCharts = {};
@@ -2375,6 +2399,151 @@
             };
         };
 
+        const zoomSelectionPlugin = {
+            id: 'zoomSelection',
+            afterDraw(chart) {
+                if (!zoomState.dragging || zoomState.sourceCanvasId !== chart.canvas.id) return;
+                const area = chart.chartArea;
+                if (!area) return;
+                const left = Math.max(area.left, Math.min(zoomState.dragStart, zoomState.dragEnd));
+                const right = Math.min(area.right, Math.max(zoomState.dragStart, zoomState.dragEnd));
+                if (right - left < 2) return;
+
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.fillStyle = 'rgba(20, 134, 255, 0.14)';
+                ctx.strokeStyle = 'rgba(20, 134, 255, 0.85)';
+                ctx.lineWidth = 1;
+                ctx.fillRect(left, area.top, right - left, area.bottom - area.top);
+                ctx.strokeRect(left, area.top, right - left, area.bottom - area.top);
+                ctx.restore();
+            }
+        };
+
+        function clampIndex(idx) {
+            const max = Math.max(0, histLabels.length - 1);
+            if (!Number.isFinite(idx)) return 0;
+            return Math.max(0, Math.min(max, Math.round(idx)));
+        }
+
+        function visibleRangeFor(endIndex) {
+            const max = Math.max(0, histLabels.length - 1);
+            if (zoomState.active) {
+                const start = clampIndex(Math.min(zoomState.start, zoomState.end));
+                const end = clampIndex(Math.max(zoomState.start, zoomState.end));
+                return { start, end: Math.max(start, end) };
+            }
+            const end = clampIndex(Math.min(endIndex, max));
+            return { start: Math.max(0, end - WINDOW_SIZE + 1), end };
+        }
+
+        function updateZoomControls() {
+            const label = document.getElementById('zoomRangeLabel');
+            const resetBtn = document.getElementById('resetZoomBtn');
+            if (!label || !resetBtn) return;
+
+            if (zoomState.active && histLabels.length > 0) {
+                const range = visibleRangeFor(zoomState.end);
+                label.textContent = `Zoom: ${histLabels[range.start] || '-'} - ${histLabels[range.end] || '-'}`;
+                resetBtn.style.display = 'inline-flex';
+            } else {
+                label.textContent = 'Drag a graph to zoom';
+                resetBtn.style.display = 'none';
+            }
+        }
+
+        function setChartZoom(startIdx, endIdx) {
+            const start = clampIndex(Math.min(startIdx, endIdx));
+            const end = clampIndex(Math.max(startIdx, endIdx));
+            if (end <= start) return;
+            zoomState.active = true;
+            zoomState.start = start;
+            zoomState.end = end;
+            zoomState.dragging = false;
+            isLiveMode = false;
+            document.getElementById('liveBtn').classList.add('active');
+            const scrubber = document.getElementById('timeScrubber');
+            if (scrubber) scrubber.value = end;
+            updateZoomControls();
+            renderChartsAt(end);
+        }
+
+        function resetChartZoom() {
+            zoomState.active = false;
+            zoomState.dragging = false;
+            zoomState.sourceCanvasId = '';
+            updateZoomControls();
+            const scrubber = document.getElementById('timeScrubber');
+            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
+        }
+
+        function clearZoomForManualScrub() {
+            if (!zoomState.active) return;
+            zoomState.active = false;
+            zoomState.dragging = false;
+            zoomState.sourceCanvasId = '';
+            updateZoomControls();
+        }
+
+        function chartIndexFromEvent(chart, evt) {
+            const area = chart.chartArea;
+            const xScale = chart.scales.x;
+            if (!area || !xScale) return null;
+            const rect = chart.canvas.getBoundingClientRect();
+            const x = evt.clientX - rect.left;
+            if (x < area.left || x > area.right) return null;
+            const renderedIdx = Math.max(0, Math.round(xScale.getValueForPixel(x)));
+            return clampIndex((chart.$visibleStart || 0) + renderedIdx);
+        }
+
+        function installDragZoom(chart) {
+            if (!chart || !chart.canvas) return;
+            const canvas = chart.canvas;
+
+            canvas.addEventListener('mousedown', (evt) => {
+                const idx = chartIndexFromEvent(chart, evt);
+                if (idx === null) return;
+                const rect = canvas.getBoundingClientRect();
+                zoomState.dragging = true;
+                zoomState.dragStart = evt.clientX - rect.left;
+                zoomState.dragEnd = zoomState.dragStart;
+                zoomState.sourceCanvasId = canvas.id;
+                zoomState.start = idx;
+                zoomState.end = idx;
+                chart.update('none');
+            });
+
+            canvas.addEventListener('mousemove', (evt) => {
+                if (!zoomState.dragging || zoomState.sourceCanvasId !== canvas.id) return;
+                const idx = chartIndexFromEvent(chart, evt);
+                const rect = canvas.getBoundingClientRect();
+                zoomState.dragEnd = evt.clientX - rect.left;
+                if (idx !== null) zoomState.end = idx;
+                chart.update('none');
+            });
+
+            const finish = (evt) => {
+                if (!zoomState.dragging || zoomState.sourceCanvasId !== canvas.id) return;
+                const idx = chartIndexFromEvent(chart, evt);
+                if (idx !== null) zoomState.end = idx;
+                const start = zoomState.start;
+                const end = zoomState.end;
+                zoomState.dragging = false;
+                zoomState.sourceCanvasId = '';
+                chart.update('none');
+                if (Math.abs(end - start) >= 1) {
+                    setChartZoom(start, end);
+                }
+            };
+
+            canvas.addEventListener('mouseup', finish);
+            canvas.addEventListener('mouseleave', (evt) => {
+                if (zoomState.dragging && zoomState.sourceCanvasId === canvas.id) {
+                    finish(evt);
+                }
+            });
+        }
+
         function initCharts() {
             Chart.defaults.font.family = "'Roboto', sans-serif";
             Chart.defaults.color = '#697793';
@@ -2421,7 +2590,7 @@
                         { label: 'Aggregate/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('throughput'),
-                plugins: [verticalLinePlugin]
+                plugins: [verticalLinePlugin, zoomSelectionPlugin]
             });
 
             latencyChart = new Chart(document.getElementById('latencyChart'), {
@@ -2437,7 +2606,7 @@
                         { label: 'Aggregate (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('latency'),
-                plugins: [verticalLinePlugin]
+                plugins: [verticalLinePlugin, zoomSelectionPlugin]
             });
 
             latencyTimelineChart = new Chart(document.getElementById('latencyTimelineChart'), {
@@ -2467,6 +2636,8 @@
                         y: { beginAtZero: true, grid: { color: '#e2e8f0' }, title: { display: true, text: 'ms' } }
                     }
                 }
+                ,
+                plugins: [zoomSelectionPlugin]
             });
 
             donutChart = new Chart(document.getElementById('donutChart'), {
@@ -2494,23 +2665,31 @@
             document.getElementById('throughputChart').addEventListener('mouseleave', clearHovers);
             document.getElementById('latencyChart').addEventListener('mouseleave', clearHovers);
             document.getElementById('latencyTimelineChart').addEventListener('mouseleave', clearHovers);
+            installDragZoom(throughputChart);
+            installDragZoom(latencyChart);
+            installDragZoom(latencyTimelineChart);
             updateLatencyToggleUI();
         }
 
         function renderChartsAt(endIndex) {
             try {
                 if (endIndex < 0) return;
-                const start = Math.max(0, endIndex - WINDOW_SIZE + 1);
+                const range = visibleRangeFor(endIndex);
+                const start = range.start;
+                endIndex = range.end;
 
                 const getSlice = (arr) => {
                     return arr.slice(start, endIndex + 1);
                 };
 
-                const labelsSlice = getSlice(histLabels, '');
+                const labelsSlice = getSlice(histLabels);
                 const markersSlice = getSlice(globalMarkers, null);
 
                 throughputChart.data.markers = markersSlice;
                 latencyChart.data.markers = markersSlice;
+                throughputChart.$visibleStart = start;
+                latencyChart.$visibleStart = start;
+                latencyTimelineChart.$visibleStart = start;
 
                 throughputChart.data.labels = labelsSlice;
                 throughputChart.data.datasets[0].data = getSlice(histRates.total);
@@ -2548,12 +2727,14 @@
                 document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
                 document.getElementById('rate-aggregate').textContent = (histRates.aggregate[endIndex] || 0).toLocaleString() + ' ops/sec';
 
-                const tT = histTotals.total[endIndex] || 0;
-                const tF = histTotals.find[endIndex] || 0;
-                const tI = histTotals.insert[endIndex] || 0;
-                const tU = histTotals.update[endIndex] || 0;
-                const tD = histTotals.delete[endIndex] || 0;
-                const tA = histTotals.aggregate[endIndex] || 0;
+                const baselineIndex = start - 1;
+                const rangeTotal = (arr) => Math.max(0, (arr[endIndex] || 0) - (baselineIndex >= 0 ? (arr[baselineIndex] || 0) : 0));
+                const tT = zoomState.active ? rangeTotal(histTotals.total) : (histTotals.total[endIndex] || 0);
+                const tF = zoomState.active ? rangeTotal(histTotals.find) : (histTotals.find[endIndex] || 0);
+                const tI = zoomState.active ? rangeTotal(histTotals.insert) : (histTotals.insert[endIndex] || 0);
+                const tU = zoomState.active ? rangeTotal(histTotals.update) : (histTotals.update[endIndex] || 0);
+                const tD = zoomState.active ? rangeTotal(histTotals.delete) : (histTotals.delete[endIndex] || 0);
+                const tA = zoomState.active ? rangeTotal(histTotals.aggregate) : (histTotals.aggregate[endIndex] || 0);
 
                 document.getElementById('stat-total').textContent = tT.toLocaleString();
                 document.getElementById('stat-finds').textContent = tF.toLocaleString();
@@ -2566,12 +2747,14 @@
                     donutChart.data.datasets[0].data = [tF, tI, tU, tD, tA];
                     donutChart.update();
                 }
+                updateZoomControls();
             } catch (e) {
                 console.error("Chart render error:", e);
             }
         }
 
         document.getElementById('timeScrubber').addEventListener('input', function () {
+            clearZoomForManualScrub();
             const maxIdx = parseInt(this.max);
             const val = parseInt(this.value);
             const liveBtn = document.getElementById('liveBtn');
@@ -2588,6 +2771,10 @@
 
         function goToLive() {
             isLiveMode = true;
+            zoomState.active = false;
+            zoomState.dragging = false;
+            zoomState.sourceCanvasId = '';
+            updateZoomControls();
             const scrubber = document.getElementById('timeScrubber');
             scrubber.value = scrubber.max;
             document.getElementById('liveBtn').classList.remove('active');
@@ -3419,6 +3606,10 @@
                         histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
                         latencyMetricVisibility = { avg: true, p95: false, p99: true };
                         latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
+                        zoomState.active = false;
+                        zoomState.dragging = false;
+                        zoomState.sourceCanvasId = '';
+                        updateZoomControls();
                         updateLatencyToggleUI();
                         lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
                         lastLat = {

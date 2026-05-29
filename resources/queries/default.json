@@ -30,5 +30,30 @@
             "_id": 0
         },
         "limit": 5
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "find",
+        "filter": {
+            "origin": "<string>",
+            "destination": "<string>"
+        },
+        "sort": {
+            "flight_date": -1
+        },
+        "limit": 20
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "find",
+        "filter": {
+            "agent_email": "<string>",
+            "duration_minutes": {
+                "$gt": 60
+            }
+        },
+        "limit": 50
     }
 ]

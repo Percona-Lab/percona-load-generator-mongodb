@@ -164,7 +164,7 @@ When running `plgm` with the `--webui` flag, you get access to a rich, browser-b
 
 * **Configuration Editor:** Edit connection pools, timeouts, and workload distributions on the fly without needing a `config.yaml` file.
 * **Live Telemetry & Dashboard:** Watch operations per second (Find, Insert, Update, Delete) and latencies update in real-time with sub-second precision.
-* **The "Time Machine" Scrubber:** Pause the live feed and scrub backward through the benchmark timeline to investigate specific latency spikes or throughput drops.
+* **The "Time Machine" Scrubber and Drag-to-Zoom:** Pause the live feed, scrub backward to a specific second, or drag across a chart to zoom into a specific time range.
 * **Real-Time CSV Export:** Configure and stream metrics to a local CSV file directly from the Advanced tab. Use the "Append" feature to stitch multiple benchmark runs into a single dataset.
 * **Post-Run Insights Analysis:** Review slow-query groups, affected collections, potential index issues, and recommendations after all iterations complete.
 * **Graceful Shutdown:** Click the **EXIT** button in the header to safely terminate close the application directly from the browser, ensuring all background workers are cleaned up properly.
@@ -197,11 +197,16 @@ Once the workload begins, the UI transitions to a real-time observability dashbo
 * **Live Telemetry:** Watch throughput (Ops/sec) and average latency (ms) stream in real-time across four distinct operation categories.
 * **Workload Anatomy:** A live-updating donut chart proves that your database is accurately executing the exact operation ratios you configured.
 * **Crosshair Sync:** Hovering over a spike on the Throughput chart will instantly highlight the exact same moment in time on the Latency chart.
+* **Drag-to-Zoom:** Click and drag across the Throughput, Latency, or Latency Percentile Timeline charts to isolate a specific time range. All dashboard graphs and summary values update to that same window.
 
-### 5. The "Time Machine" Scrubber
+### 5. The "Time Machine" Scrubber and Drag-to-Zoom
 If you are running a long benchmark, you might miss a sudden latency spike. The UI stores a running history buffer of the benchmark data. 
 
-Simply grab the **Time Machine** slider above the charts and drag it to the left to pause the live feed and "scrub" backward in time. All line charts, sparklines, and numeric values will perfectly synchronize to show you the exact state of the database at that specific historical second. Click **Back to Live** to resume real-time monitoring.
+Use the **Time Machine** slider above the charts to pause the live feed and scrub backward to a specific historical second. All line charts, sparklines, and numeric values synchronize to show the exact state of the database at that point in time.
+
+To investigate a wider window, click and drag across any main time-series chart. PLGM will zoom all dashboard charts to the selected range, including throughput, average latency, latency percentiles, sparklines, numeric totals, and workload distribution. This makes it easier to isolate a latency spike, throughput drop, or short workload burst without waiting for the run to finish.
+
+Click **Reset Zoom** to return to the normal chart window. Click **Back to Live** to clear any historical view and resume real-time monitoring. Moving the Time Machine slider also clears the current zoom selection because the slider is used for point-in-time inspection.
 
 ![PLGM Time Machine Feature](./images/time_machine.png)
 
