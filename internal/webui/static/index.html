@@ -1691,11 +1691,12 @@
             </div>
         </div>
 
-        <form id="configForm" enctype="multipart/form-data">
+        <form id="configForm" enctype="multipart/form-data" novalidate>
             <div class="settings-console">
                 <aside class="settings-sidebar">
                     <div class="settings-sidebar-title">Settings Navigation</div>
                     <div class="tabs">
+                        <button type="button" class="tab-btn" onclick="showTab('tab-connections', this)">Connections</button>
                         <button type="button" class="tab-btn active" onclick="showTab('tab-conn', this)">Execution / Runtime</button>
                         <button type="button" class="tab-btn" onclick="showTab('tab-workload', this)">Workload Configuration</button>
                         <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
@@ -1720,10 +1721,124 @@
                     </div>
                     <div id="configInlineError" class="settings-inline-error"></div>
 
+            <div id="tab-connections" class="tab-content">
+                <section class="settings-card">
+                    <h4>Manage Connections</h4>
+                    <div class="settings-help">Create and manage saved connection profiles for MongoDB or MySQL. These can be quickly selected when running workloads.</div>
+                    
+                    <div id="connectionsList" style="margin-bottom: 20px;">
+                        <div id="connectionsEmptyState" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                            No saved connections yet. Create one below.
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px;">
+                        <h5 style="margin-top: 0; font-size: 14px;">Add New Connection</h5>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Connection Name</label>
+                                <input type="text" id="connName" placeholder="e.g., Production, Development">
+                            </div>
+                            <div class="form-group">
+                                <label>Database Type</label>
+                                <select id="connType" onchange="updateConnectionFormFields()">
+                                    <option value="mongo">MongoDB</option>
+                                    <option value="mysql">MySQL</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- MongoDB-specific fields -->
+                        <div id="mongoFields">
+                            <div class="grid-2">
+                                <div class="form-group"><label>MongoDB URI</label><input type="text" id="connURI"
+                                        placeholder="mongodb://localhost:27017/"></div>
+                                <div class="form-group"><label>Auth Source</label><input type="text" id="connAuthSource"
+                                        value="admin"></div>
+                                <div class="form-group"><label>Username (Optional)</label><input type="text" id="connUsername"></div>
+                                <div class="form-group"><label>Password (Optional)</label><input type="password" id="connPassword"
+                                        placeholder="Stored securely on server"></div>
+                                <div class="form-group"><label>ReplicaSet Name (Optional)</label><input type="text"
+                                        id="connReplicaSetName"></div>
+                                <div class="form-group">
+                                    <label>Read Preference</label>
+                                    <select id="connReadPreference">
+                                        <option value="nearest">Nearest</option>
+                                        <option value="primary">Primary</option>
+                                        <option value="secondary">Secondary</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid-3">
+                                <div class="checkbox-group"><input type="checkbox" id="connDirectConn" value="true"><label
+                                        for="connDirectConn">Direct Connection</label></div>
+                            </div>
+                        </div>
+                        <!-- MySQL-specific fields -->
+                        <div id="mysqlFields" style="display: none;">
+                            <div class="grid-2">
+                                <div class="form-group"><label>Host</label><input type="text" id="connMySQLHost"
+                                        placeholder="localhost" value="localhost"></div>
+                                <div class="form-group"><label>Port</label><input type="number" id="connMySQLPort"
+                                        placeholder="3306" value="3306"></div>
+                                <div class="form-group"><label>Database</label><input type="text" id="connMySQLDatabase"
+                                        placeholder="mydb"></div>
+                                <div class="form-group"><label>Username</label><input type="text" id="connMySQLUsername"></div>
+                                <div class="form-group"><label>Password (Optional)</label><input type="password" id="connMySQLPassword"
+                                        placeholder="Stored securely on server"></div>
+                            </div>
+                        </div>
+                        <!-- Common pooling settings -->
+                        <div class="grid-3">
+                            <div class="form-group"><label>Max Pool Size</label><input type="number" id="connMaxPoolSize"
+                                    value="200"></div>
+                            <div class="form-group"><label>Min Pool Size</label><input type="number" id="connMinPoolSize"
+                                    value="10"></div>
+                            <div class="form-group"><label>Max Idle Time (m)</label><input type="number" id="connMaxIdleTime"
+                                    value="30"></div>
+                        </div>
+                        <div class="grid-3">
+                            <div class="checkbox-group"><input type="checkbox" id="connDebug" value="true"><label
+                                    for="connDebug">Enable Debug Logs</label></div>
+                        </div>
+                        <div style="margin-top: 14px;">
+                            <button type="button" class="btn btn-primary" onclick="saveConnection()">Save Connection</button>
+                            <button type="button" class="btn btn-flat" style="margin-left:8px;" onclick="testConnectionFromForm()">Test Connection</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
             <div id="tab-conn" class="tab-content active">
                 <section class="settings-card">
                     <h4>Target Connection</h4>
-                    <div class="settings-help">Set the MongoDB target and authentication details used for execution.</div>
+                    <div class="settings-help">Select a saved connection or configure connection details manually. Each workload targets only one database type.</div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Database Type</label>
+                            <select name="database_type" onchange="updateMainConnectionFields()">
+                                <option value="mongo">MongoDB</option>
+                                <option value="mysql">MySQL</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Saved Connections</label>
+                            <select name="connection_id" id="connectionSelect" onchange="loadConnectionFields()">
+                                <option value="">-- Manual Configuration --</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: flex-end;">
+                            <button type="button" class="btn btn-secondary" onclick="refreshConnectionsList()" style="width: 100%; margin-bottom: 0;">
+                                Refresh List
+                            </button>
+                            <button type="button" class="btn btn-flat" style="margin-left:8px; width: 100%; margin-bottom: 0;" onclick="testSelectedConnection()">Test Connection</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- MongoDB Manual Configuration -->
+                <section class="settings-card" id="mongoManualSection">
+                    <h4>MongoDB Manual Connection Details</h4>
+                    <div class="settings-help">Override or provide MongoDB connection settings directly.</div>
                     <div class="form-group"><label>MongoDB URI</label><input type="text" name="uri"
                             placeholder="mongodb://localhost:27017/" required></div>
                     <div class="grid-2">
@@ -1744,6 +1859,24 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- MySQL Manual Configuration -->
+                <section class="settings-card" id="mysqlManualSection" style="display: none;">
+                    <h4>MySQL Manual Connection Details</h4>
+                    <div class="settings-help">Override or provide MySQL connection settings directly.</div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Host</label><input type="text" name="mysql_host"
+                                placeholder="localhost" value="localhost" required></div>
+                        <div class="form-group"><label>Port</label><input type="number" name="mysql_port"
+                                placeholder="3306" value="3306"></div>
+                        <div class="form-group"><label>Database</label><input type="text" name="mysql_database"
+                                placeholder="mydb"></div>
+                        <div class="form-group"><label>Username</label><input type="text" name="mysql_username"></div>
+                        <div class="form-group"><label>Password (Optional)</label><input type="password" id="uiPasswordMySQL"
+                                name="mysql_password" placeholder="Stored in session"></div>
+                    </div>
+                </section>
+
                 <section class="settings-card">
                     <h4>Runtime Transport & Pooling</h4>
                     <div class="settings-help">Connection pool values should align with concurrency and target cluster capacity.</div>
@@ -1757,7 +1890,7 @@
                     </div>
                     <div class="grid-2">
                         <div class="checkbox-group"><input type="checkbox" id="directConn" name="direct_connection"
-                                value="true"><label for="directConn">Direct Connection (Bypass Topology)</label></div>
+                                value="true"><label for="directConn">Direct Connection (MongoDB Only)</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="debugLogs" name="debug" value="true"><label
                                 for="debugLogs">Enable Driver Debug Logs</label></div>
                     </div>
@@ -1787,19 +1920,19 @@
                 </section>
 
                 <section class="settings-card">
-                    <h4>Data / Query Configuration</h4>
-                    <div class="settings-help">Choose built-in defaults or upload one collections file and one queries file. Each file can contain multiple definitions.</div>
+                    <h4 id="dataQueryHeader">Data / Query Configuration</h4>
+                    <div id="dataQueryHelp" class="settings-help">Choose built-in defaults or upload one collections file and one queries file. Each file can contain multiple definitions.</div>
                     <div class="form-group checkbox-group">
                         <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
                             onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default Workload</label>
                     </div>
                     <div id="customFilesSection" class="grid-2" style="display: none; margin-top: 14px;">
-                        <div class="file-upload-box"><label>Custom Collections JSON (single file, multi-collection supported)</label><input type="file"
+                        <div class="file-upload-box"><label id="collectionsFileLabel">Custom Collections JSON (single file, multi-collection supported)</label><input type="file"
                                 name="collections_file" accept=".json"></div>
-                        <div class="file-upload-box"><label>Custom Queries JSON (single file, multi-query supported)</label><input type="file"
+                        <div class="file-upload-box"><label id="queriesFileLabel">Custom Queries JSON (single file, multi-query supported)</label><input type="file"
                                 name="queries_file" accept=".json"></div>
                     </div>
-                    <div class="settings-note">Accepted formats:
+                    <div id="dataQuerySettingsNote" class="settings-note">Accepted formats:
                         collections: <code>{"collections":[...]}</code> or <code>[...]</code>;
                         queries: <code>{"queries":[...]}</code> or <code>[...]</code>.
                         Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.
@@ -1812,7 +1945,7 @@
                     </div>
                     <div class="grid-3">
                         <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
-                                value="true"><label for="dropColl">Drop Collections First</label></div>
+                                value="true"><label id="dropCollLabel" for="dropColl">Drop Collections First</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
                                 value="true"><label for="skipSeed">Skip Seed Phase</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="useTx" name="use_transactions"
@@ -1857,7 +1990,7 @@
                         </div>
                     </section>
 
-                    <section class="settings-card">
+                    <section id="shardingSection" class="settings-card">
                         <h4>Sharding Strategy</h4>
                         <div class="settings-help">Controls how PLGM applies per-collection sharding setup in sharded, non-sharded, or mixed topologies.</div>
                         <div class="grid-2">
@@ -2194,10 +2327,33 @@
         function validateConfigForm() {
             const num = (name) => Number(document.querySelector(`[name="${name}"]`)?.value || 0);
             const uri = (document.querySelector('[name="uri"]')?.value || '').trim();
-            if (!uri) {
-                showConfigInlineError('MongoDB URI is required.');
-                showTab('tab-conn', document.querySelector('.tab-btn'));
-                return false;
+            const dbType = document.querySelector('[name="database_type"]').value || 'mongo';
+            if (dbType === 'mongo') {
+                const uri = (document.querySelector('[name="uri"]')?.value || '').trim();
+                if (!uri) {
+                    showConfigInlineError('MongoDB URI is required.');
+                    showTab('tab-conn', document.querySelector('.tab-btn'));
+                    return false;
+                }
+            } else {
+                const host = (document.querySelector('[name="mysql_host"]')?.value || '').trim();
+                const db = (document.querySelector('[name="mysql_database"]')?.value || '').trim();
+                const port = Number(document.querySelector('[name="mysql_port"]')?.value || 0);
+                if (!host) {
+                    showConfigInlineError('MySQL host is required.');
+                    showTab('tab-conn', document.querySelector('.tab-btn'));
+                    return false;
+                }
+                if (!db) {
+                    showConfigInlineError('MySQL database name is required.');
+                    showTab('tab-conn', document.querySelector('.tab-btn'));
+                    return false;
+                }
+                if (port <= 0 || port > 65535) {
+                    showConfigInlineError('MySQL port must be a valid number between 1 and 65535.');
+                    showTab('tab-conn', document.querySelector('.tab-btn'));
+                    return false;
+                }
             }
             const maxPool = num('max_pool_size');
             const minPool = num('min_pool_size');
@@ -2842,6 +2998,7 @@
                 if (e.key === 'Escape') closeInsightsDrawer();
             });
             updateInsightsDrawerNavButtons();
+            updateDatabaseTypeUI();
             fetch('/api/config').then(r => r.json()).then(cfg => {
                 document.querySelector('[name="uri"]').value = cfg.URI || '';
                 document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
@@ -4106,6 +4263,460 @@
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
         }
+
+        // Connection Management Functions
+        let editingConnectionId = '';
+
+        // Toggle MongoDB/MySQL fields in connection form
+        function updateConnectionFormFields() {
+            const connType = document.getElementById('connType').value;
+            const mongoFields = document.getElementById('mongoFields');
+            const mysqlFields = document.getElementById('mysqlFields');
+            
+            if (connType === 'mongo') {
+                mongoFields.style.display = 'block';
+                mysqlFields.style.display = 'none';
+            } else {
+                mongoFields.style.display = 'none';
+                mysqlFields.style.display = 'block';
+            }
+        }
+
+        // Toggle MongoDB/MySQL fields in main connection section
+        function updateMainConnectionFields() {
+            const dbType = document.querySelector('select[name="database_type"]').value;
+            const mongoSection = document.getElementById('mongoManualSection');
+            const mysqlSection = document.getElementById('mysqlManualSection');
+            
+            if (dbType === 'mongo') {
+                mongoSection.style.display = 'block';
+                mysqlSection.style.display = 'none';
+            } else {
+                mongoSection.style.display = 'none';
+                mysqlSection.style.display = 'block';
+            }
+            updateDatabaseTypeUI();
+        }
+
+        function updateDatabaseTypeUI() {
+            const dbType = document.querySelector('select[name="database_type"]').value;
+            const shardingSection = document.getElementById('shardingSection');
+            const dataQueryHeader = document.getElementById('dataQueryHeader');
+            const dataQueryHelp = document.getElementById('dataQueryHelp');
+            const dataQuerySettingsNote = document.getElementById('dataQuerySettingsNote');
+            const collectionsFileLabel = document.getElementById('collectionsFileLabel');
+            const queriesFileLabel = document.getElementById('queriesFileLabel');
+            const dropCollLabel = document.getElementById('dropCollLabel');
+
+            if (dbType === 'mysql') {
+                if (shardingSection) {
+                    shardingSection.style.display = 'none';
+                }
+                if (dataQueryHeader) {
+                    dataQueryHeader.textContent = 'Table / Query Configuration';
+                }
+                if (dataQueryHelp) {
+                    dataQueryHelp.textContent = 'Choose built-in defaults or upload a table definitions JSON file and a SQL queries file. Each file can contain multiple definitions.';
+                }
+                if (dataQuerySettingsNote) {
+                    dataQuerySettingsNote.innerHTML = 'Accepted formats: table definitions in JSON and SQL query files. Use the custom files upload to provide your MySQL schema and workload. Queries should include <code>name</code>, <code>table</code>, and <code>operation</code>.';
+                }
+                if (collectionsFileLabel) {
+                    collectionsFileLabel.textContent = 'Custom Table Definitions JSON (single file, multi-table supported)';
+                }
+                if (queriesFileLabel) {
+                    queriesFileLabel.textContent = 'Custom SQL Queries JSON (single file, multi-query supported)';
+                }
+                if (dropCollLabel) {
+                    dropCollLabel.textContent = 'Drop Tables First';
+                }
+            } else {
+                if (shardingSection) {
+                    shardingSection.style.display = 'block';
+                }
+                if (dataQueryHeader) {
+                    dataQueryHeader.textContent = 'Data / Query Configuration';
+                }
+                if (dataQueryHelp) {
+                    dataQueryHelp.textContent = 'Choose built-in defaults or upload one collections file and one queries file. Each file can contain multiple definitions.';
+                }
+                if (dataQuerySettingsNote) {
+                    dataQuerySettingsNote.innerHTML = 'Accepted formats: collections: <code>{"collections":[...]}</code> or <code>[...]</code>; queries: <code>{"queries":[...]}</code> or <code>[...]</code>. Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.';
+                }
+                if (collectionsFileLabel) {
+                    collectionsFileLabel.textContent = 'Custom Collections JSON (single file, multi-collection supported)';
+                }
+                if (queriesFileLabel) {
+                    queriesFileLabel.textContent = 'Custom Queries JSON (single file, multi-query supported)';
+                }
+                if (dropCollLabel) {
+                    dropCollLabel.textContent = 'Drop Collections First';
+                }
+            }
+                if (shardingSection) {
+                    shardingSection.style.display = 'block';
+                }
+                if (dataQuerySettingsNote) {
+                    dataQuerySettingsNote.innerHTML = 'Accepted formats: collections: <code>{"collections":[...]}</code> or <code>[...]</code>; queries: <code>{"queries":[...]}</code> or <code>[...]</code>. Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.';
+                }
+                if (dropCollLabel) {
+                    dropCollLabel.textContent = 'Drop Collections First';
+                }
+            }
+        }
+
+        async function saveConnection() {
+            const connName = document.getElementById('connName').value.trim();
+            const connType = document.getElementById('connType').value;
+            
+            if (!connName) {
+                alert('Connection name is required');
+                return;
+            }
+
+            let conn = {
+                name: connName,
+                type: connType,
+                max_pool_size: parseInt(document.getElementById('connMaxPoolSize').value) || 200,
+                min_pool_size: parseInt(document.getElementById('connMinPoolSize').value) || 10,
+                max_idle_time: parseInt(document.getElementById('connMaxIdleTime').value) || 30,
+                debug: document.getElementById('connDebug').checked
+            };
+
+            if (connType === 'mongo') {
+                const connURI = document.getElementById('connURI').value.trim();
+                if (!connURI) {
+                    alert('MongoDB URI is required');
+                    return;
+                }
+                conn.uri = connURI;
+                conn.username = document.getElementById('connUsername').value.trim();
+                conn.password = document.getElementById('connPassword').value;
+                conn.auth_source = document.getElementById('connAuthSource').value.trim() || 'admin';
+                conn.replicaset_name = document.getElementById('connReplicaSetName').value.trim();
+                conn.read_preference = document.getElementById('connReadPreference').value;
+                conn.direct_connection = document.getElementById('connDirectConn').checked;
+            } else {
+                const host = document.getElementById('connMySQLHost').value.trim();
+                if (!host) {
+                    alert('MySQL host is required');
+                    return;
+                }
+                conn.mysql_host = host;
+                conn.mysql_port = parseInt(document.getElementById('connMySQLPort').value) || 3306;
+                conn.mysql_database = document.getElementById('connMySQLDatabase').value.trim();
+                conn.username = document.getElementById('connMySQLUsername').value.trim();
+                conn.password = document.getElementById('connMySQLPassword').value;
+            }
+
+            if (editingConnectionId) {
+                conn.id = editingConnectionId;
+            }
+
+            try {
+                const response = await fetch('/api/connections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(conn)
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    alert('Error saving connection: ' + (errData.error || 'Unknown error'));
+                    return;
+                }
+
+                const saved = await response.json();
+                alert('Connection "' + saved.name + '" saved successfully!');
+                editingConnectionId = '';
+                document.getElementById('cancelEditBtn')?.remove();
+                
+                // Clear form
+                document.getElementById('connName').value = '';
+                document.getElementById('connType').value = 'mongo';
+                document.getElementById('connURI').value = '';
+                document.getElementById('connUsername').value = '';
+                document.getElementById('connPassword').value = '';
+                document.getElementById('connAuthSource').value = 'admin';
+                document.getElementById('connReplicaSetName').value = '';
+                document.getElementById('connReadPreference').value = 'nearest';
+                document.getElementById('connDirectConn').checked = false;
+                document.getElementById('connMySQLHost').value = 'localhost';
+                document.getElementById('connMySQLPort').value = 3306;
+                document.getElementById('connMySQLDatabase').value = '';
+                document.getElementById('connMySQLUsername').value = '';
+                document.getElementById('connMySQLPassword').value = '';
+                document.getElementById('connMaxPoolSize').value = 200;
+                document.getElementById('connMinPoolSize').value = 10;
+                document.getElementById('connMaxIdleTime').value = 30;
+                document.getElementById('connDebug').checked = false;
+                updateConnectionFormFields();
+                
+                // Refresh the connections list
+                await refreshConnectionsList();
+            } catch (err) {
+                alert('Error saving connection: ' + err.message);
+            }
+        }
+
+        async function refreshConnectionsList() {
+            try {
+                const response = await fetch('/api/connections');
+                if (!response.ok) throw new Error('Failed to fetch connections');
+
+                const data = await response.json();
+                const connections = data.connections || [];
+
+                // Update the Connections tab list
+                updateConnectionsListUI(connections);
+
+                // Update the dropdown in Execution/Runtime tab
+                const select = document.getElementById('connectionSelect');
+                const currentValue = select.value;
+                select.innerHTML = '<option value="">-- Manual Configuration --</option>';
+                
+                connections.forEach(conn => {
+                    const option = document.createElement('option');
+                    option.value = conn.id;
+                    option.textContent = conn.name;
+                    select.appendChild(option);
+                });
+                
+                select.value = currentValue;
+            } catch (err) {
+                console.error('Error refreshing connections:', err);
+            }
+        }
+
+        function updateConnectionsListUI(connections) {
+            const listContainer = document.getElementById('connectionsList');
+            
+            if (connections.length === 0) {
+                listContainer.innerHTML = '<div id="connectionsEmptyState" style="text-align: center; padding: 20px; color: var(--text-secondary);">No saved connections yet. Create one below.</div>';
+                return;
+            }
+
+            const html = connections.map(conn => `
+                <div style="border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #f8fafc;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; color: var(--p-night); margin-bottom: 4px;">${conn.name}</div>
+                            <div style="font-size: 12px; color: var(--text-secondary); font-family: monospace; word-break: break-all;">${conn.uri}</div>
+                            ${conn.username ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">User: ${conn.username}</div>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            <button type="button" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="loadAndEditConnection('${conn.id}')">Edit</button>
+                            <button type="button" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px; background: #dc2626; border-color: #dc2626; color: white;" onclick="deleteConnection('${conn.id}', '${conn.name}')">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            listContainer.innerHTML = html;
+        }
+
+        async function deleteConnection(connId, connName) {
+            if (!confirm(`Delete connection "${connName}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/connections/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `id=${encodeURIComponent(connId)}`
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    alert('Error deleting connection: ' + (errData.error || 'Unknown error'));
+                    return;
+                }
+
+                alert('Connection deleted successfully!');
+                await refreshConnectionsList();
+            } catch (err) {
+                alert('Error deleting connection: ' + err.message);
+            }
+        }
+
+        function loadAndEditConnection(connId) {
+            // Fetch the connection and populate the Add New Connection form for editing
+            fetch('/api/connections')
+                .then(r => r.json())
+                .then(data => {
+                    const conn = data.connections.find(c => c.id === connId);
+                    if (!conn) return alert('Connection not found');
+                    editingConnectionId = conn.id;
+                    document.getElementById('connName').value = conn.name || '';
+                    document.getElementById('connURI').value = conn.uri || '';
+                    document.getElementById('connUsername').value = conn.username || '';
+                    // Password is not returned by GET; prompt user to re-enter if needed
+                    document.getElementById('connPassword').value = '';
+                    document.getElementById('connAuthSource').value = conn.auth_source || 'admin';
+                    document.getElementById('connReplicaSetName').value = conn.replicaset_name || '';
+                    document.getElementById('connReadPreference').value = conn.read_preference || 'nearest';
+                    document.getElementById('connDirectConn').checked = !!conn.direct_connection;
+                    document.getElementById('connMaxPoolSize').value = conn.max_pool_size || 200;
+                    document.getElementById('connMinPoolSize').value = conn.min_pool_size || 10;
+                    document.getElementById('connMaxIdleTime').value = conn.max_idle_time || 30;
+                    document.getElementById('connDebug').checked = !!conn.debug;
+
+                    // Add a cancel edit button if not present
+                    if (!document.getElementById('cancelEditBtn')) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.id = 'cancelEditBtn';
+                        btn.className = 'btn btn-flat';
+                        btn.style.marginLeft = '8px';
+                        btn.textContent = 'Cancel Edit';
+                        btn.onclick = () => {
+                            editingConnectionId = '';
+                            document.getElementById('connName').value = '';
+                            document.getElementById('connURI').value = '';
+                            document.getElementById('connUsername').value = '';
+                            document.getElementById('connPassword').value = '';
+                            document.getElementById('connAuthSource').value = 'admin';
+                            document.getElementById('connReplicaSetName').value = '';
+                            document.getElementById('connReadPreference').value = 'nearest';
+                            document.getElementById('connDirectConn').checked = false;
+                            document.getElementById('connMaxPoolSize').value = 200;
+                            document.getElementById('connMinPoolSize').value = 10;
+                            document.getElementById('connMaxIdleTime').value = 30;
+                            document.getElementById('connDebug').checked = false;
+                            btn.remove();
+                        };
+                        document.querySelector('#tab-connections .settings-card > div').appendChild(btn);
+                    }
+                })
+                .catch(err => alert('Error loading connection for edit: ' + err.message));
+        }
+
+        function loadConnectionFields() {
+            const connId = document.getElementById('connectionSelect').value;
+            if (!connId) {
+                // Clear manual fields
+                document.querySelector('input[name="uri"]').value = '';
+                document.querySelector('input[name="username"]').value = '';
+                document.querySelector('input[name="password"]').value = '';
+                document.querySelector('input[name="auth_source"]').value = 'admin';
+                document.querySelector('input[name="replicaset_name"]').value = '';
+                document.querySelector('select[name="read_preference"]').value = 'nearest';
+                document.querySelector('input[name="direct_connection"]').checked = false;
+                document.querySelector('input[name="mysql_host"]').value = 'localhost';
+                document.querySelector('input[name="mysql_port"]').value = 3306;
+                document.querySelector('input[name="mysql_database"]').value = '';
+                document.querySelector('input[name="mysql_username"]').value = '';
+                document.querySelector('input[name="mysql_password"]').value = '';
+                document.querySelector('input[name="max_pool_size"]').value = 200;
+                document.querySelector('input[name="min_pool_size"]').value = 10;
+                return;
+            }
+
+            // Fetch and populate the selected connection
+            fetch('/api/connections')
+                .then(r => r.json())
+                .then(data => {
+                    const conn = data.connections.find(c => c.id === connId);
+                    if (conn) {
+                        // Set database type
+                        document.querySelector('select[name="database_type"]').value = conn.type || 'mongo';
+                        updateMainConnectionFields();
+                        updateDatabaseTypeUI();
+
+                        if (conn.type === 'mongo') {
+                            document.querySelector('input[name="uri"]').value = conn.uri || '';
+                            document.querySelector('input[name="username"]').value = conn.username || '';
+                            document.querySelector('input[name="password"]').value = '';
+                            document.querySelector('input[name="auth_source"]').value = conn.auth_source || 'admin';
+                            document.querySelector('input[name="replicaset_name"]').value = conn.replicaset_name || '';
+                            document.querySelector('select[name="read_preference"]').value = conn.read_preference || 'nearest';
+                            document.querySelector('input[name="direct_connection"]').checked = conn.direct_connection || false;
+                        } else {
+                            document.querySelector('input[name="mysql_host"]').value = conn.mysql_host || 'localhost';
+                            document.querySelector('input[name="mysql_port"]').value = conn.mysql_port || 3306;
+                            document.querySelector('input[name="mysql_database"]').value = conn.mysql_database || '';
+                            document.querySelector('input[name="mysql_username"]').value = conn.username || '';
+                            document.querySelector('input[name="mysql_password"]').value = '';
+                        }
+
+                        document.querySelector('input[name="max_pool_size"]').value = conn.max_pool_size || 200;
+                        document.querySelector('input[name="min_pool_size"]').value = conn.min_pool_size || 10;
+                    }
+                })
+                .catch(err => console.error('Error loading connection:', err));
+        }
+
+        async function testConnectionFromForm() {
+            const connType = document.getElementById('connType').value;
+            let conn = {
+                type: connType,
+                max_pool_size: parseInt(document.getElementById('connMaxPoolSize').value) || 200,
+                min_pool_size: parseInt(document.getElementById('connMinPoolSize').value) || 10,
+                max_idle_time: parseInt(document.getElementById('connMaxIdleTime').value) || 30
+            };
+
+            if (connType === 'mongo') {
+                conn.uri = document.getElementById('connURI').value.trim();
+                conn.username = document.getElementById('connUsername').value.trim();
+                conn.password = document.getElementById('connPassword').value;
+                conn.auth_source = document.getElementById('connAuthSource').value.trim() || 'admin';
+                conn.replicaset_name = document.getElementById('connReplicaSetName').value.trim();
+                conn.read_preference = document.getElementById('connReadPreference').value;
+                conn.direct_connection = document.getElementById('connDirectConn').checked;
+            } else {
+                conn.mysql_host = document.getElementById('connMySQLHost').value.trim();
+                conn.mysql_port = parseInt(document.getElementById('connMySQLPort').value) || 3306;
+                conn.mysql_database = document.getElementById('connMySQLDatabase').value.trim();
+                conn.username = document.getElementById('connMySQLUsername').value.trim();
+                conn.password = document.getElementById('connMySQLPassword').value;
+            }
+
+            try {
+                const resp = await fetch('/api/connections/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(conn)
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    alert('Connection successful!');
+                } else {
+                    alert('Connection failed: ' + (data.error || JSON.stringify(data)));
+                }
+            } catch (err) {
+                alert('Error testing connection: ' + err.message);
+            }
+        }
+
+        async function testSelectedConnection() {
+            const sel = document.getElementById('connectionSelect');
+            const connId = sel.value;
+            if (!connId) {
+                alert('Please select a saved connection to test or use the manual form');
+                return;
+            }
+            try {
+                const resp = await fetch('/api/connections/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: connId })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.status === 'ok') {
+                    alert('Connection successful (ping OK)');
+                } else {
+                    alert('Connection failed: ' + (data.error || JSON.stringify(data)));
+                }
+            } catch (err) {
+                alert('Error testing connection: ' + err.message);
+            }
+        }
+
+        // Initialize connections on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await refreshConnectionsList();
+        });
 
     </script>
 </body>

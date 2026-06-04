@@ -10,6 +10,7 @@ import (
 )
 
 type AppConfig struct {
+	DatabaseType    string `yaml:"database_type"` // "mongo" or "mysql", default "mongo"
 	URI             string `yaml:"uri"`
 	DefaultWorkload bool   `yaml:"default_workload"`
 	PprofEnabled    bool   `yaml:"pprof_enabled"`
@@ -101,6 +102,10 @@ type ConnectionParams struct {
 	MaxIdleTime            int    `yaml:"max_idle_time"`
 	ReplicaSetName         string `yaml:"replicaset_name"`
 	ReadPreference         string `yaml:"read_preference"`
+	// MySQL-specific parameters
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Database string `yaml:"database"`
 }
 
 func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
@@ -144,6 +149,7 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 // applyUIDefaults forces exact visual values from screenshots when no config.yaml is found
 func applyUIDefaults(cfg *AppConfig) {
 	// --- CONNECTION TAB ---
+	cfg.DatabaseType = "mongo"
 	cfg.URI = "mongodb://localhost:27017"
 	cfg.ConnectionParams.Username = "plgm"
 	cfg.ConnectionParams.AuthSource = "admin"
@@ -192,6 +198,11 @@ func applyUIDefaults(cfg *AppConfig) {
 
 // applyBaseDefaults sets low-level engine safety limits & remaining UI limits
 func applyBaseDefaults(cfg *AppConfig) {
+	// --- DATABASE TYPE ---
+	if cfg.DatabaseType == "" {
+		cfg.DatabaseType = "mongo"
+	}
+
 	// --- HIDDEN WORKLOAD PATHS ---
 	// Required to find the default JSON files when no config.yaml is present
 	if cfg.CollectionsPath == "" {

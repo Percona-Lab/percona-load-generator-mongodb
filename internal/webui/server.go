@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -68,6 +69,9 @@ type WebServer struct {
 	CompletedAt       time.Time
 	InitDurationSec   float64
 	LifecycleEvents   []lifecycleEvent
+	Connections       map[string]*SavedConnection
+	connectionCounter int64
+	connectionsFile   string
 }
 
 type lifecycleEvent struct {
@@ -76,11 +80,35 @@ type lifecycleEvent struct {
 	Message  string `json:"message"`
 }
 
+type SavedConnection struct {
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Type             string    `json:"type"` // "mongo" or "mysql"
+	URI              string    `json:"uri"` // MongoDB URI
+	Username         string    `json:"username"`
+	Password         string    `json:"password"`
+	AuthSource       string    `json:"auth_source"`
+	ReplicaSetName   string    `json:"replicaset_name"`
+	ReadPreference   string    `json:"read_preference"`
+	DirectConnection bool      `json:"direct_connection"`
+	MaxPoolSize      int       `json:"max_pool_size"`
+	MinPoolSize      int       `json:"min_pool_size"`
+	MaxIdleTimeMin   int       `json:"max_idle_time"`
+	Debug            bool      `json:"debug"`
+	CreatedAt        time.Time `json:"created_at"`
+	// MySQL-specific fields
+	MySQLHost string `json:"mysql_host"`
+	MySQLPort int    `json:"mysql_port"`
+	MySQLDatabase string `json:"mysql_database"`
+}
+
 var (
 	loadCollectionsFn   = config.LoadCollections
 	loadQueriesFn       = config.LoadQueries
 	connectFn           = db.Connect
+	connectMySQLFn      = db.ConnectMySQL
 	disconnectFn        = func(c *db.Connection, ctx context.Context) { c.Disconnect(ctx) }
+	disconnectMySQLFn   = func(c *db.Connection, ctx context.Context) { _ = c.DisconnectMySQL(ctx) }
 	createCollectionsFn = mongo.CreateCollectionsFromConfig
 	createIndexesFn     = mongo.CreateIndexesFromConfig
 	insertRandomDocsFn  = mongo.InsertRandomDocuments
@@ -89,11 +117,17 @@ var (
 )
 
 func NewServer(cfg *config.AppConfig) *WebServer {
-	return &WebServer{
+	s := &WebServer{
 		AppConfig:      cfg,
 		ShapeTrendBase: make(map[string]float64),
 		LifecyclePhase: "idle",
+		Connections:    make(map[string]*SavedConnection),
 	}
+	s.connectionsFile = defaultConnectionsPath()
+	if err := s.loadConnectionsFromDisk(); err != nil {
+		log.Printf("Warning: failed to load saved connections: %v", err)
+	}
+	return s
 }
 
 func (s *WebServer) setLifecyclePhaseLocked(phase, message string) {
@@ -192,6 +226,9 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/insights", s.handleInsights)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
+	mux.HandleFunc("/api/connections", s.handleConnections)
+	mux.HandleFunc("/api/connections/delete", s.handleDeleteConnection)
+	mux.HandleFunc("/api/connections/test", s.handleTestConnection)
 
 	cert, err := generateSelfSignedCert()
 	if err != nil {
@@ -317,9 +354,58 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg := &baseCfg
 	cfg.WebUI.Enabled = true
 
-	if v := r.FormValue("uri"); v != "" {
-		cfg.URI = v
+	if connID := r.FormValue("connection_id"); connID != "" {
+		s.mu.Lock()
+		if saved, ok := s.Connections[connID]; ok {
+			cfg.DatabaseType = saved.Type
+			if saved.Type == "mysql" {
+				cfg.ConnectionParams.Host = saved.MySQLHost
+				cfg.ConnectionParams.Port = saved.MySQLPort
+				cfg.ConnectionParams.Database = saved.MySQLDatabase
+			} else {
+				cfg.URI = saved.URI
+				cfg.ConnectionParams.AuthSource = saved.AuthSource
+				cfg.ConnectionParams.ReplicaSetName = saved.ReplicaSetName
+				cfg.ConnectionParams.ReadPreference = saved.ReadPreference
+				cfg.ConnectionParams.DirectConnection = saved.DirectConnection
+			}
+			cfg.ConnectionParams.Username = saved.Username
+			cfg.ConnectionParams.Password = saved.Password
+			cfg.ConnectionParams.MaxPoolSize = saved.MaxPoolSize
+			cfg.ConnectionParams.MinPoolSize = saved.MinPoolSize
+			cfg.ConnectionParams.MaxIdleTime = saved.MaxIdleTimeMin
+		}
+		s.mu.Unlock()
 	}
+
+	// Parse database type
+	if v := r.FormValue("database_type"); v != "" {
+		cfg.DatabaseType = v
+	}
+	if cfg.DatabaseType == "" {
+		cfg.DatabaseType = "mongo" // default
+	}
+
+	// MySQL-specific connection parameters
+	if cfg.DatabaseType == "mysql" {
+		if v := r.FormValue("mysql_host"); v != "" {
+			cfg.ConnectionParams.Host = v
+		}
+		if v := r.FormValue("mysql_port"); v != "" {
+			if port := parseInt(v, 0); port > 0 {
+				cfg.ConnectionParams.Port = port
+			}
+		}
+		if v := r.FormValue("mysql_database"); v != "" {
+			cfg.ConnectionParams.Database = v
+		}
+	} else {
+		// MongoDB-specific connection parameters
+		if v := r.FormValue("uri"); v != "" {
+			cfg.URI = v
+		}
+	}
+
 	if v := r.FormValue("username"); v != "" {
 		cfg.ConnectionParams.Username = v
 	}
@@ -653,7 +739,15 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// -----------------------------------------------------------------------
-	// EXECUTION BRANCH 2: STANDARD WORKLOAD
+	// EXECUTION ROUTING: Route to MongoDB or MySQL workload
+	// -----------------------------------------------------------------------
+	if cfg.DatabaseType == "mysql" {
+		executeWorkloadMySQL(s, w, ctx, cancel, cfg)
+		return
+	}
+
+	// -----------------------------------------------------------------------
+	// EXECUTION BRANCH 2: STANDARD WORKLOAD (MongoDB)
 	// -----------------------------------------------------------------------
 	var collectionsCfg *config.CollectionsFile
 	var loadErr error
@@ -932,6 +1026,123 @@ func (s *WebServer) handleStop(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
+}
+
+// executeWorkloadMySQL handles MySQL workload execution
+// This function routes MySQL workload logic and will call the appropriate MySQL runner
+func executeWorkloadMySQL(s *WebServer, w http.ResponseWriter, ctx context.Context, cancel context.CancelFunc, cfg *config.AppConfig) {
+	s.mu.Lock()
+	s.setLifecycleStepLocked("Connecting to MySQL database", 1, 3)
+	s.setLifecycleStepProgressLocked(0, 1)
+	s.addLifecycleEventLocked("init", "Connecting to MySQL server")
+	s.mu.Unlock()
+
+	// Connect to MySQL
+	benchConn, connectErr := connectMySQLFn(ctx, cfg)
+	if connectErr != nil {
+		s.abortRun("MySQL connection failed: " + connectErr.Error())
+		cancel()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "error", "message": connectErr.Error()})
+		return
+	}
+
+	s.mu.Lock()
+	s.CurrentStats = stats.NewCollector()
+	s.CurrentStats.ConfigureInsights(cfg)
+	s.AppConfig = cfg
+	s.ActiveCancel = cancel
+	s.LastError = ""
+	s.CurrentIteration = 1
+	s.TotalIterations = cfg.Iterations
+	s.IntervalStr = cfg.IntervalDelay
+	s.IsWaiting = false
+	s.CurrentStats.CurrentIteration = 1
+	s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				msg := fmt.Sprintf("MySQL workload crashed unexpectedly: %v", r)
+				log.Println("UI MySQL Run Panic:", msg)
+				s.mu.Lock()
+				s.LastError = msg
+				s.IsRunning = false
+				s.setLifecyclePhaseLocked("failed", "MySQL workload crashed unexpectedly")
+				s.mu.Unlock()
+			}
+		}()
+		defer disconnectMySQLFn(benchConn, context.Background())
+		defer func() {
+			s.mu.Lock()
+			s.IsRunning = false
+			if s.LastError == "" {
+				s.setLifecyclePhaseLocked("completed", "MySQL workload completed")
+			}
+			s.mu.Unlock()
+		}()
+
+		s.mu.Lock()
+		s.setLifecyclePhaseLocked("initializing", "Preparing MySQL workload execution")
+		s.setLifecycleStepLocked("Setting up MySQL workload", 2, 3)
+		s.setLifecycleStepProgressLocked(0, 1)
+		s.addLifecycleEventLocked("init", "MySQL workload setup in progress")
+		s.mu.Unlock()
+
+		// TODO: Add MySQL table creation, seeding, and workload execution logic
+		// For now, mark as in progress and ready for MySQL runner implementation
+
+		s.mu.Lock()
+		s.setLifecyclePhaseLocked("running", "Executing MySQL workload")
+		s.setLifecycleStepLocked("Running workload queries", 3, 3)
+		s.setLifecycleStepProgressLocked(0, 1)
+		s.addLifecycleEventLocked("exec", "MySQL workload execution started")
+		s.mu.Unlock()
+
+		intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
+
+		for i := 1; i <= cfg.Iterations; i++ {
+			if ctx.Err() != nil {
+				break
+			}
+
+			s.mu.Lock()
+			s.CurrentIteration = i
+			s.IsWaiting = false
+			s.CurrentStats.CurrentIteration = i
+			s.mu.Unlock()
+
+			// TODO: Call MySQL workload runner
+			// For now, simulate with a placeholder
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+				// Placeholder for MySQL workload execution
+				s.mu.Lock()
+				s.CurrentStats.FindOps++
+				s.mu.Unlock()
+			}
+
+			if i < cfg.Iterations && intervalDuration > 0 {
+				s.mu.Lock()
+				s.IsWaiting = true
+				s.mu.Unlock()
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(intervalDuration):
+				}
+			}
+		}
+
+		s.mu.Lock()
+		s.addLifecycleEventLocked("exec", "MySQL workload execution completed")
+		s.mu.Unlock()
+	}()
 }
 
 func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
@@ -2227,4 +2438,288 @@ func (s *WebServer) handleShutdown(w http.ResponseWriter, r *http.Request) {
 		log.Println("Shutdown requested via Web UI. Exiting application...")
 		os.Exit(0)
 	}()
+}
+
+func (s *WebServer) handleConnections(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	switch r.Method {
+	case http.MethodGet:
+		// Return all connections (without passwords)
+		conns := make([]*SavedConnection, 0, len(s.Connections))
+		for _, conn := range s.Connections {
+			safeCopy := *conn
+			safeCopy.Password = ""
+			conns = append(conns, &safeCopy)
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"connections": conns,
+		})
+	
+	case http.MethodPost:
+		// Create or update a connection
+		var conn SavedConnection
+		if err := json.NewDecoder(r.Body).Decode(&conn); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+			return
+		}
+
+		if conn.Name == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Connection name is required"})
+			return
+		}
+
+		if conn.Type == "" {
+			conn.Type = "mongo" // default
+		}
+
+		// Validate required fields based on connection type
+		if conn.Type == "mongo" {
+			if conn.URI == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "MongoDB URI is required"})
+				return
+			}
+		} else if conn.Type == "mysql" {
+			if conn.MySQLHost == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]string{"error": "MySQL host is required"})
+				return
+			}
+			if conn.MySQLPort == 0 {
+				conn.MySQLPort = 3306 // default MySQL port
+			}
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid connection type. Must be 'mongo' or 'mysql'"})
+			return
+		}
+
+		// Generate ID if not exists (new connection)
+		if conn.ID == "" {
+			s.connectionCounter++
+			conn.ID = fmt.Sprintf("conn_%d", s.connectionCounter)
+			conn.CreatedAt = time.Now()
+		}
+
+		s.Connections[conn.ID] = &conn
+
+		// Persist to disk (caller holds lock)
+		if err := s.saveConnectionsToDiskLocked(s.connectionsFile); err != nil {
+			log.Printf("Warning: failed to persist connections: %v", err)
+		}
+
+		respCopy := conn
+		respCopy.Password = ""
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(respCopy)
+	
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *WebServer) handleDeleteConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	
+	connectionID := r.FormValue("id")
+	if connectionID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Connection ID is required"})
+		return
+	}
+	
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if _, exists := s.Connections[connectionID]; !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Connection not found"})
+		return
+	}
+	
+	delete(s.Connections, connectionID)
+	// Persist after deletion (caller holds lock)
+	if err := s.saveConnectionsToDiskLocked(s.connectionsFile); err != nil {
+		log.Printf("Warning: failed to persist connections after delete: %v", err)
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
+func (s *WebServer) handleTestConnection(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Accept either { id: "conn_x" } or a full connection payload
+	var payload map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+		return
+	}
+
+	var conn *SavedConnection
+
+	if idRaw, ok := payload["id"]; ok {
+		idStr := fmt.Sprintf("%v", idRaw)
+		s.mu.Lock()
+		c, exists := s.Connections[idStr]
+		s.mu.Unlock()
+		if !exists {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Connection not found"})
+			return
+		}
+		conn = c
+	} else {
+		// Parse as SavedConnection
+		var tmp SavedConnection
+		b, _ := json.Marshal(payload)
+		if err := json.Unmarshal(b, &tmp); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid connection payload"})
+			return
+		}
+		conn = &tmp
+	}
+
+	// Default to mongo if not specified
+	if conn.Type == "" {
+		conn.Type = "mongo"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+
+	var testErr error
+
+	if conn.Type == "mongo" {
+		// Test MongoDB connection
+		tempCfg := *s.AppConfig
+		tempCfg.URI = conn.URI
+		tempCfg.ConnectionParams.Username = conn.Username
+		tempCfg.ConnectionParams.Password = conn.Password
+		tempCfg.ConnectionParams.AuthSource = conn.AuthSource
+		tempCfg.ConnectionParams.ReplicaSetName = conn.ReplicaSetName
+		tempCfg.ConnectionParams.ReadPreference = conn.ReadPreference
+		tempCfg.ConnectionParams.DirectConnection = conn.DirectConnection
+		tempCfg.ConnectionParams.MaxPoolSize = conn.MaxPoolSize
+		tempCfg.ConnectionParams.MinPoolSize = conn.MinPoolSize
+		tempCfg.ConnectionParams.MaxIdleTime = conn.MaxIdleTimeMin
+
+		testErr = db.TestConnection(ctx, &tempCfg)
+	} else if conn.Type == "mysql" {
+		// Test MySQL connection
+		tempCfg := *s.AppConfig
+		tempCfg.ConnectionParams.Host = conn.MySQLHost
+		tempCfg.ConnectionParams.Port = conn.MySQLPort
+		tempCfg.ConnectionParams.Username = conn.Username
+		tempCfg.ConnectionParams.Password = conn.Password
+		tempCfg.ConnectionParams.Database = conn.MySQLDatabase
+		tempCfg.ConnectionParams.MaxPoolSize = conn.MaxPoolSize
+		tempCfg.ConnectionParams.MinPoolSize = conn.MinPoolSize
+		tempCfg.ConnectionParams.MaxIdleTime = conn.MaxIdleTimeMin
+
+		testErr = db.TestConnectionMySQL(ctx, &tempCfg)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"status": "failed", "error": "Unknown connection type"})
+		return
+	}
+
+	if testErr != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"status": "failed", "error": testErr.Error()})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// defaultConnectionsPath returns a sensible default path for storing connections.
+func defaultConnectionsPath() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		cfgDir := filepath.Join(dir, "plgm")
+		_ = os.MkdirAll(cfgDir, 0700)
+		return filepath.Join(cfgDir, "connections.json")
+	}
+	return "plgm_connections.json"
+}
+
+// loadConnectionsFromDisk loads saved connections into memory.
+func (s *WebServer) loadConnectionsFromDisk() error {
+	path := s.connectionsFile
+	if path == "" {
+		path = defaultConnectionsPath()
+		s.connectionsFile = path
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var conns []SavedConnection
+	if err := json.Unmarshal(b, &conns); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, c := range conns {
+		tmp := c
+		s.Connections[tmp.ID] = &tmp
+		if strings.HasPrefix(tmp.ID, "conn_") {
+			if n, err := strconv.Atoi(strings.TrimPrefix(tmp.ID, "conn_")); err == nil {
+				if int64(n) > s.connectionCounter {
+					s.connectionCounter = int64(n)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// saveConnectionsToDiskLocked persists connections to disk. Caller must hold s.mu.
+func (s *WebServer) saveConnectionsToDiskLocked(path string) error {
+	if path == "" {
+		path = defaultConnectionsPath()
+	}
+	// build slice
+	conns := make([]SavedConnection, 0, len(s.Connections))
+	for _, c := range s.Connections {
+		conns = append(conns, *c)
+	}
+	data, err := json.MarshalIndent(conns, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// saveConnectionsToDisk persists connections to disk with locking.
+func (s *WebServer) saveConnectionsToDisk(path string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.saveConnectionsToDiskLocked(path)
 }
