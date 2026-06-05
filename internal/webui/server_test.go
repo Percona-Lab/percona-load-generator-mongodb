@@ -14,6 +14,7 @@ import (
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/definitions"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	driverMongo "go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -65,6 +66,83 @@ func TestHandleGetConfigMasksPassword(t *testing.T) {
 	}
 	if got.ConnectionParams.Username != "user" {
 		t.Fatalf("expected username preserved, got %q", got.ConnectionParams.Username)
+	}
+}
+
+func TestDefinitionAPIListCreateGetUpdateDelete(t *testing.T) {
+	s := newServerWithTempDefinitions(t)
+	body := strings.NewReader(`{"name":"orders queries","description":"demo","content":"{\"queries\":[{\"name\":\"find_orders\",\"database\":\"shop\",\"collection\":\"orders\",\"operation\":\"find\",\"filter\":{}}]}"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/query-definitions", body)
+	rec := httptest.NewRecorder()
+
+	s.handleQueryDefinitions(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var created definitions.Definition
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created definition: %v", err)
+	}
+	if created.ID == "" || created.Type != definitions.KindQuery || !strings.Contains(created.Content, `"queries"`) {
+		t.Fatalf("unexpected created definition: %+v", created)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/query-definitions", nil)
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	listPayload := decodeJSONMap(t, rec.Body.Bytes())
+	defs, ok := listPayload["definitions"].([]interface{})
+	if !ok || len(defs) != 1 {
+		t.Fatalf("expected one listed definition, got %+v", listPayload)
+	}
+	if _, hasContent := defs[0].(map[string]interface{})["content"]; hasContent {
+		t.Fatalf("list payload should omit definition content")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/query-definitions/"+created.ID, nil)
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPut, "/api/query-definitions/"+created.ID, strings.NewReader(`{"name":"orders queries edited","content":"{\"queries\":[{\"name\":\"find_orders\",\"database\":\"shop\",\"collection\":\"orders\",\"operation\":\"find\",\"filter\":{\"status\":\"open\"}}]}"}`))
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on update, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/query-definitions/"+created.ID, nil)
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on delete, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDefinitionAPIUploadAndValidationFailures(t *testing.T) {
+	s := newServerWithTempDefinitions(t)
+
+	req, rec := newDefinitionUploadRequest(t, "/api/collection-definitions/upload", "file", "collections.json", `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`)
+	s.handleCollectionDefinitionItem(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected upload 201, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req, rec = newDefinitionUploadRequest(t, "/api/collection-definitions/upload", "file", "collections-copy.json", `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`)
+	s.handleCollectionDefinitionItem(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "identical content") {
+		t.Fatalf("expected duplicate content failure, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	req, rec = newDefinitionUploadRequest(t, "/api/query-definitions/upload", "file", "bad.json", `{"queries":[{"name":"bad","collection":"orders","filter":{}}]}`)
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid query operation") {
+		t.Fatalf("expected semantic validation failure, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -545,6 +623,36 @@ func newMultipartRequest(t *testing.T, fields map[string]string, files map[strin
 	return req, httptest.NewRecorder()
 }
 
+func newDefinitionUploadRequest(t *testing.T, path, formField, filename, contents string) (*http.Request, *httptest.ResponseRecorder) {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, err := w.CreateFormFile(formField, filename)
+	if err != nil {
+		t.Fatalf("create upload part: %v", err)
+	}
+	if _, err := part.Write([]byte(contents)); err != nil {
+		t.Fatalf("write upload content: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close upload writer: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, &body)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req, httptest.NewRecorder()
+}
+
+func newServerWithTempDefinitions(t *testing.T) *WebServer {
+	t.Helper()
+	store, err := definitions.NewFileStore(t.TempDir() + "/definitions.json")
+	if err != nil {
+		t.Fatalf("create temp definition store: %v", err)
+	}
+	s := NewServer(&config.AppConfig{})
+	s.DefinitionStore = store
+	return s
+}
+
 func decodeJSONMap(t *testing.T, b []byte) map[string]interface{} {
 	t.Helper()
 	var m map[string]interface{}
@@ -802,6 +910,79 @@ func TestHandleStartSuccessWithUploadedCustomFilesSkipsLoaders(t *testing.T) {
 	}
 	if connectedDBName != "customdb" {
 		t.Fatalf("expected dbName from uploaded custom collections, got %q", connectedDBName)
+	}
+}
+
+func TestHandleStartSuccessWithSelectedStoredDefinitions(t *testing.T) {
+	loadCalled := false
+	runCalled := make(chan []config.QueryDefinition, 1)
+
+	withWebUISeams(t, webuiSeams{
+		loadCollections: func(path string, loadDefault bool) (*config.CollectionsFile, error) {
+			loadCalled = true
+			return nil, nil
+		},
+		loadQueries: func(path string, loadDefault bool) (*config.QueriesFile, error) {
+			loadCalled = true
+			return nil, nil
+		},
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			if dbName != "stored_db" {
+				t.Fatalf("expected stored_db connection, got %q", dbName)
+			}
+			return &db.Connection{}, nil
+		},
+		disconnect: func(c *db.Connection, ctx context.Context) {},
+		createCollections: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile, drop bool) error {
+			return nil
+		},
+		createIndexes: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile) error {
+			return nil
+		},
+		runWorkload: func(ctx context.Context, database *driverMongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
+			runCalled <- append([]config.QueryDefinition(nil), queries...)
+			return nil
+		},
+	})
+
+	s := newServerWithTempDefinitions(t)
+	s.AppConfig.Duration = "1s"
+	s.AppConfig.Iterations = 1
+	collDef, err := s.DefinitionStore.Create(definitions.KindCollection, definitions.Input{
+		Name:    "stored collections",
+		Content: `{"collections":[{"database":"stored_db","collection":"orders","fields":{}}]}`,
+	})
+	if err != nil {
+		t.Fatalf("create stored collection definition: %v", err)
+	}
+	queryDef, err := s.DefinitionStore.Create(definitions.KindQuery, definitions.Input{
+		Name:    "stored queries",
+		Content: `{"queries":[{"name":"find_stored","collection":"orders","operation":"find","filter":{}}]}`,
+	})
+	if err != nil {
+		t.Fatalf("create stored query definition: %v", err)
+	}
+
+	req, rec := newMultipartRequest(t, map[string]string{
+		"default_workload":         "false",
+		"collection_definition_id": collDef.ID,
+		"query_definition_id":      queryDef.ID,
+	}, nil)
+	s.handleStart(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case queries := <-runCalled:
+		if len(queries) != 1 || queries[0].Database != "stored_db" || queries[0].SourceType != "stored_definition" {
+			t.Fatalf("expected query bound from stored definitions, got %+v", queries)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected runWorkload to be called")
+	}
+	if loadCalled {
+		t.Fatalf("expected file loaders not to be called when stored definitions are selected")
 	}
 }
 

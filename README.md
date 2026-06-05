@@ -225,6 +225,42 @@ The output, once the workload is completed, will look like the following:
 <img src="./images/finding_diag.png" alt="finding_diagnostics" width="50%">
 <img src="./images/finding_query_ref.png" alt="finding_query_reference" width="50%">
 
+### 7. User-Managed Query and Collection Definitions
+The Web UI can save reusable query and collection definition files so they do not need to be uploaded every time a workload is started.
+
+In the `Workload` tab, uncheck **Use Built-in Default Workload**. The **Saved Definition Library** will show dropdowns for collection definitions and query definitions. From there you can:
+
+* Upload and save a collection definition JSON file.
+* Upload and save a query definition JSON file.
+* Select previously saved definitions from dropdowns.
+* View and edit the selected query definition in the built-in JSON editor.
+* Save query edits back to the selected definition, or save the edited content as a new definition.
+* Use unsaved one-off JSON files for a single run when you do not want to add them to the library.
+
+Uploaded and edited definitions are validated before they are saved. PLGM rejects empty files, malformed JSON, invalid workload schemas, duplicate namespaces in collection definitions, duplicate query names in a query definition, duplicate saved definition names, and duplicate saved content.
+
+Definition storage is durable application storage, separate from browser caching. By default PLGM stores definitions in a local JSON file under the user config directory:
+
+```bash
+~/.config/plgm/definitions.json
+```
+
+On macOS this typically resolves under:
+
+```bash
+~/Library/Application Support/plgm/definitions.json
+```
+
+You can override the location with:
+
+```bash
+export PLGM_DEFINITIONS_STORE=/path/to/plgm-definitions.json
+```
+
+The last selected query and collection definitions are cached in browser `localStorage` so the Web UI can restore your previous selections after refresh. This cache only stores selected IDs; the actual definition content is stored server-side in the JSON store.
+
+Storage decision: PLGM uses local file-based JSON storage because it has no existing database dependency, usually runs as a single local or single-container Web UI process, and needs simple durable persistence with easy backup and restore. SQLite would be a reasonable future option if richer querying, heavier concurrent editing, or multi-user metadata becomes necessary. Valkey/Redis is not used because PLGM does not require distributed cache/state for this feature and adding it would increase operational complexity without improving the single-instance workflow.
+
 ## CLI 
 
 #### 1. Configuration

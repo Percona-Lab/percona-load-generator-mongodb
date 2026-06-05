@@ -32,6 +32,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/benchmark"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/definitions"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -68,6 +69,7 @@ type WebServer struct {
 	CompletedAt       time.Time
 	InitDurationSec   float64
 	LifecycleEvents   []lifecycleEvent
+	DefinitionStore   *definitions.FileStore
 }
 
 type lifecycleEvent struct {
@@ -89,10 +91,15 @@ var (
 )
 
 func NewServer(cfg *config.AppConfig) *WebServer {
+	defStore, err := definitions.NewFileStore(definitions.DefaultStorePath())
+	if err != nil {
+		log.Printf("Warning: definition library disabled: %v", err)
+	}
 	return &WebServer{
-		AppConfig:      cfg,
-		ShapeTrendBase: make(map[string]float64),
-		LifecyclePhase: "idle",
+		AppConfig:       cfg,
+		ShapeTrendBase:  make(map[string]float64),
+		LifecyclePhase:  "idle",
+		DefinitionStore: defStore,
 	}
 }
 
@@ -192,6 +199,10 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/insights", s.handleInsights)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
+	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
+	mux.HandleFunc("/api/query-definitions/", s.handleQueryDefinitionItem)
+	mux.HandleFunc("/api/collection-definitions", s.handleCollectionDefinitions)
+	mux.HandleFunc("/api/collection-definitions/", s.handleCollectionDefinitionItem)
 
 	cert, err := generateSelfSignedCert()
 	if err != nil {
@@ -220,6 +231,171 @@ func (s *WebServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	safeCfg := *s.AppConfig
 	safeCfg.ConnectionParams.Password = ""
 	json.NewEncoder(w).Encode(safeCfg)
+}
+
+func (s *WebServer) handleQueryDefinitions(w http.ResponseWriter, r *http.Request) {
+	s.handleDefinitionCollection(w, r, definitions.KindQuery)
+}
+
+func (s *WebServer) handleQueryDefinitionItem(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/query-definitions/")
+	s.handleDefinitionItem(w, r, definitions.KindQuery, id)
+}
+
+func (s *WebServer) handleCollectionDefinitions(w http.ResponseWriter, r *http.Request) {
+	s.handleDefinitionCollection(w, r, definitions.KindCollection)
+}
+
+func (s *WebServer) handleCollectionDefinitionItem(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/collection-definitions/")
+	s.handleDefinitionItem(w, r, definitions.KindCollection, id)
+}
+
+func (s *WebServer) handleDefinitionCollection(w http.ResponseWriter, r *http.Request, kind definitions.Kind) {
+	if s.DefinitionStore == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		defs, err := s.DefinitionStore.List(kind)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"definitions": defs})
+	case http.MethodPost:
+		if strings.HasSuffix(r.URL.Path, "/upload") {
+			s.handleDefinitionUpload(w, r, kind)
+			return
+		}
+		var in definitions.Input
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid JSON request body: "+err.Error())
+			return
+		}
+		def, err := s.DefinitionStore.Create(kind, in)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusCreated, def)
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request, kind definitions.Kind, id string) {
+	if s.DefinitionStore == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+		return
+	}
+
+	id = strings.Trim(id, "/")
+	if id == "upload" {
+		if r.Method != http.MethodPost {
+			writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		s.handleDefinitionUpload(w, r, kind)
+		return
+	}
+	if id == "" {
+		writeAPIError(w, http.StatusBadRequest, "definition id is required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		def, err := s.DefinitionStore.Get(kind, id)
+		if err != nil {
+			writeDefinitionLookupError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, def)
+	case http.MethodPut:
+		var in definitions.Input
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid JSON request body: "+err.Error())
+			return
+		}
+		def, err := s.DefinitionStore.Update(kind, id, in)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				writeAPIError(w, http.StatusNotFound, "definition not found")
+				return
+			}
+			writeAPIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, def)
+	case http.MethodDelete:
+		if err := s.DefinitionStore.Delete(kind, id); err != nil {
+			writeDefinitionLookupError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *WebServer) handleDefinitionUpload(w http.ResponseWriter, r *http.Request, kind definitions.Kind) {
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "failed to parse multipart upload: "+err.Error())
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "upload field 'file' is required")
+		return
+	}
+	defer file.Close()
+
+	b, err := io.ReadAll(file)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "failed to read uploaded file: "+err.Error())
+		return
+	}
+	filename := ""
+	if header != nil {
+		filename = header.Filename
+	}
+	in := definitions.Input{
+		Name:           r.FormValue("name"),
+		Description:    r.FormValue("description"),
+		Content:        string(b),
+		Format:         "json",
+		SourceFilename: filename,
+	}
+	def, err := s.DefinitionStore.Create(kind, in)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, def)
+}
+
+func writeDefinitionLookupError(w http.ResponseWriter, err error) {
+	if errors.Is(err, os.ErrNotExist) {
+		writeAPIError(w, http.StatusNotFound, "definition not found")
+		return
+	}
+	writeAPIError(w, http.StatusBadRequest, err.Error())
+}
+
+func writeAPIError(w http.ResponseWriter, statusCode int, message string) {
+	writeJSON(w, statusCode, map[string]string{
+		"status":  "error",
+		"message": message,
+	})
+}
+
+func writeJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func parseInt(val string, defaultVal int) int {
@@ -439,8 +615,29 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	var customQueries *config.QueriesFile
 
 	if !cfg.DefaultWorkload {
+		if defID := strings.TrimSpace(r.FormValue("collection_definition_id")); defID != "" {
+			if s.DefinitionStore == nil {
+				s.abortRun("Definition storage is not available")
+				writeStartError(w, http.StatusServiceUnavailable, "definition storage is not available")
+				return
+			}
+			def, err := s.DefinitionStore.Get(definitions.KindCollection, defID)
+			if err != nil {
+				s.abortRun("Failed to load selected collection definition: " + err.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to load selected collection definition: "+err.Error())
+				return
+			}
+			parsed, err := config.ParseCollectionsBytes([]byte(def.Content))
+			if err != nil {
+				s.abortRun("Failed to parse selected collection definition: " + err.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to parse selected collection definition: "+err.Error())
+				return
+			}
+			customCollections = parsed
+		}
+
 		collFile, _, err := r.FormFile("collections_file")
-		if err == nil {
+		if err == nil && customCollections == nil {
 			defer collFile.Close()
 			b, readErr := io.ReadAll(collFile)
 			if readErr != nil {
@@ -473,8 +670,43 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if defID := strings.TrimSpace(r.FormValue("query_definition_id")); defID != "" {
+			if s.DefinitionStore == nil {
+				s.abortRun("Definition storage is not available")
+				writeStartError(w, http.StatusServiceUnavailable, "definition storage is not available")
+				return
+			}
+			def, err := s.DefinitionStore.Get(definitions.KindQuery, defID)
+			if err != nil {
+				s.abortRun("Failed to load selected query definition: " + err.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to load selected query definition: "+err.Error())
+				return
+			}
+			parsed, err := config.ParseQueriesBytes([]byte(def.Content))
+			if err != nil {
+				s.abortRun("Failed to parse selected query definition: " + err.Error())
+				writeStartError(w, http.StatusBadRequest, "failed to parse selected query definition: "+err.Error())
+				return
+			}
+			for i := range parsed.Queries {
+				parsed.Queries[i].SourceType = "stored_definition"
+				parsed.Queries[i].SourceFile = def.SourceFilename
+				if parsed.Queries[i].SourceFile == "" {
+					parsed.Queries[i].SourceFile = def.Name
+				}
+				parsed.Queries[i].WorkloadName = "custom_workload"
+				parsed.Queries[i].DefinitionIndex = i
+			}
+			if err := config.NormalizeAndValidateQueries(parsed.Queries); err != nil {
+				s.abortRun("Failed to validate selected query definition: " + err.Error())
+				writeStartError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			customQueries = parsed
+		}
+
 		queryFile, queryHeader, err := r.FormFile("queries_file")
-		if err == nil {
+		if err == nil && customQueries == nil {
 			defer queryFile.Close()
 			b, readErr := io.ReadAll(queryFile)
 			if readErr != nil {
