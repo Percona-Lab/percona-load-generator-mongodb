@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/logger"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 
@@ -15,6 +16,11 @@ import (
 )
 
 func InsertRandomDocuments(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, count int, cfg *config.AppConfig) error {
+	// Configure deterministic generation (no-op when random_seed == 0). The seed
+	// phase is single-threaded, so the generated dataset is fully reproducible.
+	if cfg != nil {
+		datagen.ConfigureSeed(cfg.RandomSeed)
+	}
 	logger.Info("Seeding %d documents into '%s.%s'...", count, col.DatabaseName, col.Name)
 
 	// 1. Configure Batch Size

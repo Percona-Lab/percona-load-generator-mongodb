@@ -120,6 +120,34 @@ func TestFileStorePersistsAcrossInstances(t *testing.T) {
 	}
 }
 
+func TestValidateContentPreservesDatatypePlaceholders(t *testing.T) {
+	raw := `{"queries":[{"name":"typed_filters","database":"shop","collection":"orders","operation":"find","filter":{
+		"field_string":"<string>",
+		"field_int":"<int>",
+		"field_bool":"<boolean>",
+		"field_array":"<array>",
+		"field_object":"<object>",
+		"field_null":"<null>",
+		"literal_value":"open"
+	}}]}`
+
+	content, err := ValidateContent(KindQuery, []byte(raw))
+	if err != nil {
+		t.Fatalf("validate query content: %v", err)
+	}
+	for _, placeholder := range []string{"<string>", "<int>", "<boolean>", "<array>", "<object>", "<null>"} {
+		if !strings.Contains(content, `"`+placeholder+`"`) {
+			t.Fatalf("expected readable placeholder %q in content, got:\n%s", placeholder, content)
+		}
+	}
+	if strings.Contains(content, `\u003c`) {
+		t.Fatalf("expected no HTML-escaped angle brackets in content, got:\n%s", content)
+	}
+	if !strings.Contains(content, `"literal_value": "open"`) {
+		t.Fatalf("expected user-provided filter values to be preserved, got:\n%s", content)
+	}
+}
+
 func newTestStore(t *testing.T) *FileStore {
 	t.Helper()
 	store, err := NewFileStore(filepath.Join(t.TempDir(), "definitions.json"))

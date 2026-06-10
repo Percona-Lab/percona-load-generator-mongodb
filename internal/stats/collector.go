@@ -238,6 +238,93 @@ type Collector struct {
 	insightEligible   uint64
 	insightSampledIn  uint64
 	finalInsights     *InsightsReport
+
+	acc accuracyCounters
+}
+
+// accuracyCounters track how well the workload actually exercises existing data.
+// A benchmark that mostly misses records can look fast but is not representative,
+// so these counters surface match/miss quality independent of latency.
+type accuracyCounters struct {
+	findOps        uint64
+	findReturned   uint64
+	findZero       uint64
+	updateOps      uint64
+	updateMatched  uint64
+	updateModified uint64
+	deleteOps      uint64
+	deleteDeleted  uint64
+	targetExisting uint64
+	targetRandom   uint64
+}
+
+// RecordFindResult records the number of documents returned by a find operation.
+func (c *Collector) RecordFindResult(returned int64) {
+	atomic.AddUint64(&c.acc.findOps, 1)
+	if returned <= 0 {
+		atomic.AddUint64(&c.acc.findZero, 1)
+		return
+	}
+	atomic.AddUint64(&c.acc.findReturned, uint64(returned))
+}
+
+// RecordUpdateResult records matched/modified counts for an update operation.
+func (c *Collector) RecordUpdateResult(matched, modified int64) {
+	atomic.AddUint64(&c.acc.updateOps, 1)
+	if matched > 0 {
+		atomic.AddUint64(&c.acc.updateMatched, uint64(matched))
+	}
+	if modified > 0 {
+		atomic.AddUint64(&c.acc.updateModified, uint64(modified))
+	}
+}
+
+// RecordDeleteResult records the number of documents removed by a delete op.
+func (c *Collector) RecordDeleteResult(deleted int64) {
+	atomic.AddUint64(&c.acc.deleteOps, 1)
+	if deleted > 0 {
+		atomic.AddUint64(&c.acc.deleteDeleted, uint64(deleted))
+	}
+}
+
+// RecordTargeting records whether an operation's filter was resolved from a
+// known existing record (true) or from a random value (false).
+func (c *Collector) RecordTargeting(usedExisting bool) {
+	if usedExisting {
+		atomic.AddUint64(&c.acc.targetExisting, 1)
+		return
+	}
+	atomic.AddUint64(&c.acc.targetRandom, 1)
+}
+
+// AccuracySnapshot exposes the accuracy counters for reporting/tests.
+type AccuracySnapshot struct {
+	FindOps        uint64
+	FindReturned   uint64
+	FindZero       uint64
+	UpdateOps      uint64
+	UpdateMatched  uint64
+	UpdateModified uint64
+	DeleteOps      uint64
+	DeleteDeleted  uint64
+	TargetExisting uint64
+	TargetRandom   uint64
+}
+
+// AccuracyStats returns a snapshot of the current accuracy counters.
+func (c *Collector) AccuracyStats() AccuracySnapshot {
+	return AccuracySnapshot{
+		FindOps:        atomic.LoadUint64(&c.acc.findOps),
+		FindReturned:   atomic.LoadUint64(&c.acc.findReturned),
+		FindZero:       atomic.LoadUint64(&c.acc.findZero),
+		UpdateOps:      atomic.LoadUint64(&c.acc.updateOps),
+		UpdateMatched:  atomic.LoadUint64(&c.acc.updateMatched),
+		UpdateModified: atomic.LoadUint64(&c.acc.updateModified),
+		DeleteOps:      atomic.LoadUint64(&c.acc.deleteOps),
+		DeleteDeleted:  atomic.LoadUint64(&c.acc.deleteDeleted),
+		TargetExisting: atomic.LoadUint64(&c.acc.targetExisting),
+		TargetRandom:   atomic.LoadUint64(&c.acc.targetRandom),
+	}
 }
 
 func NewCollector() *Collector {
@@ -618,6 +705,59 @@ func (c *Collector) PrintFinalSummary(duration time.Duration, silent ...bool) {
 	printLatencyRow(layout, "AGG", c.AggHist)
 	printLatencyRow(layout, "TRANS", c.TransHist)
 	fmt.Println()
+
+	c.printAccuracySummary()
+}
+
+// printAccuracySummary reports how well the workload targeted existing records.
+func (c *Collector) printAccuracySummary() {
+	acc := c.AccuracyStats()
+	if acc.FindOps == 0 && acc.UpdateOps == 0 && acc.DeleteOps == 0 && acc.TargetExisting == 0 && acc.TargetRandom == 0 {
+		return
+	}
+
+	fmt.Println(logger.BoldString("  WORKLOAD ACCURACY"))
+	fmt.Println(logger.CyanString("  --------------------------------------------------"))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+
+	pct := func(num, den uint64) string {
+		if den == 0 {
+			return "n/a"
+		}
+		return fmt.Sprintf("%.1f%%", 100*float64(num)/float64(den))
+	}
+
+	if acc.TargetExisting+acc.TargetRandom > 0 {
+		total := acc.TargetExisting + acc.TargetRandom
+		fmt.Fprintf(w, "  Existing-record targeting:\t%s (%s of %s filters)\n",
+			pct(acc.TargetExisting, total), formatInt(int64(acc.TargetExisting)), formatInt(int64(total)))
+	}
+	if acc.FindOps > 0 {
+		matched := acc.FindOps - acc.FindZero
+		fmt.Fprintf(w, "  Find match rate:\t%s (%s/%s ops returned docs)\n",
+			pct(matched, acc.FindOps), formatInt(int64(matched)), formatInt(int64(acc.FindOps)))
+		fmt.Fprintf(w, "  Find miss rate:\t%s\n", pct(acc.FindZero, acc.FindOps))
+		fmt.Fprintf(w, "  Docs returned (find):\t%s\n", formatInt(int64(acc.FindReturned)))
+	}
+	if acc.UpdateOps > 0 {
+		fmt.Fprintf(w, "  Update match rate:\t%s (%s matched, %s modified, %s ops)\n",
+			pct(acc.UpdateMatched, acc.UpdateOps), formatInt(int64(acc.UpdateMatched)),
+			formatInt(int64(acc.UpdateModified)), formatInt(int64(acc.UpdateOps)))
+	}
+	if acc.DeleteOps > 0 {
+		fmt.Fprintf(w, "  Delete hit rate:\t%s (%s deleted, %s ops)\n",
+			pct(acc.deleteHits(), acc.DeleteOps), formatInt(int64(acc.DeleteDeleted)), formatInt(int64(acc.DeleteOps)))
+	}
+	w.Flush()
+	fmt.Println()
+}
+
+// deleteHits caps deleted docs at op count to express a per-op hit rate.
+func (a AccuracySnapshot) deleteHits() uint64 {
+	if a.DeleteDeleted > a.DeleteOps {
+		return a.DeleteOps
+	}
+	return a.DeleteDeleted
 }
 
 func printLatencyRow(layout string, label string, h *LatencyHistogram) {

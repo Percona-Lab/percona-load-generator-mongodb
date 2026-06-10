@@ -228,14 +228,14 @@ The output, once the workload is completed, will look like the following:
 ### 7. User-Managed Query and Collection Definitions
 The Web UI can save reusable query and collection definition files so they do not need to be uploaded every time a workload is started.
 
-In the `Workload` tab, uncheck **Use Built-in Default Workload**. The **Saved Definition Library** will show dropdowns for collection definitions and query definitions. From there you can:
+In the `Workload` tab, the **Data & Query Definitions** section drives the workload entirely from the **Saved Definition Library**. Each of the Collection Definitions and Query Definitions cards has a single library dropdown that is the primary way to choose what runs. From there you can:
 
-* Upload and save a collection definition JSON file.
-* Upload and save a query definition JSON file.
-* Select previously saved definitions from dropdowns.
-* View and edit the selected query definition in the built-in JSON editor.
-* Save query edits back to the selected definition, or save the edited content as a new definition.
-* Use unsaved one-off JSON files for a single run when you do not want to add them to the library.
+* Select the built-in default collection and query definitions directly from the library dropdowns. The built-in defaults are pre-selected so a run is always ready without extra steps.
+* See a short summary of which definition is currently selected for the run.
+* Import a collection or query definition JSON file via **Save to Library**, which validates the file, stores it, and selects it for the run.
+* Select previously saved definitions from the dropdowns.
+* View and edit the selected query definition in the built-in JSON editor (**Create or edit a query definition**), then save edits back to the selected definition or save the edited content as a new definition. Editing a built-in default and saving creates a new custom definition, since built-ins are read-only.
+* Use a one-off JSON file for a single run without saving it: choose a file in the import section and run without clicking **Save to Library**. An unsaved imported file is used for that run only and overrides the library selection.
 
 Uploaded and edited definitions are validated before they are saved. PLGM rejects empty files, malformed JSON, invalid workload schemas, duplicate namespaces in collection definitions, duplicate query names in a query definition, duplicate saved definition names, and duplicate saved content.
 
@@ -994,6 +994,46 @@ To run your own workload against your own schema:
 * **Binary/Logic:** `binary`, `uuid`, `objectid`, `regex`, `javascript`.
 * **Complex:** `object`, `array`.
 * **Providers:** Supports ANY gofakeit provider via reflection. Example: `beer_name`, `car_maker`, `bitcoin_address`, `credit_card`, `city`, `ssn`, etc..
+* **Domain providers (airline workload):** `flight_code` (e.g. `DL482`), `gate` (e.g. `B7`), `airport_code` / `airport` (IATA), `airline`, `aircraft` / `plane_type`, `seats_available`, `duration_minutes`, `equip` (aircraft object), `passengers` (passenger list).
+
+### Field Constraints (schema-aware bounded values)
+Each field may declare optional constraints so generated data stays realistic and bounded:
+
+| Key         | Applies to        | Description |
+|-------------|-------------------|-------------|
+| `min`/`max` | `int`, `double`   | Inclusive numeric range. Unbounded ints default to a large range, so set these for real-world fields. |
+| `enum`      | any type          | Picks a random value from the provided list (strings or numbers). Takes precedence over `provider`/`type`. |
+| `template`  | `string`          | Pattern expander: `#` → digit, `?` → uppercase letter, `^` → lowercase letter (e.g. `"??###"` → `DL482`). |
+| `minLength`/`maxLength` | `string`, provider args | Length hints passed to length-aware providers. |
+| `arraySize` | `array`           | Fixed element count (otherwise randomized). |
+| `items`     | `array`           | Field definition for array elements. |
+| `fields`    | `object`          | Nested field definitions. |
+
+```json
+{
+  "duration_minutes": { "type": "int", "min": 30, "max": 900 },
+  "status":           { "type": "string", "enum": ["scheduled", "boarding", "landed", "cancelled"] },
+  "flight_code":      { "type": "string", "template": "??###" }
+}
+```
+
+### Query Accuracy (targeting existing records)
+Find/update/delete query filters use placeholders such as `<int>` and `<string>`. At runtime plgm
+maintains an in-memory **record pool** of inserted (and bootstrap-sampled) documents and, for
+`existing_record_hit_rate`% of operations, fills those placeholders with real values from the pool.
+This ensures operations actually read/update/delete documents that exist instead of missing on random
+values, so benchmark results reflect real work rather than empty matches. Tune via
+`existing_record_hit_rate`, `record_pool_max_size`, and `record_pool_bootstrap_sample`.
+
+### Workload Accuracy Metrics
+The final summary includes a **WORKLOAD ACCURACY** section reporting existing-record targeting,
+find match/miss rate, documents returned, update matched/modified counts, and delete hit rate — so a
+fast-but-misleading run (mostly missing records) is easy to spot.
+
+### Deterministic Generation
+Set `random_seed` (or `PLGM_RANDOM_SEED`) to a non-zero value to reproduce datasets. The single-threaded
+seed phase is fully reproducible; concurrent workload streams are seeded per-worker from the base
+(best-effort). Leave `0` for time-based, non-deterministic generation.
 
 ---
 

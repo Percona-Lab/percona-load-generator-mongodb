@@ -409,26 +409,6 @@
             background: #f8fafc;
         }
 
-        .definition-manager {
-            border: 1px solid #dbeafe;
-            background: #f8fbff;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 14px;
-        }
-
-        .definition-toolbar {
-            display: flex;
-            align-items: flex-end;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .definition-toolbar .form-group {
-            flex: 1 1 260px;
-            margin-bottom: 0;
-        }
-
         .definition-actions {
             display: flex;
             gap: 8px;
@@ -472,6 +452,79 @@
             font-size: 12px;
             color: var(--text-secondary);
             margin-top: 8px;
+        }
+
+        .definition-card {
+            border: 1px solid #dbeafe;
+            background: #f8fbff;
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .definition-card-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--p-night);
+            margin-bottom: 10px;
+        }
+
+        .definition-summary {
+            font-size: 12px;
+            color: var(--text);
+            background: #eef6ff;
+            border: 1px solid #cfe3ff;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .definition-summary .definition-summary-name {
+            font-weight: 600;
+            color: var(--p-night);
+        }
+
+        .definition-summary .definition-summary-meta {
+            color: var(--text-secondary);
+        }
+
+        .definition-import,
+        .definition-editor-wrap {
+            border-top: 1px solid #e2e8f0;
+            margin-top: 4px;
+            padding-top: 8px;
+        }
+
+        .definition-import>summary,
+        .definition-editor-wrap>summary {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--p-sky);
+            list-style: revert;
+            user-select: none;
+        }
+
+        .definition-import>summary:hover,
+        .definition-editor-wrap>summary:hover {
+            text-decoration: underline;
+        }
+
+        .definition-import-body {
+            margin-top: 10px;
+        }
+
+        .definition-import-body .definition-actions {
+            margin-top: 10px;
+        }
+
+        .definition-import-help {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            line-height: 1.4;
         }
 
         .btn-small {
@@ -1866,81 +1919,80 @@
                 </section>
 
                 <section class="settings-card">
-                    <h4>Data / Query Configuration</h4>
-                    <div class="settings-help">Choose built-in defaults or upload one collections file and one queries file. Each file can contain multiple definitions.</div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="defaultWorkload" name="default_workload" value="true" checked
-                            onchange="toggleCustomFiles()"><label for="defaultWorkload">Use Built-in Default Workload</label>
-                    </div>
+                    <h4>Data &amp; Query Definitions</h4>
+                    <div class="settings-help">Pick the collection and query definitions for this run from the Saved Definition Library. Built-in defaults are always available, and you can import your own JSON files to add more. Your last selection is remembered in this browser.</div>
                     <input type="hidden" id="selectedCollectionDefinitionId" name="collection_definition_id">
                     <input type="hidden" id="selectedQueryDefinitionId" name="query_definition_id">
-                    <div id="customFilesSection" style="display: none;">
-                        <div class="definition-manager">
-                            <h4>Saved Definition Library</h4>
-                            <div class="settings-help">Upload, select, or edit reusable JSON workload definitions. Saved definitions are persisted by the application; last-used selections are remembered in this browser.</div>
-                            <div class="grid-2">
-                                <div>
-                                    <div class="definition-toolbar">
-                                        <div class="form-group">
-                                            <label>Collection Definition</label>
-                                            <select id="collectionDefinitionSelect" onchange="selectDefinition('collection', this.value)">
-                                                <option value="">Loading saved collections...</option>
-                                            </select>
-                                            <div id="collectionDefinitionEmpty" class="definition-empty" style="display:none;">No saved collection definitions yet.</div>
-                                        </div>
-                                    </div>
-                                    <div class="definition-actions" style="margin-top: 10px;">
-                                        <input type="file" id="collectionDefinitionUpload" accept=".json">
-                                        <button type="button" class="btn btn-secondary btn-small" onclick="uploadDefinition('collection')">Upload & Save</button>
-                                    </div>
-                                    <div id="collectionDefinitionStatus" class="definition-status"></div>
-                                </div>
-                                <div>
-                                    <div class="definition-toolbar">
-                                        <div class="form-group">
-                                            <label>Query Definition</label>
-                                            <select id="queryDefinitionSelect" onchange="selectDefinition('query', this.value)">
-                                                <option value="">Loading saved queries...</option>
-                                            </select>
-                                            <div id="queryDefinitionEmpty" class="definition-empty" style="display:none;">No saved query definitions yet.</div>
-                                        </div>
-                                    </div>
-                                    <div class="definition-actions" style="margin-top: 10px;">
-                                        <input type="file" id="queryDefinitionUpload" accept=".json">
-                                        <button type="button" class="btn btn-secondary btn-small" onclick="uploadDefinition('query')">Upload & Save</button>
-                                        <button type="button" class="btn btn-secondary btn-small" onclick="newQueryDefinition()">New Query</button>
-                                    </div>
-                                    <div id="queryDefinitionStatus" class="definition-status"></div>
-                                </div>
+                    <div class="grid-2">
+                        <div class="definition-card">
+                            <div class="definition-card-title">Collection Definitions</div>
+                            <div class="form-group">
+                                <label for="collectionDefinitionSelect">Saved Definition Library</label>
+                                <select id="collectionDefinitionSelect" onchange="selectDefinition('collection', this.value)">
+                                    <option value="">Loading saved collections...</option>
+                                </select>
+                                <div id="collectionDefinitionEmpty" class="definition-empty" style="display:none;">No saved collection definitions yet.</div>
                             </div>
-                            <div class="definition-editor">
-                                <div>
-                                    <div class="form-group">
-                                        <label>Query Definition Name</label>
-                                        <input type="text" id="queryEditorName" placeholder="Example: ecommerce slow queries">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Description</label>
-                                        <input type="text" id="queryEditorDescription" placeholder="Optional">
-                                    </div>
+                            <div id="collectionDefinitionSummary" class="definition-summary" style="display:none;"></div>
+                            <details class="definition-import">
+                                <summary>Import a collection JSON file</summary>
+                                <div class="definition-import-body">
+                                    <input type="file" id="collectionImportFile" name="collections_file" accept=".json">
                                     <div class="definition-actions">
-                                        <button type="button" class="btn btn-primary btn-small" onclick="saveQueryDefinition()">Save</button>
-                                        <button type="button" class="btn btn-secondary btn-small" onclick="saveQueryDefinitionAsNew()">Save As New</button>
-                                        <button type="button" class="btn btn-danger btn-small" onclick="deleteSelectedQueryDefinition()">Delete</button>
+                                        <button type="button" class="btn btn-primary btn-small" onclick="saveImportToLibrary('collection')">Save to Library</button>
                                     </div>
-                                    <div id="queryEditorStatus" class="definition-status"></div>
+                                    <div class="definition-import-help">Validate and store the file so it appears in the library and can be reused. If you choose a file but do not save it, it is used for this run only.</div>
                                 </div>
-                                <div class="form-group">
-                                    <label>Query JSON Editor</label>
-                                    <textarea id="queryDefinitionEditor" spellcheck="false" placeholder='{"queries":[{"name":"find_orders","database":"shop","collection":"orders","operation":"find","filter":{}}]}'></textarea>
-                                </div>
-                            </div>
+                            </details>
+                            <div id="collectionDefinitionStatus" class="definition-status"></div>
                         </div>
-                        <div class="grid-2" style="margin-top: 14px;">
-                            <div class="file-upload-box"><label>Run Once With Unsaved Collections JSON</label><input type="file"
-                                    name="collections_file" accept=".json"></div>
-                            <div class="file-upload-box"><label>Run Once With Unsaved Queries JSON</label><input type="file"
-                                    name="queries_file" accept=".json"></div>
+                        <div class="definition-card">
+                            <div class="definition-card-title">Query Definitions</div>
+                            <div class="form-group">
+                                <label for="queryDefinitionSelect">Saved Definition Library</label>
+                                <select id="queryDefinitionSelect" onchange="selectDefinition('query', this.value)">
+                                    <option value="">Loading saved queries...</option>
+                                </select>
+                                <div id="queryDefinitionEmpty" class="definition-empty" style="display:none;">No saved query definitions yet.</div>
+                            </div>
+                            <div id="queryDefinitionSummary" class="definition-summary" style="display:none;"></div>
+                            <details class="definition-import">
+                                <summary>Import a query JSON file</summary>
+                                <div class="definition-import-body">
+                                    <input type="file" id="queryImportFile" name="queries_file" accept=".json">
+                                    <div class="definition-actions">
+                                        <button type="button" class="btn btn-primary btn-small" onclick="saveImportToLibrary('query')">Save to Library</button>
+                                    </div>
+                                    <div class="definition-import-help">Validate and store the file so it appears in the library and can be reused. If you choose a file but do not save it, it is used for this run only.</div>
+                                </div>
+                            </details>
+                            <div id="queryDefinitionStatus" class="definition-status"></div>
+                            <details class="definition-editor-wrap">
+                                <summary>Create or edit a query definition</summary>
+                                <div class="definition-editor">
+                                    <div>
+                                        <div class="form-group">
+                                            <label>Query Definition Name</label>
+                                            <input type="text" id="queryEditorName" placeholder="Example: ecommerce slow queries">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Description</label>
+                                            <input type="text" id="queryEditorDescription" placeholder="Optional">
+                                        </div>
+                                        <div class="definition-actions">
+                                            <button type="button" class="btn btn-secondary btn-small" onclick="newQueryDefinition()">New</button>
+                                            <button type="button" class="btn btn-primary btn-small" onclick="saveQueryDefinition()">Save to Library</button>
+                                            <button type="button" class="btn btn-secondary btn-small" onclick="saveQueryDefinitionAsNew()">Save As New</button>
+                                            <button type="button" class="btn btn-danger btn-small" onclick="deleteSelectedQueryDefinition()">Delete</button>
+                                        </div>
+                                        <div id="queryEditorStatus" class="definition-status"></div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Query JSON Editor</label>
+                                        <textarea id="queryDefinitionEditor" spellcheck="false" placeholder='{"queries":[{"name":"find_orders","database":"shop","collection":"orders","operation":"find","filter":{}}]}'></textarea>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
                     </div>
                     <div class="settings-note">Accepted formats:
@@ -2328,12 +2380,6 @@
             collection: 'plgm.lastCollectionDefinitionId'
         };
 
-        function toggleCustomFiles() {
-            const showCustom = !document.getElementById('defaultWorkload').checked;
-            document.getElementById('customFilesSection').style.display = showCustom ? 'block' : 'none';
-            if (showCustom) loadDefinitionLibrary();
-        }
-
         function definitionStatusEl(kind) {
             return document.getElementById(kind === 'query' ? 'queryDefinitionStatus' : 'collectionDefinitionStatus');
         }
@@ -2368,14 +2414,53 @@
             return document.getElementById(kind === 'query' ? 'queryDefinitionEmpty' : 'collectionDefinitionEmpty');
         }
 
-        function uploadElFor(kind) {
-            return document.getElementById(kind === 'query' ? 'queryDefinitionUpload' : 'collectionDefinitionUpload');
+        function importFileFor(kind) {
+            return document.getElementById(kind === 'query' ? 'queryImportFile' : 'collectionImportFile');
+        }
+
+        function summaryElFor(kind) {
+            return document.getElementById(kind === 'query' ? 'queryDefinitionSummary' : 'collectionDefinitionSummary');
+        }
+
+        function isBuiltinDefinitionId(id) {
+            return typeof id === 'string' && id.indexOf('__builtin_') === 0;
         }
 
         function definitionLabel(def) {
             if (!def) return '';
+            if (isBuiltinDefinitionId(def.id)) {
+                return def.name || def.id;
+            }
             const updated = def.updatedAt ? new Date(def.updatedAt).toLocaleString() : '';
             return `${def.name || def.sourceFilename || def.id}${updated ? ' - ' + updated : ''}`;
+        }
+
+        function escHtmlSafe(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function renderDefinitionSummary(kind, def) {
+            const el = summaryElFor(kind);
+            if (!el) return;
+            if (!def) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            const builtin = isBuiltinDefinitionId(def.id);
+            const metaParts = [];
+            if (builtin) {
+                metaParts.push('Built-in default');
+            } else {
+                if (def.sourceFilename) metaParts.push(`source: ${escHtmlSafe(def.sourceFilename)}`);
+                if (def.updatedAt) metaParts.push(`updated: ${escHtmlSafe(new Date(def.updatedAt).toLocaleString())}`);
+            }
+            const desc = def.description ? `<div class="definition-summary-meta">${escHtmlSafe(def.description)}</div>` : '';
+            const meta = metaParts.length ? `<div class="definition-summary-meta">${metaParts.join(' &middot; ')}</div>` : '';
+            el.innerHTML = `Using <span class="definition-summary-name">${escHtmlSafe(def.name || def.id)}</span> for this run.${desc}${meta}`;
+            el.style.display = 'block';
         }
 
         async function apiJSON(url, options = {}) {
@@ -2428,8 +2513,13 @@
             const hidden = hiddenDefinitionInput(kind);
             if (hidden) hidden.value = id || '';
             definitionState[kind].selected = null;
+            // Selecting a library definition takes precedence over an imported file,
+            // so clear any pending run-once import to avoid an ambiguous run.
+            const importInput = importFileFor(kind);
+            if (importInput) importInput.value = '';
             if (!id) {
                 localStorage.removeItem(definitionLocalStorageKeys[kind]);
+                renderDefinitionSummary(kind, null);
                 if (kind === 'query') clearQueryEditor();
                 return;
             }
@@ -2437,35 +2527,46 @@
                 const def = await apiJSON(`${endpointFor(kind)}/${encodeURIComponent(id)}`);
                 definitionState[kind].selected = def;
                 localStorage.setItem(definitionLocalStorageKeys[kind], id);
+                renderDefinitionSummary(kind, def);
                 if (kind === 'query') populateQueryEditor(def);
                 setDefinitionStatus(kind, `Selected ${def.name}.`, 'ok');
             } catch (err) {
                 if (hidden) hidden.value = '';
+                renderDefinitionSummary(kind, null);
                 setDefinitionStatus(kind, err.message || String(err), 'error');
             }
         }
 
+        function builtinDefinitionId(kind) {
+            const builtin = definitionState[kind].items.find(def => isBuiltinDefinitionId(def.id));
+            return builtin ? builtin.id : '';
+        }
+
         function restoreLastDefinitionSelections() {
             ['collection', 'query'].forEach(kind => {
-                const last = localStorage.getItem(definitionLocalStorageKeys[kind]);
                 const select = selectElFor(kind);
-                if (!last || !select || !definitionState[kind].items.some(def => def.id === last)) return;
-                select.value = last;
-                selectDefinition(kind, last);
+                if (!select) return;
+                const last = localStorage.getItem(definitionLocalStorageKeys[kind]);
+                let target = (last && definitionState[kind].items.some(def => def.id === last)) ? last : '';
+                // Default to the built-in definition so a run is always ready without extra clicks.
+                if (!target) target = builtinDefinitionId(kind);
+                if (!target) return;
+                select.value = target;
+                selectDefinition(kind, target);
             });
         }
 
-        async function uploadDefinition(kind) {
-            const input = uploadElFor(kind);
+        async function saveImportToLibrary(kind) {
+            const input = importFileFor(kind);
             const file = input && input.files ? input.files[0] : null;
             if (!file) {
-                setDefinitionStatus(kind, 'Choose a JSON file to upload first.', 'error');
+                setDefinitionStatus(kind, 'Choose a JSON file to import first.', 'error');
                 return;
             }
             const fd = new FormData();
             fd.append('file', file);
             fd.append('name', file.name.replace(/\.[^.]+$/, ''));
-            setDefinitionStatus(kind, 'Uploading and validating...', '');
+            setDefinitionStatus(kind, 'Validating and saving to library...', '');
             try {
                 const def = await apiJSON(`${endpointFor(kind)}/upload`, { method: 'POST', body: fd });
                 if (input) input.value = '';
@@ -2473,7 +2574,7 @@
                 const select = selectElFor(kind);
                 if (select) select.value = def.id;
                 await selectDefinition(kind, def.id);
-                setDefinitionStatus(kind, `Saved ${def.name}.`, 'ok');
+                setDefinitionStatus(kind, `Saved "${def.name}" to the library and selected it for this run.`, 'ok');
             } catch (err) {
                 setDefinitionStatus(kind, err.message || String(err), 'error');
             }
@@ -2500,10 +2601,11 @@
             if (hidden) hidden.value = '';
             definitionState.query.selected = null;
             localStorage.removeItem(definitionLocalStorageKeys.query);
+            renderDefinitionSummary('query', null);
             document.getElementById('queryEditorName').value = '';
             document.getElementById('queryEditorDescription').value = '';
             document.getElementById('queryDefinitionEditor').value = '{\n  "queries": [\n    {\n      "name": "find_orders",\n      "database": "shop",\n      "collection": "orders",\n      "operation": "find",\n      "filter": {}\n    }\n  ]\n}';
-            setQueryEditorStatus('New query definition ready.', 'ok');
+            setQueryEditorStatus('New query definition ready. Fill in the JSON and click "Save to Library".', 'ok');
         }
 
         function readQueryEditorInput(requireExisting) {
@@ -2532,9 +2634,14 @@
         async function saveQueryDefinition() {
             try {
                 const selected = definitionState.query.selected;
-                const payload = readQueryEditorInput(!!selected);
+                // Built-in defaults are read-only, so editing one and saving creates a new library entry.
+                const updateExisting = !!selected && !isBuiltinDefinitionId(selected.id);
+                const payload = readQueryEditorInput(false);
+                if (!updateExisting && selected && isBuiltinDefinitionId(selected.id) && payload.name === selected.name) {
+                    payload.name = `${payload.name} (custom)`;
+                }
                 setQueryEditorStatus('Saving query definition...', '');
-                const def = selected
+                const def = updateExisting
                     ? await apiJSON(`${endpointFor('query')}/${encodeURIComponent(selected.id)}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -2589,6 +2696,15 @@
                 localStorage.removeItem(definitionLocalStorageKeys.query);
                 clearQueryEditor();
                 await loadDefinitions('query');
+                // Fall back to the built-in default so a query definition stays selected.
+                const select = selectElFor('query');
+                const fallback = builtinDefinitionId('query');
+                if (select && fallback) {
+                    select.value = fallback;
+                    await selectDefinition('query', fallback);
+                } else {
+                    renderDefinitionSummary('query', null);
+                }
                 setQueryEditorStatus('Query definition deleted.', 'ok');
             } catch (err) {
                 setQueryEditorStatus(err.message || String(err), 'error');
@@ -2652,19 +2768,18 @@
                 return false;
             }
 
-            const usingDefault = !!document.getElementById('defaultWorkload')?.checked;
-            if (!usingDefault) {
+            {
                 const selectedCollection = (document.getElementById('selectedCollectionDefinitionId')?.value || '').trim();
                 const selectedQuery = (document.getElementById('selectedQueryDefinitionId')?.value || '').trim();
                 const collectionFile = document.querySelector('[name="collections_file"]')?.files?.length || 0;
                 const queryFile = document.querySelector('[name="queries_file"]')?.files?.length || 0;
                 if (!selectedCollection && collectionFile === 0) {
-                    showConfigInlineError('Select a saved collection definition or upload an unsaved collections JSON file.');
+                    showConfigInlineError('Select a collection definition from the library, or import a collection JSON file.');
                     showTab('tab-workload', document.querySelectorAll('.tab-btn')[1]);
                     return false;
                 }
                 if (!selectedQuery && queryFile === 0) {
-                    showConfigInlineError('Select a saved query definition or upload an unsaved queries JSON file.');
+                    showConfigInlineError('Select a query definition from the library, or import a query JSON file.');
                     showTab('tab-workload', document.querySelectorAll('.tab-btn')[1]);
                     return false;
                 }
@@ -3311,7 +3426,6 @@
                 }
 
                 document.getElementById('debugLogs').checked = cfg.Debug;
-                document.getElementById('defaultWorkload').checked = cfg.DefaultWorkload; toggleCustomFiles();
                 document.getElementById('dropColl').checked = cfg.DropCollections;
                 document.getElementById('skipSeed').checked = cfg.SkipSeed;
                 document.querySelector('[name="documents_count"]').value = cfg.DocumentsCount || 100000;
@@ -3363,30 +3477,24 @@
                 loadDefinitionLibrary();
             });
 
-            const runOnceCollections = document.querySelector('[name="collections_file"]');
-            if (runOnceCollections) {
-                runOnceCollections.addEventListener('change', () => {
-                    if (runOnceCollections.files.length > 0) {
-                        const select = selectElFor('collection');
-                        if (select) select.value = '';
-                        hiddenDefinitionInput('collection').value = '';
-                        localStorage.removeItem(definitionLocalStorageKeys.collection);
-                        setDefinitionStatus('collection', 'Unsaved collections file will be used for this run.', 'ok');
-                    }
+            ['collection', 'query'].forEach(kind => {
+                const importInput = importFileFor(kind);
+                if (!importInput) return;
+                importInput.addEventListener('change', () => {
+                    if (importInput.files.length === 0) return;
+                    // An imported file (not yet saved) is used for this run only and
+                    // overrides any library selection. Clear the selection to make that obvious.
+                    const select = selectElFor(kind);
+                    if (select) select.value = '';
+                    const hidden = hiddenDefinitionInput(kind);
+                    if (hidden) hidden.value = '';
+                    definitionState[kind].selected = null;
+                    localStorage.removeItem(definitionLocalStorageKeys[kind]);
+                    renderDefinitionSummary(kind, null);
+                    const label = kind === 'query' ? 'queries' : 'collections';
+                    setDefinitionStatus(kind, `Imported ${label} file will be used for this run only. Click "Save to Library" to keep it.`, 'ok');
                 });
-            }
-            const runOnceQueries = document.querySelector('[name="queries_file"]');
-            if (runOnceQueries) {
-                runOnceQueries.addEventListener('change', () => {
-                    if (runOnceQueries.files.length > 0) {
-                        const select = selectElFor('query');
-                        if (select) select.value = '';
-                        hiddenDefinitionInput('query').value = '';
-                        localStorage.removeItem(definitionLocalStorageKeys.query);
-                        setDefinitionStatus('query', 'Unsaved queries file will be used for this run.', 'ok');
-                    }
-                });
-            }
+            });
         });
 
         document.getElementById('configForm').addEventListener('submit', function (e) {

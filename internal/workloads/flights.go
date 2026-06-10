@@ -1,138 +1,98 @@
 package workloads
 
 import (
-	"fmt"
 	"math/rand"
-	"strings"
-	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
 	"github.com/brianvoe/gofakeit/v6"
 )
 
-// simplified but realistic plane types & amenities
-var planeTypes = []string{"Boeing 737", "Airbus A320", "Embraer E190", "Bombardier CRJ900", "Boeing 777", "Airbus A350"}
-var amenities = []string{"WiFi", "TV", "Power outlets", "Hot meals", "Priority boarding", "Extra legroom"}
+// flightFieldSignals are field names / provider names that indicate a
+// flight/airline-style schema and trigger the consistent flight generator.
+var flightFieldSignals = map[string]struct{}{
+	"passengers":      {},
+	"equipment":       {},
+	"seats_available": {},
+	"flight_code":     {},
+	"gate":            {},
+}
 
-const minTotalSeats = 10
-const maxTotalSeats = 50
+// isFlightSchema reports whether the collection should use the consistent
+// flight generator. It triggers for the "flights" collection whenever the
+// schema references flight-specific fields or providers, independent of the
+// default_workload flag, so selecting the built-in definition from the library
+// produces the same realistic data as the default workload mode.
+func isFlightSchema(col config.CollectionDefinition) bool {
+	if col.Name != "flights" {
+		return false
+	}
+	for name, def := range col.Fields {
+		if _, ok := flightFieldSignals[name]; ok {
+			return true
+		}
+		if _, ok := flightFieldSignals[def.Provider]; ok {
+			return true
+		}
+	}
+	return false
+}
 
-// randomEquipment produces an equipment object
+// randomEquipment produces an equipment object (test/back-compat helper).
 func randomEquipment(rng *rand.Rand) map[string]interface{} {
-	totalSeats := rng.Intn(maxTotalSeats-minTotalSeats+1) + minTotalSeats
-
-	numAmenities := rng.Intn(4) + 2
-	perm := rng.Perm(len(amenities))
-	picked := make([]string, 0, numAmenities)
-	for i := 0; i < numAmenities; i++ {
-		picked = append(picked, amenities[perm[i]])
-	}
-	return map[string]interface{}{
-		"plane_type":  planeTypes[perm[0]%len(planeTypes)],
-		"total_seats": totalSeats,
-		"amenities":   picked,
-	}
+	equip, _ := datagen.RandomEquipment(gofakeit.New(rng.Int63()))
+	return equip
 }
 
-// randomPassengers creates a list of passengers with UNIQUE seat assignments
+// randomPassengers creates a list of passengers with unique seat assignments
+// (test/back-compat helper delegating to the shared generator).
 func randomPassengers(totalSeats int, seatsAvailable int, rng *rand.Rand) []map[string]interface{} {
-	faker := gofakeit.New(rng.Int63())
-	numPassengers := totalSeats - seatsAvailable
-	if numPassengers < 1 {
-		numPassengers = 1
-	}
-	// Safety check: ensure we don't try to create more passengers than seats
-	if numPassengers > totalSeats {
-		numPassengers = totalSeats
-	}
-
-	passengers := make([]map[string]interface{}, numPassengers)
-	seatLetters := []string{"A", "B", "C", "D", "E", "F"}
-
-	// 1. Create a "deck" of all available seats on the plane
-	//    We fill rows sequentially (1A, 1B... 2A, 2B...) until we hit totalSeats
-	allSeats := make([]string, 0, totalSeats)
-	currentRow := 1
-	for len(allSeats) < totalSeats {
-		for _, letter := range seatLetters {
-			if len(allSeats) >= totalSeats {
-				break
-			}
-			allSeats = append(allSeats, fmt.Sprintf("%d%s", currentRow, letter))
-		}
-		currentRow++
-	}
-
-	// 2. Shuffle the deck to ensure random assignment
-	rng.Shuffle(len(allSeats), func(i, j int) {
-		allSeats[i], allSeats[j] = allSeats[j], allSeats[i]
-	})
-
-	for i := 0; i < numPassengers; i++ {
-		n := rng.Intn(99999999) + 1
-		ticket := fmt.Sprintf("TCK-%08d", n)
-
-		passengers[i] = map[string]interface{}{
-			"passenger_id":  i + 1,
-			"name":          fmt.Sprintf("%s %s", faker.FirstName(), faker.LastName()),
-			"ticket_number": ticket,
-			// 3. Assign a unique seat from the shuffled deck
-			"seat_number": allSeats[i],
-		}
-	}
-	return passengers
+	return datagen.RandomPassengers(gofakeit.New(rng.Int63()), totalSeats, seatsAvailable)
 }
 
-// GenerateDefaultDocument produces a document using the collection def if provided.
+// GenerateDefaultDocument produces a realistic, internally-consistent flight
+// document using the collection definition.
 func GenerateDefaultDocument(col config.CollectionDefinition) map[string]interface{} {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	faker := gofakeit.New(rng.Int63()) // Create ONCE
+	faker := datagen.NewFaker()
+	rng := faker.Rand
 	doc := make(map[string]interface{})
 
 	if len(col.Fields) > 0 {
-		var equipmentData map[string]interface{}
 		var totalSeats int
 		var seatsAvailable int
+		hasSeatsAvailable := false
 
 		for fname, fdef := range col.Fields {
-			// 1. Check for Domain-Specific Providers first
-			if fdef.Provider == "flight_code" {
-				doc[fname] = fmt.Sprintf("%s%d", strings.ToUpper(faker.LetterN(2)), faker.Number(100, 999))
-				continue
-			}
-			if fdef.Provider == "gate" {
-				letter := rune('A' + rng.Intn(6))
-				number := rng.Intn(50) + 1
-				doc[fname] = fmt.Sprintf("%c%d", letter, number)
-				continue
-			}
-
-			// 2. Handle Complex Flight Fields
 			switch fname {
 			case "equipment":
-				equipmentData = randomEquipment(rng)
-				doc[fname] = equipmentData
-				if ts, ok := equipmentData["total_seats"].(int); ok {
-					totalSeats = ts
-				}
+				equip, capacity := datagen.RandomEquipment(faker)
+				doc[fname] = equip
+				totalSeats = capacity
 			case "seats_available":
-				seatsAvailable = rng.Intn(maxTotalSeats) + 1
-				doc[fname] = seatsAvailable
+				hasSeatsAvailable = true
+				// Resolved after equipment so it can be bounded by capacity.
 			case "passengers":
-				continue // handled at the end
+				// Filled at the end once seat counts are known.
 			default:
-				// 3. Fallback to Generic Generator using EXISTING faker
+				// Everything else (flight_code, gate, origin, agent_*, dates,
+				// bounded ints, ...) flows through the schema-driven generator,
+				// which now understands the domain providers.
 				doc[fname] = datagen.RandomValueWithFaker(fdef, faker)
 			}
 		}
 
-		// --- LOGICAL CONSISTENCY CHECKS ---
+		if totalSeats <= 0 {
+			_, totalSeats = datagen.RandomEquipment(faker)
+		}
 
-		// 1. Fix Origin == Destination collision
+		if hasSeatsAvailable {
+			seatsAvailable = rng.Intn(totalSeats + 1)
+			doc["seats_available"] = seatsAvailable
+		}
+
+		// Logical consistency: origin and destination must differ.
 		if origin, ok := doc["origin"].(string); ok {
 			if dest, ok := doc["destination"].(string); ok {
-				// While they are the same, pick a new destination
 				for origin == dest {
 					dest = faker.City()
 				}
@@ -140,42 +100,33 @@ func GenerateDefaultDocument(col config.CollectionDefinition) map[string]interfa
 			}
 		}
 
-		// 2. Ensure seats
-		if totalSeats == 0 {
-			totalSeats = maxTotalSeats
-		}
-		if seatsAvailable > totalSeats {
-			seatsAvailable = rng.Intn(totalSeats) + 1
-			doc["seats_available"] = seatsAvailable
-		}
-
-		// 3. Fill passengers
 		if _, ok := col.Fields["passengers"]; ok {
-			doc["passengers"] = randomPassengers(totalSeats, seatsAvailable, rng)
+			doc["passengers"] = datagen.RandomPassengers(faker, totalSeats, seatsAvailable)
 		}
 		return doc
 	}
 
-	// Fallback if no schema is provided
-	doc["flight_id"] = rng.Intn(10000)
+	// Fallback if no schema is provided.
+	equip, totalSeats := datagen.RandomEquipment(faker)
+	doc["flight_id"] = rng.Intn(900000) + 100000
+	doc["flight_code"] = datagen.RandomFlightCode(faker)
 	doc["origin"] = faker.City()
-
-	// Ensure distinct fallback cities
 	dest := faker.City()
 	for dest == doc["origin"] {
 		dest = faker.City()
 	}
 	doc["destination"] = dest
-
-	doc["duration_minutes"] = rng.Intn(400)
-	doc["seats_available"] = rng.Intn(300)
-	doc["equipment"] = map[string]interface{}{
-		"plane_type": fmt.Sprintf("A%d", rng.Intn(320)),
-	}
+	doc["gate"] = datagen.RandomGate(faker)
+	doc["duration_minutes"] = rng.Intn(871) + 30
+	seatsAvailable := rng.Intn(totalSeats + 1)
+	doc["seats_available"] = seatsAvailable
+	doc["equipment"] = equip
+	doc["passengers"] = datagen.RandomPassengers(faker, totalSeats, seatsAvailable)
 	return doc
 }
 
-// GenerateDefaultUpdate returns a MongoDB update document specific to the flights workload.
+// GenerateDefaultUpdate returns a MongoDB update document specific to the
+// flights workload, using realistic bounded values.
 func GenerateDefaultUpdate(rng *rand.Rand) map[string]interface{} {
 	if rng.Intn(2) == 0 {
 		return map[string]interface{}{
@@ -183,6 +134,6 @@ func GenerateDefaultUpdate(rng *rand.Rand) map[string]interface{} {
 		}
 	}
 	return map[string]interface{}{
-		"$set": map[string]interface{}{"duration_minutes": rng.Intn(400) + 30},
+		"$set": map[string]interface{}{"duration_minutes": rng.Intn(871) + 30},
 	}
 }

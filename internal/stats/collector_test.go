@@ -355,3 +355,30 @@ func TestPrintFinalSummarySilentModeMessage(t *testing.T) {
 		t.Fatalf("expected silent mode message with duration, got: %q", output)
 	}
 }
+
+func TestAccuracyCounters(t *testing.T) {
+	c := NewCollector()
+
+	c.RecordFindResult(3)
+	c.RecordFindResult(0)
+	c.RecordUpdateResult(2, 1)
+	c.RecordUpdateResult(0, 0)
+	c.RecordDeleteResult(1)
+	c.RecordTargeting(true)
+	c.RecordTargeting(true)
+	c.RecordTargeting(false)
+
+	acc := c.AccuracyStats()
+	if acc.FindOps != 2 || acc.FindReturned != 3 || acc.FindZero != 1 {
+		t.Fatalf("unexpected find counters: %+v", acc)
+	}
+	if acc.UpdateOps != 2 || acc.UpdateMatched != 2 || acc.UpdateModified != 1 {
+		t.Fatalf("unexpected update counters: %+v", acc)
+	}
+	if acc.DeleteOps != 1 || acc.DeleteDeleted != 1 {
+		t.Fatalf("unexpected delete counters: %+v", acc)
+	}
+	if acc.TargetExisting != 2 || acc.TargetRandom != 1 {
+		t.Fatalf("unexpected targeting counters: %+v", acc)
+	}
+}

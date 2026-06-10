@@ -25,14 +25,54 @@ func toCamelCase(s string) string {
 	return strings.Join(parts, "")
 }
 
+// expandTemplate replaces pattern characters in a template string:
+//
+//	'#' -> random digit, '?' -> uppercase letter, '^' -> lowercase letter.
+//
+// All other characters are emitted literally.
+func expandTemplate(faker *gofakeit.Faker, template string) string {
+	rng := faker.Rand
+	out := make([]rune, 0, len(template))
+	for _, c := range template {
+		switch c {
+		case '#':
+			out = append(out, rune('0'+rng.Intn(10)))
+		case '?':
+			out = append(out, rune('A'+rng.Intn(26)))
+		case '^':
+			out = append(out, rune('a'+rng.Intn(26)))
+		default:
+			out = append(out, c)
+		}
+	}
+	return string(out)
+}
+
 // RandomValueWithFaker uses an existing Faker instance to generate values.
 // This is much faster than creating a new Faker for every field.
 func RandomValueWithFaker(def config.CollectionField, faker *gofakeit.Faker) interface{} {
 	// Use the RNG inside the faker instance for raw math operations
 	rng := faker.Rand
 
-	// 1. Dynamic Provider Lookup (Reflection)
+	// 0. Enum values take precedence over everything else: when a field
+	// enumerates allowed values we always pick one of them.
+	if len(def.Enum) > 0 {
+		return def.Enum[rng.Intn(len(def.Enum))]
+	}
+
+	// 0b. Template/pattern values for structured string fields (e.g. "??###").
+	if def.Template != "" {
+		return expandTemplate(faker, def.Template)
+	}
+
+	// 1. Provider lookup. Domain-specific providers (flight_code, gate, ...)
+	// take precedence so semantic names always yield realistic data; otherwise
+	// fall back to gofakeit reflection.
 	if def.Provider != "" {
+		if fn, ok := domainProvider(strings.ToLower(def.Provider)); ok {
+			return fn(faker, def)
+		}
+
 		methodName := toCamelCase(def.Provider)
 		fakerVal := reflect.ValueOf(faker)
 		method := fakerVal.MethodByName(methodName)
@@ -174,6 +214,5 @@ func RandomValueWithFaker(def config.CollectionField, faker *gofakeit.Faker) int
 
 // RandomValue convenience wrapper (slower, creates new faker)
 func RandomValue(def config.CollectionField) interface{} {
-	faker := gofakeit.New(time.Now().UnixNano())
-	return RandomValueWithFaker(def, faker)
+	return RandomValueWithFaker(def, NewFaker())
 }

@@ -180,6 +180,23 @@ op_timeout_ms: 500
 retry_attempts: 2
 retry_backoff_ms: 5
 
+# --- Workload Realism ---
+# Percentage (0-100) of find/update/delete operations that target known existing records.
+# The generator caches inserted/sampled documents in a "record pool" and uses real
+# field values to fill query placeholders (e.g. <int>, <string>), so find/update/delete
+# operations actually hit existing data instead of missing on random values.
+existing_record_hit_rate: 90
+# Maximum inserted-record snapshots kept in memory per collection.
+record_pool_max_size: 10000
+# Sample up to this many existing documents per collection at workload start (0 disables).
+record_pool_bootstrap_sample: 500
+
+# Deterministic data generation. When non-zero, the seed dataset is fully reproducible
+# and each worker stream is seeded from this base (best-effort under concurrency).
+# Leave 0 (default) for time-based, non-deterministic generation.
+# Can be overridden via env: PLGM_RANDOM_SEED
+random_seed: 0
+
 # --- Global Pool Overrides ---
 # These override connection_params if set here, providing runtime flexibility.
 max_pool_size: 1000

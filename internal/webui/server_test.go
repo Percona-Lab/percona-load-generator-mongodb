@@ -95,8 +95,8 @@ func TestDefinitionAPIListCreateGetUpdateDelete(t *testing.T) {
 	}
 	listPayload := decodeJSONMap(t, rec.Body.Bytes())
 	defs, ok := listPayload["definitions"].([]interface{})
-	if !ok || len(defs) != 1 {
-		t.Fatalf("expected one listed definition, got %+v", listPayload)
+	if !ok || len(defs) != 2 {
+		t.Fatalf("expected built-in plus one saved definition, got %+v", listPayload)
 	}
 	if _, hasContent := defs[0].(map[string]interface{})["content"]; hasContent {
 		t.Fatalf("list payload should omit definition content")
@@ -121,6 +121,50 @@ func TestDefinitionAPIListCreateGetUpdateDelete(t *testing.T) {
 	s.handleQueryDefinitionItem(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 on delete, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDefinitionAPIIncludesBuiltInDefaults(t *testing.T) {
+	s := newServerWithTempDefinitions(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/query-definitions", nil)
+	rec := httptest.NewRecorder()
+	s.handleQueryDefinitions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	payload := decodeJSONMap(t, rec.Body.Bytes())
+	defs := payload["definitions"].([]interface{})
+	first := defs[0].(map[string]interface{})
+	if first["id"] != builtinQueryDefinitionID || first["name"] != "Built-in Default Queries" {
+		t.Fatalf("expected built-in query definition first, got %+v", first)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/query-definitions/"+builtinQueryDefinitionID, nil)
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected built-in get 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	got := decodeJSONMap(t, rec.Body.Bytes())
+	content, ok := got["content"].(string)
+	if !ok || !strings.Contains(content, `"queries"`) {
+		t.Fatalf("expected built-in content to include queries, got %+v", got)
+	}
+	for _, placeholder := range []string{`"<string>"`, `"<int>"`} {
+		if !strings.Contains(content, placeholder) {
+			t.Fatalf("expected readable datatype placeholder %s in built-in content, got:\n%s", placeholder, content)
+		}
+	}
+	if strings.Contains(content, `\u003c`) {
+		t.Fatalf("expected no HTML-escaped datatype placeholders in built-in content, got:\n%s", content)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/query-definitions/"+builtinQueryDefinitionID, nil)
+	rec = httptest.NewRecorder()
+	s.handleQueryDefinitionItem(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "cannot be deleted") {
+		t.Fatalf("expected built-in delete rejection, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -983,6 +1027,74 @@ func TestHandleStartSuccessWithSelectedStoredDefinitions(t *testing.T) {
 	}
 	if loadCalled {
 		t.Fatalf("expected file loaders not to be called when stored definitions are selected")
+	}
+}
+
+func TestHandleStartSuccessWithSelectedBuiltInDefaultDefinitions(t *testing.T) {
+	loadedDefaults := 0
+	runCalled := make(chan []config.QueryDefinition, 1)
+
+	withWebUISeams(t, webuiSeams{
+		loadCollections: func(path string, loadDefault bool) (*config.CollectionsFile, error) {
+			if !loadDefault {
+				t.Fatalf("expected built-in collection loader to request defaults")
+			}
+			loadedDefaults++
+			return &config.CollectionsFile{Collections: []config.CollectionDefinition{
+				{DatabaseName: "airline", Name: "flights", Fields: map[string]config.CollectionField{}},
+			}}, nil
+		},
+		loadQueries: func(path string, loadDefault bool) (*config.QueriesFile, error) {
+			if !loadDefault {
+				t.Fatalf("expected built-in query loader to request defaults")
+			}
+			loadedDefaults++
+			return &config.QueriesFile{Queries: []config.QueryDefinition{
+				{Name: "find_flights", Collection: "flights", Operation: "find", Filter: map[string]interface{}{}},
+			}}, nil
+		},
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			if dbName != "airline" {
+				t.Fatalf("expected airline connection, got %q", dbName)
+			}
+			return &db.Connection{}, nil
+		},
+		disconnect: func(c *db.Connection, ctx context.Context) {},
+		createCollections: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile, drop bool) error {
+			return nil
+		},
+		createIndexes: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile) error {
+			return nil
+		},
+		runWorkload: func(ctx context.Context, database *driverMongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
+			runCalled <- append([]config.QueryDefinition(nil), queries...)
+			return nil
+		},
+	})
+
+	s := newServerWithTempDefinitions(t)
+	s.AppConfig.Duration = "1s"
+	s.AppConfig.Iterations = 1
+	req, rec := newMultipartRequest(t, map[string]string{
+		"default_workload":         "false",
+		"collection_definition_id": builtinCollectionDefinitionID,
+		"query_definition_id":      builtinQueryDefinitionID,
+	}, nil)
+	s.handleStart(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case queries := <-runCalled:
+		if len(queries) != 1 || queries[0].Database != "airline" || queries[0].SourceType != "stored_definition" {
+			t.Fatalf("expected query bound from built-in definitions, got %+v", queries)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected runWorkload to be called")
+	}
+	if loadedDefaults != 2 {
+		t.Fatalf("expected built-in collection and query defaults to load once each, got %d", loadedDefaults)
 	}
 }
 

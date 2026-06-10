@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -51,6 +52,7 @@ type workloadConfig struct {
 	maxInsertCache     int
 	primaryFilterField string
 	collector          *stats.Collector
+	recordPool         *RecordPool
 }
 
 var InsertDocumentCache chan map[string]interface{}
@@ -398,7 +400,8 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 			}
 			coll := getCollectionHandle(wCfg.database, currentCol)
 			filter := cloneMap(q.Filter)
-			processRecursive(filter, rng)
+			ns := collectionNamespace(wCfg.database, currentCol)
+			processRecursiveWithPool(filter, rng, wCfg.recordPool, ns, wCfg.appConfig.ExistingRecordHitRate)
 			switch innerOp {
 			case "find":
 				cursor, err := coll.Find(sessCtx, filter, options.Find().SetLimit(1))
@@ -414,13 +417,21 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 				opts := options.UpdateMany().SetUpsert(q.Upsert)
 				coll.UpdateMany(sessCtx, filter, q.Update, opts)
 			case "deleteOne":
-				coll.DeleteOne(sessCtx, filter)
+				if _, err := coll.DeleteOne(sessCtx, filter); err == nil {
+					wCfg.recordPool.RemoveMatching(ns, filter)
+				}
 			case "deleteMany":
-				coll.DeleteMany(sessCtx, filter)
+				if _, err := coll.DeleteMany(sessCtx, filter); err == nil {
+					wCfg.recordPool.RemoveMatching(ns, filter)
+				}
 			case "insert":
-				coll.InsertOne(sessCtx, q.Filter)
+				if _, err := coll.InsertOne(sessCtx, q.Filter); err == nil {
+					registerInsertedDocument(wCfg.recordPool, wCfg.database, currentCol, q.Filter)
+				}
 			case "insertMany":
-				coll.InsertMany(sessCtx, insertManyDocs)
+				if _, err := coll.InsertMany(sessCtx, insertManyDocs); err == nil {
+					registerInsertedDocuments(wCfg.recordPool, wCfg.database, currentCol, insertManyDocs)
+				}
 			}
 		}
 		return nil, nil
@@ -495,6 +506,7 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				wCfg.collector.Add("insert", 1, dur)
 				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
 			} else {
+				registerFastBatchIDs(wCfg.recordPool, wCfg.database, currentCol, patchKey, batch.CmdRaw, batch.Offsets)
 				dur := time.Since(start)
 				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), dur/time.Duration(wCfg.appConfig.InsertBatchSize))
 				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
@@ -508,12 +520,36 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				batchSize = 10
 			}
 
-			ids := make([]int64, batchSize)
-			for i := 0; i < batchSize; i++ {
+			ns := collectionNamespace(wCfg.database, currentCol)
+			ids := make([]int64, 0, batchSize)
+			pooledIDs := 0
+			if wCfg.recordPool != nil && wCfg.recordPool.Len(ns) > 0 && rng.Intn(100) < wCfg.appConfig.ExistingRecordHitRate {
+				for len(ids) < batchSize {
+					rec, ok := wCfg.recordPool.Random(ns, rng)
+					if !ok {
+						break
+					}
+					if raw, ok := rec[patchKey]; ok {
+						switch v := raw.(type) {
+						case int:
+							ids = append(ids, int64(v))
+							pooledIDs++
+						case int32:
+							ids = append(ids, int64(v))
+							pooledIDs++
+						case int64:
+							ids = append(ids, v)
+							pooledIDs++
+						}
+					}
+				}
+			}
+			for len(ids) < batchSize {
 				targetW := rng.Intn(wCfg.concurrency)
 				targetSeq := rng.Int63n(10000000)
-				ids[i] = int64(targetW)*100000000 + targetSeq
+				ids = append(ids, int64(targetW)*100000000+targetSeq)
 			}
+			wCfg.collector.RecordTargeting(pooledIDs > 0)
 
 			rawIDs := buildRawInt64Array(ids)
 			cmd := bson.D{
@@ -522,9 +558,17 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				{Key: "limit", Value: batchSize},
 			}
 
+			var fastFindRes struct {
+				Cursor struct {
+					FirstBatch []bson.Raw `bson:"firstBatch"`
+				} `bson:"cursor"`
+			}
 			fastCtx, cancel := context.WithTimeout(dbOpCtx, 30*time.Second)
-			err := wCfg.database.RunCommand(fastCtx, cmd).Err()
+			err := wCfg.database.RunCommand(fastCtx, cmd).Decode(&fastFindRes)
 			cancel()
+			if err == nil {
+				wCfg.collector.RecordFindResult(int64(len(fastFindRes.Cursor.FirstBatch)))
+			}
 
 			if err != nil {
 				if wCfg.debug {
@@ -564,18 +608,25 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 		}
 
 		coll := getCollectionHandle(wCfg.database, currentCol)
+		ns := collectionNamespace(wCfg.database, currentCol)
+		hitRate := wCfg.appConfig.ExistingRecordHitRate
 
 		var filter map[string]interface{}
 		var pipeline []interface{}
+		usedExisting := false
 
 		if opType == "aggregate" {
 			if cloned, ok := deepClone(q.Pipeline).([]interface{}); ok {
 				pipeline = cloned
-				processRecursive(pipeline, rng)
+				usedExisting = processRecursiveWithPool(pipeline, rng, wCfg.recordPool, ns, hitRate)
 			}
 		} else if opType != "insertMany" {
 			filter = cloneMap(q.Filter)
-			processRecursive(filter, rng)
+			usedExisting = processRecursiveWithPool(filter, rng, wCfg.recordPool, ns, hitRate)
+		}
+		switch opType {
+		case "find", "updateOne", "updateMany", "deleteOne", "deleteMany", "aggregate":
+			wCfg.collector.RecordTargeting(usedExisting)
 		}
 
 		success := true
@@ -595,9 +646,12 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				options.Find().SetProjection(q.Projection),
 			)
 			if err == nil {
+				returned := int64(0)
 				for cursor.Next(dbOpCtx) {
+					returned++
 				}
 				_ = cursor.Close(dbOpCtx)
+				wCfg.collector.RecordFindResult(returned)
 			} else {
 				success = false
 			}
@@ -612,29 +666,43 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			}
 		case "updateOne":
 			opts := options.UpdateOne().SetUpsert(q.Upsert)
-			if _, err := coll.UpdateOne(dbOpCtx, filter, q.Update, opts); err != nil {
+			if res, err := coll.UpdateOne(dbOpCtx, filter, q.Update, opts); err != nil {
 				success = false
+			} else {
+				wCfg.collector.RecordUpdateResult(res.MatchedCount, res.ModifiedCount)
 			}
 		case "updateMany":
 			opts := options.UpdateMany().SetUpsert(q.Upsert)
-			if _, err := coll.UpdateMany(dbOpCtx, filter, q.Update, opts); err != nil {
+			if res, err := coll.UpdateMany(dbOpCtx, filter, q.Update, opts); err != nil {
 				success = false
+			} else {
+				wCfg.collector.RecordUpdateResult(res.MatchedCount, res.ModifiedCount)
 			}
 		case "deleteOne":
-			if _, err := coll.DeleteOne(dbOpCtx, filter); err != nil {
+			if res, err := coll.DeleteOne(dbOpCtx, filter); err != nil {
 				success = false
+			} else {
+				wCfg.recordPool.RemoveMatching(ns, filter)
+				wCfg.collector.RecordDeleteResult(res.DeletedCount)
 			}
 		case "deleteMany":
-			if _, err := coll.DeleteMany(dbOpCtx, filter); err != nil {
+			if res, err := coll.DeleteMany(dbOpCtx, filter); err != nil {
 				success = false
+			} else {
+				wCfg.recordPool.RemoveMatching(ns, filter)
+				wCfg.collector.RecordDeleteResult(res.DeletedCount)
 			}
 		case "insert":
 			if _, err := coll.InsertOne(dbOpCtx, q.Filter); err != nil {
 				success = false
+			} else {
+				registerInsertedDocument(wCfg.recordPool, wCfg.database, currentCol, q.Filter)
 			}
 		case "insertMany":
 			if _, err := coll.InsertMany(dbOpCtx, insertManyDocs); err != nil {
 				success = false
+			} else {
+				registerInsertedDocuments(wCfg.recordPool, wCfg.database, currentCol, insertManyDocs)
 			}
 		}
 		dur := time.Since(start)
@@ -862,32 +930,14 @@ func buildQueryReferenceFromDefinition(q config.QueryDefinition, opType string, 
 	return
 }
 
-func processRecursive(v interface{}, rng *rand.Rand) {
-	switch t := v.(type) {
-	case map[string]interface{}:
-		for k, val := range t {
-			if s, ok := val.(string); ok {
-				if s == "<int>" {
-					t[k] = rng.Intn(1000)
-				} else if s == "<string>" {
-					t[k] = fmt.Sprintf("val-%d", rng.Intn(1000))
-				}
-			} else {
-				processRecursive(val, rng)
-			}
-		}
-	case []interface{}:
-		for _, val := range t {
-			processRecursive(val, rng)
-		}
-	}
-}
-
 func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
 	duration, err := time.ParseDuration(cfg.Duration)
 	if err != nil {
 		return err
 	}
+
+	// Configure deterministic generation for the workload phase (no-op when 0).
+	datagen.ConfigureSeed(cfg.RandomSeed)
 
 	if err := config.ValidateCollectionDefinitions(collections); err != nil {
 		return err
@@ -967,6 +1017,19 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 }
 
 func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
+	if wCfg.recordPool == nil {
+		wCfg.recordPool = NewRecordPool(wCfg.appConfig.RecordPoolMaxSize)
+	}
+	bootstrapRecordPool(ctx, wCfg.database, wCfg.collections, wCfg.recordPool, wCfg.appConfig.RecordPoolBootstrapSample)
+	if wCfg.debug {
+		for _, col := range wCfg.collections {
+			ns := collectionNamespace(wCfg.database, col)
+			if wCfg.recordPool.Len(ns) == 0 {
+				log.Printf("[RecordPool] No existing records for %s; non-insert operations may use random filters until inserts populate the pool", ns)
+			}
+		}
+	}
+
 	InsertDocumentCache = make(chan map[string]interface{}, wCfg.maxInsertCache)
 	workloadCtx, cancel := context.WithTimeout(ctx, wCfg.duration)
 	defer cancel()
@@ -1009,7 +1072,13 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	var wg sync.WaitGroup
 	for i := 1; i <= wCfg.concurrency; i++ {
 		wg.Add(1)
-		rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(i)))
+		// Seed each worker deterministically when a random seed is configured so
+		// per-worker operation streams are reproducible; otherwise stay random.
+		workerSeed := time.Now().UnixNano() + int64(i)
+		if wCfg.appConfig != nil && wCfg.appConfig.RandomSeed != 0 {
+			workerSeed = wCfg.appConfig.RandomSeed + int64(i)*1000003
+		}
+		rng := rand.New(rand.NewSource(workerSeed))
 		workerID := i
 		go func() {
 			defer func() {

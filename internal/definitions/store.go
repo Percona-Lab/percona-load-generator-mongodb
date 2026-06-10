@@ -1,6 +1,7 @@
 package definitions
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -66,7 +67,7 @@ func (in *Input) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(raw.Content, &normalized); err != nil {
 		return fmt.Errorf("content must be a JSON string, object, or array: %w", err)
 	}
-	canonical, err := json.Marshal(normalized)
+	canonical, err := marshalJSONNoHTMLEscape(normalized)
 	if err != nil {
 		return err
 	}
@@ -342,12 +343,47 @@ func ValidateContent(kind Kind, raw []byte) (string, error) {
 	}
 }
 
-func marshalCanonical(v interface{}) (string, error) {
-	b, err := json.MarshalIndent(v, "", "  ")
+// MarshalCanonicalJSON pretty-prints validated definition payloads for display and storage.
+// Datatype placeholders such as "<string>" are kept readable instead of HTML-escaped as \u003c.
+func MarshalCanonicalJSON(v interface{}) (string, error) {
+	b, err := marshalJSONIndentNoHTMLEscape(v)
 	if err != nil {
 		return "", fmt.Errorf("canonicalize definition JSON: %w", err)
 	}
 	return string(b), nil
+}
+
+func marshalCanonical(v interface{}) (string, error) {
+	return MarshalCanonicalJSON(v)
+}
+
+func marshalJSONNoHTMLEscape(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		b = b[:len(b)-1]
+	}
+	return b, nil
+}
+
+func marshalJSONIndentNoHTMLEscape(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		b = b[:len(b)-1]
+	}
+	return b, nil
 }
 
 func rejectDuplicateQueryNames(queries []config.QueryDefinition) error {

@@ -36,14 +36,23 @@ type AppConfig struct {
 	MaxTransactionOps  int    `yaml:"max_transaction_ops"`
 	DebugMode          bool   `yaml:"debug_mode"`
 
-	FindBatchSize         int   `yaml:"find_batch_size"`
-	FindLimit             int64 `yaml:"find_limit"`
-	UseFindOneForLimitOne bool  `yaml:"use_findone_for_limit_one"`
-	InsertCacheSize       int   `yaml:"insert_cache_size"`
-	StatusRefreshRateSec  int   `yaml:"status_refresh_rate_sec"`
-	OpTimeoutMs           int   `yaml:"op_timeout_ms"`
-	RetryAttempts         int   `yaml:"retry_attempts"`
-	RetryBackoffMs        int   `yaml:"retry_backoff_ms"`
+	FindBatchSize             int   `yaml:"find_batch_size"`
+	FindLimit                 int64 `yaml:"find_limit"`
+	UseFindOneForLimitOne     bool  `yaml:"use_findone_for_limit_one"`
+	InsertCacheSize           int   `yaml:"insert_cache_size"`
+	StatusRefreshRateSec      int   `yaml:"status_refresh_rate_sec"`
+	OpTimeoutMs               int   `yaml:"op_timeout_ms"`
+	RetryAttempts             int   `yaml:"retry_attempts"`
+	RetryBackoffMs            int   `yaml:"retry_backoff_ms"`
+	ExistingRecordHitRate     int   `yaml:"existing_record_hit_rate"`
+	RecordPoolMaxSize         int   `yaml:"record_pool_max_size"`
+	RecordPoolBootstrapSample int   `yaml:"record_pool_bootstrap_sample"`
+
+	// RandomSeed enables deterministic data generation when set to a non-zero
+	// value. Reproducibility is best-effort: the seed dataset (generated during
+	// the single-threaded seed phase) is fully reproducible, while concurrent
+	// workload streams are seeded per-worker from this base.
+	RandomSeed int64 `yaml:"random_seed"`
 
 	ConnectionParams ConnectionParams       `yaml:"connection_params"`
 	CustomParamsMap  map[string]interface{} `yaml:"custom_params"`
@@ -104,7 +113,11 @@ type ConnectionParams struct {
 }
 
 func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
-	cfg := &AppConfig{}
+	cfg := &AppConfig{
+		ExistingRecordHitRate:     90,
+		RecordPoolMaxSize:         10000,
+		RecordPoolBootstrapSample: 500,
+	}
 	configLoaded := false
 
 	// 1. Load the YAML file if it exists
@@ -290,6 +303,18 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	if cfg.RetryBackoffMs <= 0 {
 		cfg.RetryBackoffMs = 5
+	}
+	if cfg.ExistingRecordHitRate < 0 {
+		cfg.ExistingRecordHitRate = 0
+	}
+	if cfg.ExistingRecordHitRate > 100 {
+		cfg.ExistingRecordHitRate = 100
+	}
+	if cfg.RecordPoolMaxSize <= 0 {
+		cfg.RecordPoolMaxSize = 10000
+	}
+	if cfg.RecordPoolBootstrapSample < 0 {
+		cfg.RecordPoolBootstrapSample = 0
 	}
 	if cfg.MaxTransactionOps <= 0 {
 		cfg.MaxTransactionOps = 3
@@ -514,6 +539,26 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_SEED_BATCH_SIZE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.SeedBatchSize = n
+		}
+	}
+	if v := os.Getenv("PLGM_EXISTING_RECORD_HIT_RATE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
+			cfg.ExistingRecordHitRate = n
+		}
+	}
+	if v := os.Getenv("PLGM_RECORD_POOL_MAX_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.RecordPoolMaxSize = n
+		}
+	}
+	if v := os.Getenv("PLGM_RECORD_POOL_BOOTSTRAP_SAMPLE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.RecordPoolBootstrapSample = n
+		}
+	}
+	if v := os.Getenv("PLGM_RANDOM_SEED"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.RandomSeed = n
 		}
 	}
 

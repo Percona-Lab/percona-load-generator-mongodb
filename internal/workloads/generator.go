@@ -2,16 +2,14 @@ package workloads
 
 import (
 	"math/rand"
-	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
-	"github.com/brianvoe/gofakeit/v6"
 )
 
 // GenerateDocument creates a single document.
 func GenerateDocument(col config.CollectionDefinition, cfg *config.AppConfig) map[string]interface{} {
-	if cfg.DefaultWorkload && col.Name == "flights" {
+	if isFlightSchema(col) {
 		return GenerateDefaultDocument(col)
 	}
 	return generateGenericDocument(col)
@@ -19,15 +17,15 @@ func GenerateDocument(col config.CollectionDefinition, cfg *config.AppConfig) ma
 
 // GenerateFallbackUpdate creates an update document when no configured query is found.
 func GenerateFallbackUpdate(col config.CollectionDefinition, cfg *config.AppConfig, rng *rand.Rand) map[string]interface{} {
-	if cfg.DefaultWorkload && col.Name == "flights" {
+	if isFlightSchema(col) {
 		return GenerateDefaultUpdate(rng)
 	}
 	return generateGenericUpdate(col, rng)
 }
 
 func generateGenericDocument(col config.CollectionDefinition) map[string]interface{} {
-	// Optimization: Create ONE faker instance per document
-	faker := gofakeit.New(time.Now().UnixNano())
+	// Optimization: Create ONE faker instance per document (honors seed config).
+	faker := datagen.NewFaker()
 
 	doc := make(map[string]interface{})
 	for fieldName, fieldDef := range col.Fields {

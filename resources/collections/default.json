@@ -9,7 +9,13 @@
         },
         "fields": {
             "flight_id": {
-                "type": "int"
+                "type": "int",
+                "min": 100000,
+                "max": 999999
+            },
+            "airline": {
+                "type": "string",
+                "provider": "airline"
             },
             "agent_first_name": {
                 "type": "string",
@@ -21,8 +27,7 @@
             },
             "agent_email": {
                 "type": "string",
-                "provider": "email",
-                "maxLength": 20
+                "provider": "email"
             },
             "flight_date": {
                 "type": "date",
@@ -30,22 +35,25 @@
             },
             "origin": {
                 "type": "string",
-                "provider": "city",
-                "minLength": 8,
-                "maxLength": 30
+                "provider": "city"
             },
             "destination": {
                 "type": "string",
-                "provider": "city",
-                "minLength": 8,
-                "maxLength": 30
+                "provider": "city"
             },
             "flight_code": {
                 "type": "string",
                 "provider": "flight_code"
             },
+            "status": {
+                "type": "string",
+                "enum": ["scheduled", "boarding", "departed", "in_air", "landed", "delayed", "cancelled"]
+            },
             "duration_minutes": {
-                "type": "int"
+                "type": "int",
+                "provider": "duration_minutes",
+                "min": 30,
+                "max": 900
             },
             "gate": {
                 "type": "string",
@@ -87,6 +95,18 @@
             {
                 "keys": {
                     "equipment.plane_type": 1
+                }
+            },
+            {
+                "keys": {
+                    "origin": 1,
+                    "destination": 1,
+                    "flight_date": -1
+                }
+            },
+            {
+                "keys": {
+                    "status": 1
                 }
             }
         ]

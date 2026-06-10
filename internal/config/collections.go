@@ -11,13 +11,18 @@ import (
 )
 
 type CollectionField struct {
-	Type      string                     `json:"type"`
-	Provider  string                     `json:"provider,omitempty"`
-	MaxLength int                        `json:"maxLength,omitempty"`
-	MinLength int                        `json:"minLength,omitempty"`
-	Min       *int                       `json:"min,omitempty"`
-	Max       *int                       `json:"max,omitempty"`
-	Enum      []string                   `json:"enum,omitempty"`
+	Type      string        `json:"type"`
+	Provider  string        `json:"provider,omitempty"`
+	MaxLength int           `json:"maxLength,omitempty"`
+	MinLength int           `json:"minLength,omitempty"`
+	Min       *int          `json:"min,omitempty"`
+	Max       *int          `json:"max,omitempty"`
+	Enum      []interface{} `json:"enum,omitempty"`
+	// Template is a simple pattern expander for string fields. The characters
+	// '#' (random digit), '?' (uppercase letter) and '^' (lowercase letter) are
+	// replaced with random values; all other characters are emitted literally.
+	// Example: "??###" might produce "DL482".
+	Template  string                     `json:"template,omitempty"`
 	Items     *CollectionField           `json:"items,omitempty"`
 	Fields    map[string]CollectionField `json:"fields,omitempty"`
 	ArraySize int                        `json:"arraySize,omitempty"`

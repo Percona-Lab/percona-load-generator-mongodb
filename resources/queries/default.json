@@ -3,14 +3,17 @@
         "database": "airline",
         "collection": "flights",
         "operation": "find",
+        "label": "find flight by id",
         "filter": {
             "flight_id": "<int>"
         },
         "projection": {
             "flight_id": 1,
+            "flight_code": 1,
             "origin": 1,
             "destination": 1,
             "gate": 1,
+            "status": 1,
             "_id": 0
         },
         "limit": 5
@@ -19,22 +22,7 @@
         "database": "airline",
         "collection": "flights",
         "operation": "find",
-        "filter": {
-            "flight_id": "<int>"
-        },
-        "projection": {
-            "flight_id": 1,
-            "origin": 1,
-            "destination": 1,
-            "gate": 1,
-            "_id": 0
-        },
-        "limit": 5
-    },
-    {
-        "database": "airline",
-        "collection": "flights",
-        "operation": "find",
+        "label": "find flights by route",
         "filter": {
             "origin": "<string>",
             "destination": "<string>"
@@ -48,6 +36,7 @@
         "database": "airline",
         "collection": "flights",
         "operation": "find",
+        "label": "find long flights by agent",
         "filter": {
             "agent_email": "<string>",
             "duration_minutes": {
@@ -55,5 +44,104 @@
             }
         },
         "limit": 50
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "find",
+        "label": "find flights by status",
+        "filter": {
+            "status": "<string>"
+        },
+        "limit": 20
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "update",
+        "label": "update status and seats by flight id",
+        "filter": {
+            "flight_id": "<int>"
+        },
+        "update": {
+            "$inc": {
+                "seats_available": 1
+            },
+            "$set": {
+                "status": "boarding"
+            }
+        }
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "delete",
+        "label": "delete cancelled flight by id",
+        "filter": {
+            "flight_id": "<int>"
+        }
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "aggregate",
+        "label": "avg duration by aircraft type",
+        "pipeline": [
+            {
+                "$match": {
+                    "duration_minutes": {
+                        "$gte": 30
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$equipment.plane_type",
+                    "flights": {
+                        "$sum": 1
+                    },
+                    "avg_duration": {
+                        "$avg": "$duration_minutes"
+                    },
+                    "avg_seats_available": {
+                        "$avg": "$seats_available"
+                    }
+                }
+            },
+            {
+                "$sort": {
+                    "flights": -1
+                }
+            }
+        ]
+    },
+    {
+        "database": "airline",
+        "collection": "flights",
+        "operation": "aggregate",
+        "label": "flight counts by origin for status",
+        "pipeline": [
+            {
+                "$match": {
+                    "status": "<string>"
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$origin",
+                    "flights": {
+                        "$sum": 1
+                    }
+                }
+            },
+            {
+                "$sort": {
+                    "flights": -1
+                }
+            },
+            {
+                "$limit": 10
+            }
+        ]
     }
 ]

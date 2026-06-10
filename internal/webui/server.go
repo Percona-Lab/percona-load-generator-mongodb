@@ -78,6 +78,12 @@ type lifecycleEvent struct {
 	Message  string `json:"message"`
 }
 
+const (
+	builtinQueryDefinitionID      = "__builtin_default_queries"
+	builtinCollectionDefinitionID = "__builtin_default_collections"
+	builtinDefinitionTimestamp    = "1970-01-01T00:00:00Z"
+)
+
 var (
 	loadCollectionsFn   = config.LoadCollections
 	loadQueriesFn       = config.LoadQueries
@@ -252,20 +258,28 @@ func (s *WebServer) handleCollectionDefinitionItem(w http.ResponseWriter, r *htt
 }
 
 func (s *WebServer) handleDefinitionCollection(w http.ResponseWriter, r *http.Request, kind definitions.Kind) {
-	if s.DefinitionStore == nil {
-		writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
-		return
-	}
-
 	switch r.Method {
 	case http.MethodGet:
-		defs, err := s.DefinitionStore.List(kind)
+		builtin, err := s.builtinDefinition(kind, false)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		defs := []definitions.Definition{builtin}
+		if s.DefinitionStore != nil {
+			stored, err := s.DefinitionStore.List(kind)
+			if err != nil {
+				writeAPIError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			defs = append(defs, stored...)
+		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{"definitions": defs})
 	case http.MethodPost:
+		if s.DefinitionStore == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, "/upload") {
 			s.handleDefinitionUpload(w, r, kind)
 			return
@@ -287,11 +301,6 @@ func (s *WebServer) handleDefinitionCollection(w http.ResponseWriter, r *http.Re
 }
 
 func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request, kind definitions.Kind, id string) {
-	if s.DefinitionStore == nil {
-		writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
-		return
-	}
-
 	id = strings.Trim(id, "/")
 	if id == "upload" {
 		if r.Method != http.MethodPost {
@@ -308,13 +317,21 @@ func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request,
 
 	switch r.Method {
 	case http.MethodGet:
-		def, err := s.DefinitionStore.Get(kind, id)
+		def, err := s.getDefinition(kind, id)
 		if err != nil {
 			writeDefinitionLookupError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, def)
 	case http.MethodPut:
+		if isBuiltinDefinitionID(id) {
+			writeAPIError(w, http.StatusBadRequest, "built-in default definitions cannot be updated; use Save As New instead")
+			return
+		}
+		if s.DefinitionStore == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+			return
+		}
 		var in definitions.Input
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			writeAPIError(w, http.StatusBadRequest, "invalid JSON request body: "+err.Error())
@@ -331,6 +348,14 @@ func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request,
 		}
 		writeJSON(w, http.StatusOK, def)
 	case http.MethodDelete:
+		if isBuiltinDefinitionID(id) {
+			writeAPIError(w, http.StatusBadRequest, "built-in default definitions cannot be deleted")
+			return
+		}
+		if s.DefinitionStore == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+			return
+		}
 		if err := s.DefinitionStore.Delete(kind, id); err != nil {
 			writeDefinitionLookupError(w, err)
 			return
@@ -342,6 +367,10 @@ func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request,
 }
 
 func (s *WebServer) handleDefinitionUpload(w http.ResponseWriter, r *http.Request, kind definitions.Kind) {
+	if s.DefinitionStore == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "definition storage is not available")
+		return
+	}
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		writeAPIError(w, http.StatusBadRequest, "failed to parse multipart upload: "+err.Error())
 		return
@@ -375,6 +404,97 @@ func (s *WebServer) handleDefinitionUpload(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusCreated, def)
+}
+
+func (s *WebServer) getDefinition(kind definitions.Kind, id string) (definitions.Definition, error) {
+	if isBuiltinDefinitionID(id) {
+		if id != builtinDefinitionIDForKind(kind) {
+			return definitions.Definition{}, os.ErrNotExist
+		}
+		return s.builtinDefinition(kind, true)
+	}
+	if s.DefinitionStore == nil {
+		return definitions.Definition{}, fmt.Errorf("definition storage is not available")
+	}
+	return s.DefinitionStore.Get(kind, id)
+}
+
+func (s *WebServer) builtinDefinition(kind definitions.Kind, includeContent bool) (definitions.Definition, error) {
+	switch kind {
+	case definitions.KindCollection:
+		path := "resources/collections"
+		if s.AppConfig != nil && strings.TrimSpace(s.AppConfig.CollectionsPath) != "" {
+			path = s.AppConfig.CollectionsPath
+		}
+		loaded, err := loadCollectionsFn(path, true)
+		if err != nil {
+			return definitions.Definition{}, err
+		}
+		content := ""
+		if includeContent {
+			var err error
+			content, err = definitions.MarshalCanonicalJSON(loaded)
+			if err != nil {
+				return definitions.Definition{}, err
+			}
+		}
+		return definitions.Definition{
+			ID:             builtinCollectionDefinitionID,
+			Type:           definitions.KindCollection,
+			Name:           "Built-in Default Collections",
+			Description:    "PLGM embedded default collection definition.",
+			Content:        content,
+			Format:         "json",
+			SourceFilename: "resources/collections/default.json",
+			CreatedAt:      builtinDefinitionTimestamp,
+			UpdatedAt:      builtinDefinitionTimestamp,
+		}, nil
+	case definitions.KindQuery:
+		path := "resources/queries"
+		if s.AppConfig != nil && strings.TrimSpace(s.AppConfig.QueriesPath) != "" {
+			path = s.AppConfig.QueriesPath
+		}
+		loaded, err := loadQueriesFn(path, true)
+		if err != nil {
+			return definitions.Definition{}, err
+		}
+		content := ""
+		if includeContent {
+			var err error
+			content, err = definitions.MarshalCanonicalJSON(loaded)
+			if err != nil {
+				return definitions.Definition{}, err
+			}
+		}
+		return definitions.Definition{
+			ID:             builtinQueryDefinitionID,
+			Type:           definitions.KindQuery,
+			Name:           "Built-in Default Queries",
+			Description:    "PLGM embedded default query definition.",
+			Content:        content,
+			Format:         "json",
+			SourceFilename: "resources/queries/default.json",
+			CreatedAt:      builtinDefinitionTimestamp,
+			UpdatedAt:      builtinDefinitionTimestamp,
+		}, nil
+	default:
+		return definitions.Definition{}, fmt.Errorf("unsupported definition type %q", kind)
+	}
+}
+
+func isBuiltinDefinitionID(id string) bool {
+	return id == builtinQueryDefinitionID || id == builtinCollectionDefinitionID
+}
+
+func builtinDefinitionIDForKind(kind definitions.Kind) string {
+	switch kind {
+	case definitions.KindQuery:
+		return builtinQueryDefinitionID
+	case definitions.KindCollection:
+		return builtinCollectionDefinitionID
+	default:
+		return ""
+	}
 }
 
 func writeDefinitionLookupError(w http.ResponseWriter, err error) {
@@ -595,6 +715,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.OpTimeoutMs = parseInt(r.FormValue("op_timeout_ms"), cfg.OpTimeoutMs)
 	cfg.RetryAttempts = parseInt(r.FormValue("retry_attempts"), cfg.RetryAttempts)
 	cfg.RetryBackoffMs = parseInt(r.FormValue("retry_backoff_ms"), cfg.RetryBackoffMs)
+	cfg.ExistingRecordHitRate = parseInt(r.FormValue("existing_record_hit_rate"), cfg.ExistingRecordHitRate)
+	cfg.RecordPoolMaxSize = parseInt(r.FormValue("record_pool_max_size"), cfg.RecordPoolMaxSize)
+	cfg.RecordPoolBootstrapSample = parseInt(r.FormValue("record_pool_bootstrap_sample"), cfg.RecordPoolBootstrapSample)
 
 	cfg.RawInjector.Enabled = r.FormValue("raw_injector_enabled") == "true" || r.FormValue("raw_injector_enabled") == "on"
 	if t := r.FormValue("raw_injector_type"); t != "" {
@@ -616,12 +739,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	if !cfg.DefaultWorkload {
 		if defID := strings.TrimSpace(r.FormValue("collection_definition_id")); defID != "" {
-			if s.DefinitionStore == nil {
-				s.abortRun("Definition storage is not available")
-				writeStartError(w, http.StatusServiceUnavailable, "definition storage is not available")
-				return
-			}
-			def, err := s.DefinitionStore.Get(definitions.KindCollection, defID)
+			def, err := s.getDefinition(definitions.KindCollection, defID)
 			if err != nil {
 				s.abortRun("Failed to load selected collection definition: " + err.Error())
 				writeStartError(w, http.StatusBadRequest, "failed to load selected collection definition: "+err.Error())
@@ -671,12 +789,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if defID := strings.TrimSpace(r.FormValue("query_definition_id")); defID != "" {
-			if s.DefinitionStore == nil {
-				s.abortRun("Definition storage is not available")
-				writeStartError(w, http.StatusServiceUnavailable, "definition storage is not available")
-				return
-			}
-			def, err := s.DefinitionStore.Get(definitions.KindQuery, defID)
+			def, err := s.getDefinition(definitions.KindQuery, defID)
 			if err != nil {
 				s.abortRun("Failed to load selected query definition: " + err.Error())
 				writeStartError(w, http.StatusBadRequest, "failed to load selected query definition: "+err.Error())
