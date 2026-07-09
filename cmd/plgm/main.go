@@ -29,6 +29,9 @@ func main() {
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
 	webuiFlag := flag.Bool("webui", false, "Start the interactive Web UI")
 	webuiPort := flag.Int("webui-port", 8080, "Port for the Web UI")
+	webuiTLS := flag.Bool("webui-tls", false, "Serve the Web UI over HTTPS (default: HTTP on loopback, no cert warnings)")
+	webuiCert := flag.String("webui-cert", "", "Path to a TLS certificate file for the Web UI (implies --webui-tls)")
+	webuiKey := flag.String("webui-key", "", "Path to the TLS private key file for the Web UI (implies --webui-tls)")
 	injectorFlag := flag.Bool("raw-injector", false, "Enable Raw BSON Injector (High Performance Mode)")
 	injectorType := flag.String("raw-injector-type", "insert", "Operation: insert, upsert, update, delete, find, mixed")
 	injectorSize := flag.Int("raw-injector-size", 1024, "Document size in bytes")
@@ -61,6 +64,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n [Web UI]\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui", "Flag: Start the interactive Web UI")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-port", "Flag: Port for the Web UI (default: 8080)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-tls", "Flag: Serve Web UI over HTTPS (default: HTTP on loopback)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-cert", "Flag: TLS certificate file for the Web UI (implies --webui-tls)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-key", "Flag: TLS private key file for the Web UI (implies --webui-tls)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WEBUI_TLS", "Serve Web UI over HTTPS (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WEBUI_TLS_CERT", "TLS certificate file path for the Web UI")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WEBUI_TLS_KEY", "TLS private key file path for the Web UI")
 
 		fmt.Fprintf(os.Stderr, "\n [Workload Core]\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DEFAULT_WORKLOAD", "Use built-in workload (true/false)")
@@ -155,12 +164,23 @@ func main() {
 
 	if *webuiFlag || appCfg.WebUI.Enabled {
 		port := appCfg.WebUI.Port
-		// If the user explicitly passed the --webui-port flag, it overrides the config file
+		// Explicit flags override the config file / environment.
 		flag.Visit(func(f *flag.Flag) {
-			if f.Name == "webui-port" {
+			switch f.Name {
+			case "webui-port":
 				port = *webuiPort
+			case "webui-tls":
+				appCfg.WebUI.TLSEnabled = *webuiTLS
+			case "webui-cert":
+				appCfg.WebUI.TLSCertFile = *webuiCert
+			case "webui-key":
+				appCfg.WebUI.TLSKeyFile = *webuiKey
 			}
 		})
+		// Supplying a cert/key implies TLS should be enabled.
+		if appCfg.WebUI.TLSCertFile != "" && appCfg.WebUI.TLSKeyFile != "" {
+			appCfg.WebUI.TLSEnabled = true
+		}
 
 		server := webui.NewServer(appCfg)
 		if err := server.Start(port); err != nil {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -578,6 +579,189 @@ func TestRunWorkloadDurationPositiveBuildsWorkloadConfig(t *testing.T) {
 	}
 	if len(captured.queryMap["find"]) != 1 || len(captured.queryMap["updateOne"]) != 1 {
 		t.Fatalf("expected query map to be grouped by operation, got %+v", captured.queryMap)
+	}
+}
+
+func TestRunWorkloadAppliesLoadProfilePeakConcurrency(t *testing.T) {
+	captured := workloadConfig{}
+	withMongoSeams(t, mongoSeams{
+		ensureGenericSharding: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+			return nil
+		},
+		getPrimaryFilterField: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition) string {
+			return "user_id"
+		},
+		runContinuousWorkload: func(ctx context.Context, wCfg workloadConfig) error {
+			captured = wCfg
+			return nil
+		},
+	})
+
+	cfg := &config.AppConfig{
+		Duration:    "2s",
+		Concurrency: 4,
+		FindPercent: 100,
+		LoadProfile: loadprofile.Config{
+			Kind:         "ramp",
+			StartWorkers: 1,
+			EndWorkers:   50,
+			RampOver:     "30s",
+		},
+	}
+	cols := []config.CollectionDefinition{{Name: "users", DatabaseName: "appdb"}}
+	queries := []config.QueryDefinition{
+		{Name: "find_users", Database: "appdb", Operation: "find", Collection: "users", Filter: map[string]interface{}{}},
+	}
+
+	if err := RunWorkload(context.Background(), nil, cols, queries, cfg); err != nil {
+		t.Fatalf("RunWorkload() error = %v", err)
+	}
+	if captured.concurrency != 50 {
+		t.Fatalf("expected worker pool sized to ramp peak 50, got %d", captured.concurrency)
+	}
+	if captured.schedule.Kind() != loadprofile.KindRamp {
+		t.Fatalf("expected ramp schedule, got %q", captured.schedule.Kind())
+	}
+	if captured.schedule.TargetAt(0) != 1 {
+		t.Fatalf("expected ramp to start at 1 worker, got %d", captured.schedule.TargetAt(0))
+	}
+}
+
+func TestRunWorkloadFixedProfilePreservesConcurrency(t *testing.T) {
+	captured := workloadConfig{}
+	withMongoSeams(t, mongoSeams{
+		ensureGenericSharding: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+			return nil
+		},
+		getPrimaryFilterField: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition) string {
+			return "user_id"
+		},
+		runContinuousWorkload: func(ctx context.Context, wCfg workloadConfig) error {
+			captured = wCfg
+			return nil
+		},
+	})
+
+	cfg := &config.AppConfig{Duration: "2s", Concurrency: 6, FindPercent: 100}
+	cols := []config.CollectionDefinition{{Name: "users", DatabaseName: "appdb"}}
+	queries := []config.QueryDefinition{{Name: "f", Database: "appdb", Operation: "find", Collection: "users", Filter: map[string]interface{}{}}}
+
+	if err := RunWorkload(context.Background(), nil, cols, queries, cfg); err != nil {
+		t.Fatalf("RunWorkload() error = %v", err)
+	}
+	if captured.concurrency != 6 {
+		t.Fatalf("expected fixed concurrency 6 preserved, got %d", captured.concurrency)
+	}
+	if captured.schedule.Kind() != loadprofile.KindFixed {
+		t.Fatalf("expected fixed schedule, got %q", captured.schedule.Kind())
+	}
+}
+
+func TestRunWorkloadInvalidLoadProfileReturnsError(t *testing.T) {
+	withMongoSeams(t, mongoSeams{
+		ensureGenericSharding: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+			return nil
+		},
+		getPrimaryFilterField: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition) string {
+			return "user_id"
+		},
+		runContinuousWorkload: func(ctx context.Context, wCfg workloadConfig) error {
+			t.Fatalf("runContinuousWorkload should not run with an invalid load profile")
+			return nil
+		},
+	})
+
+	cfg := &config.AppConfig{
+		Duration:    "2s",
+		Concurrency: 4,
+		FindPercent: 100,
+		LoadProfile: loadprofile.Config{Kind: "ramp", StartWorkers: 1, EndWorkers: 10}, // missing ramp_over
+	}
+	cols := []config.CollectionDefinition{{Name: "users", DatabaseName: "appdb"}}
+	queries := []config.QueryDefinition{{Name: "f", Database: "appdb", Operation: "find", Collection: "users", Filter: map[string]interface{}{}}}
+
+	err := RunWorkload(context.Background(), nil, cols, queries, cfg)
+	if err == nil || !strings.Contains(err.Error(), "load profile") {
+		t.Fatalf("expected load profile validation error, got %v", err)
+	}
+}
+
+func TestApplyPacingNoOpWhenZero(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	start := time.Now()
+	applyPacing(context.Background(), rng, 0, 0)
+	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
+		t.Fatalf("expected zero pacing to be a no-op, waited %s", elapsed)
+	}
+}
+
+func TestApplyPacingWaitsAtLeastThinkTime(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	start := time.Now()
+	applyPacing(context.Background(), rng, 40*time.Millisecond, 0)
+	elapsed := time.Since(start)
+	// Lower-bound assertion only, to avoid timing flakiness under load.
+	if elapsed < 35*time.Millisecond {
+		t.Fatalf("expected to wait ~40ms, only waited %s", elapsed)
+	}
+}
+
+func TestApplyPacingHonorsContextCancel(t *testing.T) {
+	rng := rand.New(rand.NewSource(1))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	applyPacing(ctx, rng, 5*time.Second, 5*time.Second)
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("expected cancelled context to short-circuit pacing, waited %s", elapsed)
+	}
+}
+
+func TestApplyPacingJitterStaysWithinBounds(t *testing.T) {
+	rng := rand.New(rand.NewSource(42))
+	// thinkTime 0, jitter 10ms: should never exceed ~10ms by much across samples.
+	for i := 0; i < 5; i++ {
+		start := time.Now()
+		applyPacing(context.Background(), rng, 0, 10*time.Millisecond)
+		if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+			t.Fatalf("jitter pacing exceeded sane upper bound: %s", elapsed)
+		}
+	}
+}
+
+func TestRunWorkloadPropagatesPacingToWorkers(t *testing.T) {
+	captured := workloadConfig{}
+	withMongoSeams(t, mongoSeams{
+		ensureGenericSharding: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, cfg *config.AppConfig) error {
+			return nil
+		},
+		getPrimaryFilterField: func(ctx context.Context, db *mongo.Database, col config.CollectionDefinition) string {
+			return "user_id"
+		},
+		runContinuousWorkload: func(ctx context.Context, wCfg workloadConfig) error {
+			captured = wCfg
+			return nil
+		},
+	})
+
+	cfg := &config.AppConfig{
+		Duration:      "2s",
+		Concurrency:   2,
+		FindPercent:   100,
+		ThinkTimeMs:   50,
+		ThinkJitterMs: 25,
+	}
+	cols := []config.CollectionDefinition{{Name: "users", DatabaseName: "appdb"}}
+	queries := []config.QueryDefinition{{Name: "f", Database: "appdb", Operation: "find", Collection: "users", Filter: map[string]interface{}{}}}
+
+	if err := RunWorkload(context.Background(), nil, cols, queries, cfg); err != nil {
+		t.Fatalf("RunWorkload() error = %v", err)
+	}
+	if captured.thinkTime != 50*time.Millisecond {
+		t.Fatalf("expected thinkTime 50ms, got %s", captured.thinkTime)
+	}
+	if captured.thinkJitter != 25*time.Millisecond {
+		t.Fatalf("expected thinkJitter 25ms, got %s", captured.thinkJitter)
 	}
 }
 

@@ -5,6 +5,21 @@ This repository has two test layers:
 1. Unit tests (default, fast, no MongoDB required)
 2. Integration tests (optional, require a real MongoDB instance)
 
+## Quick Start (Make targets)
+
+The Makefile wraps the common commands so they are easy to find and run:
+
+```bash
+make test             # all unit tests (no MongoDB required)
+make test-race        # unit tests with the race detector
+make vet              # go vet static analysis
+make fmt              # verify gofmt formatting
+make check            # full local gate: fmt + vet + unit tests (run before committing)
+make test-integration # integration tests (needs MongoDB; see below)
+```
+
+`make check` is the recommended pre-commit gate and mirrors what CI should enforce.
+
 ## Unit Tests
 
 Run all unit tests:
@@ -14,6 +29,24 @@ go test ./...
 ```
 
 Unit tests are the default and are intentionally independent of local MongoDB availability.
+
+### Feature test map
+
+Tests for the load-modeling / analysis features live next to their packages:
+
+| Feature | Package | Notes |
+| --- | --- | --- |
+| Load profiles (fixed/ramp/step/spike/sine) | `internal/loadprofile` | Compile + `TargetAt` + validation |
+| Load-profile wiring (peak concurrency) | `internal/mongo` | `TestRunWorkload*LoadProfile*` |
+| Think time / pacing | `internal/mongo` | `TestApplyPacing*`, `TestRunWorkloadPropagatesPacingToWorkers` |
+| Access-pattern skew (uniform/zipfian/hotspot) | `internal/accesspattern` | Distribution + validation; `internal/mongo` record-pool integration |
+| Latency heatmap over time | `internal/stats` | `heatmap_test.go`, `SnapshotAndReset` percentiles |
+| Query-log schema inference | `internal/schemainfer` | mongod logs, profiler docs, raw commands, malformed input |
+| Shareable run reports | `internal/report` | Self-contained HTML + inline SVG chart |
+| Web API endpoints | `internal/webui` | `/api/infer-schema`, `/api/report` |
+
+Timing-sensitive tests (pacing) assert lower bounds / ranges rather than
+exact durations to avoid flakiness.
 
 ## Integration Tests
 

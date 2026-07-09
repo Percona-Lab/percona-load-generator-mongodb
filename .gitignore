@@ -15,4 +15,5 @@ Thumbs.db
 *.swp
 
 # Go specific
-vendor/
+vendor/.cursor/
+.cursor

@@ -330,6 +330,188 @@
             display: block;
         }
 
+        /* --- Live Dashboard Tabs --- */
+        .dash-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin: 4px 0 14px 0;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0;
+        }
+
+        .dash-tab-btn {
+            padding: 9px 16px;
+            border: none;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: 0.15s ease;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .dash-tab-btn:hover {
+            color: var(--p-night);
+            background: rgba(20, 134, 255, 0.06);
+        }
+
+        .dash-tab-btn.active {
+            color: var(--p-sky);
+            border-bottom-color: var(--p-sky);
+        }
+
+        .dash-tab-btn .dash-tab-badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            background: #e2e8f0;
+            color: var(--p-stone);
+            vertical-align: middle;
+        }
+
+        .dash-tab-btn .dash-tab-badge.on {
+            background: #ecfdf5;
+            color: #065f46;
+        }
+
+        .dash-tab-btn .dash-tab-badge.warn {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .dash-tab-content {
+            display: none;
+        }
+
+        .dash-tab-content.active {
+            display: block;
+        }
+
+        /* Sticky run-summary header keeps key counters visible across tabs */
+        .run-summary-sticky {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--bg);
+            padding-top: 6px;
+            padding-bottom: 6px;
+        }
+
+        /* --- Latency heatmap (over time) --- */
+        .heatmap-wrap {
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+
+        .heatmap-grid {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            min-height: 140px;
+            height: 160px;
+        }
+
+        .heatmap-col {
+            width: 12px;
+            min-width: 8px;
+            flex: 1 0 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            border-radius: 2px 2px 0 0;
+            transition: 0.1s ease;
+        }
+
+        .heatmap-col:hover {
+            outline: 2px solid var(--p-night);
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .heatmap-scale {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .heatmap-scale-bar {
+            width: 120px;
+            height: 10px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #22c55e, #eab308, #f97316, #dc2626);
+        }
+
+        .hm-key {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .hm-key i {
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+
+        .heatmap-empty {
+            color: var(--text-secondary);
+            font-size: 13px;
+            padding: 30px 0;
+            text-align: center;
+        }
+
+        .heatmap-tooltip {
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            background: var(--p-night);
+            color: #fff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            box-shadow: 0 6px 20px rgba(14, 26, 83, 0.35);
+            max-width: 240px;
+        }
+
+        .heatmap-tooltip .htt-title {
+            font-weight: 700;
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 4px;
+        }
+
+        .heatmap-tooltip .htt-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .heatmap-tooltip .htt-row .htt-k {
+            color: #aab6e0;
+        }
+
+        .heatmap-tooltip .htt-row .htt-v {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -375,6 +557,14 @@
             outline: none;
             border-color: var(--p-sky);
             box-shadow: 0 0 0 2px rgba(20, 134, 255, 0.2);
+        }
+
+        /* Input whose value is overridden by another setting (e.g. concurrency
+           when a dynamic load profile drives the worker count). */
+        input.input-managed {
+            background: #f1f5f9;
+            color: var(--text-secondary);
+            border-style: dashed;
         }
 
         .checkbox-group {
@@ -1586,7 +1776,13 @@
                 </div>
             </div>
 
-            <div class="chart-grid">
+            <div class="dash-tabs run-summary-sticky" id="dashTabs">
+                <button type="button" class="dash-tab-btn active" data-dashtab="overview" onclick="showDashTab('overview', this)">Live Metrics</button>
+                <button type="button" class="dash-tab-btn" data-dashtab="latency" onclick="showDashTab('latency', this)">Latency Analysis</button>
+                <button type="button" class="dash-tab-btn" data-dashtab="insights" onclick="showDashTab('insights', this)">Insights</button>
+            </div>
+
+            <div class="chart-grid" id="dashpanel-throughput">
                 <div class="mat-card" style="height: 320px; margin-bottom: 0;">
                     <div class="mat-card-title">Live Throughput (Ops/sec)</div>
                     <div style="position: relative; height: 260px; width: 100%;">
@@ -1602,23 +1798,23 @@
                 </div>
             </div>
 
-            <div class="mat-card" style="height: 280px;">
+            <div class="mat-card" style="height: 280px;" id="dashpanel-livelatency">
                 <div class="mat-card-title">Live Latency (ms)</div>
                 <div style="position: relative; height: 220px; width: 100%;">
                     <canvas id="latencyChart"></canvas>
                 </div>
             </div>
 
-            <div class="mat-card" style="height: 380px;">
+            <div class="mat-card" style="height: 380px;" id="dashpanel-timeline">
                 <div class="mat-card-title">LATENCY PERCENTILE TIMELINE (MS)</div>
                 <div class="latency-toggles">
                     <button type="button" id="toggleMetricAvg" class="toggle-chip active" onclick="toggleLatencyMetric('avg')">Avg</button>
                     <button type="button" id="toggleMetricP95" class="toggle-chip" onclick="toggleLatencyMetric('p95')">P95</button>
                     <button type="button" id="toggleMetricP99" class="toggle-chip active" onclick="toggleLatencyMetric('p99')">P99</button>
                     <span style="width:1px;height:18px;background:var(--border);margin:0 4px;"></span>
-                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('all')">All</button>
-                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('none')">None</button>
-                    <button type="button" class="toggle-chip" onclick="setLatencyQuickFilter('total')">Only Total</button>
+                    <button type="button" id="quickFilterAll" class="toggle-chip" onclick="setLatencyQuickFilter('all')">All</button>
+                    <button type="button" id="quickFilterNone" class="toggle-chip" onclick="setLatencyQuickFilter('none')">None</button>
+                    <button type="button" id="quickFilterTotal" class="toggle-chip" onclick="setLatencyQuickFilter('total')">Only Total</button>
                     <div class="line-style-key">
                         <span class="line-style-key-item"><span class="line-style-key-swatch"></span>Solid = Avg</span>
                         <span class="line-style-key-item"><span class="line-style-key-swatch dash-dot"></span>Dash-dot = P95</span>
@@ -1639,7 +1835,7 @@
                 </div>
             </div>
 
-            <div class="mat-card" style="margin-bottom: 16px; padding: 0;">
+            <div class="mat-card" style="margin-bottom: 16px; padding: 0;" id="dashpanel-distribution">
                 <div class="mat-card-title" style="padding: 16px 20px 0 20px; margin-bottom: 12px;">Cumulative Latency
                     Distribution
                     (ms)</div>
@@ -1715,6 +1911,27 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="mat-card" id="dashpanel-heatmap" style="margin-bottom: 16px;">
+                <div class="mat-card-title">LATENCY HEATMAP OVER TIME</div>
+                <div class="settings-help">Each column is a ~1&nbsp;second time window covering <strong>all operation types combined</strong>. <strong>Color</strong> reflects that window's p99 on an <strong>absolute</strong> scale (green &le;10&nbsp;ms is excellent, red is &ge;250&nbsp;ms, dark red &ge;1&nbsp;s), so a fast run stays green. <strong>Bar height</strong> is relative to this run's own peak so you can still see <em>when</em> tail latency drifted up. Hover a bar for the full p50/p95/p99/max breakdown. Because each window is short, an occasional slow op (e.g. an aggregate) can lift a single window's p99 above the cumulative p99.</div>
+                <div class="heatmap-wrap">
+                    <div class="heatmap-grid" id="heatmapGrid"></div>
+                </div>
+                <div class="heatmap-empty" id="heatmapEmpty">No latency-over-time data captured yet.</div>
+                <div class="heatmap-legend">
+                    <span class="heatmap-scale">p99 latency:</span>
+                    <span class="hm-key"><i style="background:#22c55e"></i>&le;10&nbsp;ms</span>
+                    <span class="hm-key"><i style="background:#84cc16"></i>25</span>
+                    <span class="hm-key"><i style="background:#eab308"></i>50</span>
+                    <span class="hm-key"><i style="background:#f97316"></i>100</span>
+                    <span class="hm-key"><i style="background:#ef4444"></i>250</span>
+                    <span class="hm-key"><i style="background:#dc2626"></i>500</span>
+                    <span class="hm-key"><i style="background:#991b1b"></i>&ge;1&nbsp;s</span>
+                    <span id="heatmapMaxLabel"></span>
+                </div>
+                <div id="heatmapTooltip" class="heatmap-tooltip" style="display:none;"></div>
             </div>
 
             <div id="activeActions" style="text-align: right; margin-top: 8px;">
@@ -1813,6 +2030,9 @@
                         </svg>
                         Download Summary
                     </button>
+                    <button type="button" class="btn btn-secondary" onclick="openHtmlReport()" title="Open a self-contained HTML report (print to PDF from the browser)">
+                        Export HTML Report
+                    </button>
 
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <button type="button" class="btn btn-flat" onclick="showConfigure()"
@@ -1899,13 +2119,69 @@
             <div id="tab-workload" class="tab-content">
                 <section class="settings-card">
                     <h4>Workload Control</h4>
-                    <div class="settings-help">Primary execution controls for run length, iteration strategy, and worker pressure.</div>
-                    <div class="grid-2">
-                        <div class="form-group"><label>Concurrency (Active Workers)</label><input type="number"
-                                name="concurrency" value="16" required></div>
-                        <div class="form-group"><label>Duration (e.g. 60s, 5m)</label><input type="text" name="duration"
-                                value="60s" required></div>
+                    <div class="settings-help">Defines the worker count, how that count is shaped over time, and how long the run lasts. The load profile is the single source of truth for concurrency.</div>
+
+                    <div class="form-group">
+                        <label>Load Profile <span style="font-weight:400; color:var(--text-secondary);">(how worker count behaves over time)</span></label>
+                        <select name="load_profile_kind" id="loadProfileKind" onchange="onLoadProfileKindChange()">
+                            <option value="fixed">Fixed — constant worker count</option>
+                            <option value="ramp">Ramp — linearly grow/shrink over time</option>
+                            <option value="step">Step — hold staged worker counts</option>
+                            <option value="spike">Spike — short burst above a baseline</option>
+                            <option value="sine">Sine — oscillate periodically</option>
+                        </select>
+                        <div class="settings-help" id="loadProfileHint"></div>
                     </div>
+
+                    <div class="grid-2">
+                        <div class="form-group" id="concurrencyGroup">
+                            <label id="concurrencyLabel">Concurrency (Active Workers)</label>
+                            <input type="number" name="concurrency" id="concurrencyInput" value="16" min="1" required>
+                            <div class="settings-help" id="concurrencyManagedHint" style="display:none;">Worker count is controlled by the load profile fields below; this value is used only as a fallback.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (e.g. 60s, 5m)</label>
+                            <input type="text" name="duration" value="60s" required>
+                            <div class="settings-help"><strong>Total run length</strong> per iteration &mdash; the whole benchmark. All load-profile timings (ramp/step/spike/<strong>period</strong>) happen <em>inside</em> this window, so they should each be shorter than the Duration.</div>
+                        </div>
+                    </div>
+
+                    <div class="lp-group" data-lp="ramp" style="display:none;">
+                        <div class="grid-2">
+                            <div class="form-group"><label>Start Workers</label><input type="number" name="load_profile_start_workers" value="1" min="0"></div>
+                            <div class="form-group"><label>End Workers</label><input type="number" name="load_profile_end_workers" value="50" min="0"></div>
+                        </div>
+                        <div class="form-group"><label>Ramp Over (e.g. 30s)</label><input type="text" name="load_profile_ramp_over" value="30s"></div>
+                    </div>
+
+                    <div class="lp-group" data-lp="step" style="display:none;">
+                        <div class="form-group">
+                            <label>Steps (JSON array of {"workers","duration"})</label>
+                            <textarea name="load_profile_steps" rows="3" placeholder='[{"workers":5,"duration":"30s"},{"workers":20,"duration":"60s"}]'></textarea>
+                        </div>
+                    </div>
+
+                    <div class="lp-group" data-lp="spike" style="display:none;">
+                        <div class="grid-2">
+                            <div class="form-group"><label>Base Workers</label><input type="number" name="load_profile_base_workers" value="5" min="0"></div>
+                            <div class="form-group"><label>Peak Workers</label><input type="number" name="load_profile_peak_workers" value="50" min="0"></div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group"><label>Spike At (e.g. 20s)</label><input type="text" name="load_profile_spike_at" value="20s"></div>
+                            <div class="form-group"><label>Spike For (e.g. 5s)</label><input type="text" name="load_profile_spike_for" value="5s"></div>
+                        </div>
+                    </div>
+
+                    <div class="lp-group" data-lp="sine" style="display:none;">
+                        <div class="grid-2">
+                            <div class="form-group"><label>Min Workers</label><input type="number" name="load_profile_min_workers" value="5" min="0"></div>
+                            <div class="form-group"><label>Max Workers</label><input type="number" name="load_profile_max_workers" value="50" min="0"></div>
+                        </div>
+                        <div class="form-group"><label>Period (e.g. 30s)</label><input type="text" name="load_profile_period" value="30s">
+                            <div class="settings-help">Length of <strong>one full oscillation</strong> (Min &rarr; Max &rarr; Min). This is <em>not</em> the run length. Keep Period &le; Duration; for whole cycles, make Duration a multiple of Period (e.g. Duration 120s &divide; Period 30s = 4 complete waves).</div>
+                        </div>
+                    </div>
+
                     <div class="grid-2">
                         <div class="form-group">
                             <label>Iterations (Run Count)</label>
@@ -1916,6 +2192,51 @@
                             <input type="text" name="interval_delay" value="0s" required>
                         </div>
                     </div>
+                </section>
+
+                <section class="settings-card">
+                    <h4>Client Pacing &amp; Access Pattern</h4>
+                    <div class="settings-help">Emulate realistic client behavior with per-operation pacing and skew which records are accessed. Defaults preserve no-pacing, uniform behavior.</div>
+
+                    <h4 style="margin-top:6px;">Think Time / Pacing</h4>
+                    <div class="settings-help">Per-worker delay between operations. Excluded from measured latency. 0 = run as fast as possible.</div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Think Time (ms)</label><input type="number" name="think_time_ms" value="0" min="0"></div>
+                        <div class="form-group"><label>Think Jitter (ms)</label><input type="number" name="think_jitter_ms" value="0" min="0"></div>
+                    </div>
+
+                    <h4 style="margin-top:18px;">Access Pattern</h4>
+                    <div class="settings-help">Distribution used to pick existing records for find/update/delete targeting.</div>
+                    <div class="form-group">
+                        <label>Pattern</label>
+                        <select name="access_pattern_kind" id="accessPatternKind" onchange="onAccessPatternKindChange()">
+                            <option value="uniform">Uniform (every record equally likely)</option>
+                            <option value="zipfian">Zipfian (power-law skew)</option>
+                            <option value="hotspot">Hotspot (small subset gets most traffic)</option>
+                        </select>
+                    </div>
+                    <div class="ap-group" data-ap="zipfian" style="display:none;">
+                        <div class="form-group"><label>Zipfian Exponent (&ge; 1.0)</label><input type="number" step="0.1" name="access_pattern_zipfian_exponent" value="1.2" min="1"></div>
+                    </div>
+                    <div class="ap-group" data-ap="hotspot" style="display:none;">
+                        <div class="grid-2">
+                            <div class="form-group"><label>Hot Records (%)</label><input type="number" name="access_pattern_hotspot_percent" value="20" min="1" max="99"></div>
+                            <div class="form-group"><label>Hot Traffic (%)</label><input type="number" name="access_pattern_hotspot_traffic_percent" value="80" min="1" max="100"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card">
+                    <h4>Schema Inference from Query Logs</h4>
+                    <div class="settings-help">Paste mongod JSON slow-query logs, system.profile documents, or raw command documents to infer collections, operation patterns, and a suggested operation mix. Use the result to pre-fill the distribution below.</div>
+                    <div class="form-group">
+                        <textarea id="schemaInferInput" rows="5" placeholder='{"attr":{"ns":"shop.orders","command":{"find":"orders","filter":{"status":"open"}}}}'></textarea>
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-primary btn-small" onclick="runSchemaInference()">Infer Schema</button>
+                        <button type="button" class="btn btn-small" onclick="applyInferredMix()" id="applyMixBtn" style="display:none;">Apply Suggested Mix</button>
+                    </div>
+                    <div id="schemaInferResult" class="definition-status"></div>
                 </section>
 
                 <section class="settings-card">
@@ -2022,13 +2343,13 @@
                     <h4>Operation Mix Allocation</h4>
                     <div class="settings-help">Define workload composition by operation percentage. Backend normalizes totals to 100%.</div>
                     <div class="grid-3">
-                        <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="50"></div>
+                        <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="60"></div>
                         <div class="form-group"><label>Update (%)</label><input type="number" name="update_percent" value="20"></div>
                         <div class="form-group"><label>Delete (%)</label><input type="number" name="delete_percent" value="10"></div>
                         <div class="form-group"><label>Insert (%)</label><input type="number" name="insert_percent" value="5"></div>
                         <div class="form-group"><label>Bulk Insert (%)</label><input type="number" name="bulk_insert_percent" value="5"></div>
-                        <div class="form-group"><label>Aggregate (%)</label><input type="number" name="aggregate_percent" value="5"></div>
-                        <div class="form-group"><label>Transaction (%)</label><input type="number" name="transaction_percent" value="5"></div>
+                        <div class="form-group"><label>Aggregate (%)</label><input type="number" name="aggregate_percent" value="0"></div>
+                        <div class="form-group"><label>Transaction (%)</label><input type="number" name="transaction_percent" value="0"></div>
                     </div>
                     <div class="settings-note">Tip: keep uncommon operations low initially, then increase selectively when investigating specific behaviors.</div>
                 </section>
@@ -2249,14 +2570,21 @@
 
         <div class="modal-overlay" id="passwordModal">
             <div class="modal-box">
-                <h3>Authentication Required</h3>
-                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">A username is set, but no
-                    password was provided. Please enter the password for the MongoDB connection:</p>
-                <div class="form-group"><input type="password" id="modalPasswordInput"
-                        placeholder="Enter MongoDB Password"></div>
+                <h3>MongoDB Credentials</h3>
+                <p id="credModalMessage" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;"></p>
+                <div class="form-group" id="modalUsernameGroup" style="display:none;">
+                    <label>Username</label>
+                    <input type="text" id="modalUsernameInput" placeholder="Enter MongoDB Username"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitWithCredentials();}">
+                </div>
+                <div class="form-group" id="modalPasswordGroup" style="display:none;">
+                    <label>Password</label>
+                    <input type="password" id="modalPasswordInput" placeholder="Enter MongoDB Password"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();submitWithCredentials();}">
+                </div>
                 <div class="modal-actions"><button type="button" class="btn btn-flat"
                         onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary"
-                        onclick="submitWithPassword()">Confirm</button></div>
+                        onclick="submitWithCredentials()">Continue</button></div>
             </div>
         </div>
 
@@ -2365,6 +2693,191 @@
             document.getElementById(tabId).classList.add('active');
             const activeBtn = btnEl || event?.currentTarget;
             if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        // --- Live dashboard tabs ---
+        // Panels stay in the DOM and keep receiving polled updates regardless of
+        // which tab is active, so no data is lost when switching tabs. We only
+        // toggle visibility and resize charts when a tab becomes visible.
+        const dashTabPanels = {
+            overview: ['dashpanel-throughput', 'dashpanel-livelatency'],
+            latency: ['dashpanel-timeline', 'dashpanel-distribution', 'dashpanel-heatmap'],
+            insights: ['insightsPanel']
+        };
+        let activeDashTab = 'overview';
+
+        function showDashTab(name, btnEl) {
+            if (!dashTabPanels[name]) name = 'overview';
+            activeDashTab = name;
+            // Toggle panel visibility.
+            const allPanels = new Set();
+            Object.values(dashTabPanels).forEach(ids => ids.forEach(id => allPanels.add(id)));
+            allPanels.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.style.display = dashTabPanels[name].includes(id) ? '' : 'none';
+            });
+            // Toggle button active state.
+            document.querySelectorAll('.dash-tab-btn').forEach(b => b.classList.remove('active'));
+            const btn = btnEl || document.querySelector(`.dash-tab-btn[data-dashtab="${name}"]`);
+            if (btn) btn.classList.add('active');
+            // Charts created/updated while hidden need a resize once visible.
+            requestAnimationFrame(resizeDashCharts);
+        }
+
+        function resizeDashCharts() {
+            try {
+                [throughputChart, donutChart, latencyChart, latencyTimelineChart].forEach(c => { if (c) c.resize(); });
+                Object.values(sparkCharts).forEach(c => { if (c) c.resize(); });
+            } catch (e) { /* charts may not be initialized yet */ }
+        }
+
+        // --- Latency heatmap over time ---
+        // Color reflects ABSOLUTE p99 latency (milliseconds) against common
+        // database/APM latency norms, NOT the run's own max. This keeps a fast
+        // run green even when one window is relatively taller than the others.
+        // Anchor points (ms -> [r,g,b]); values in between are interpolated.
+        const HEATMAP_STOPS = [
+            [0, [34, 197, 94]],     // green      - excellent
+            [10, [34, 197, 94]],    // green      - excellent (<= 10ms)
+            [25, [132, 204, 22]],   // lime       - very good
+            [50, [234, 179, 8]],    // yellow     - good
+            [100, [249, 115, 22]],  // orange     - moderate
+            [250, [239, 68, 68]],   // red        - slow
+            [500, [220, 38, 38]],   // strong red - very slow
+            [1000, [153, 27, 27]]   // dark red   - critical (>= 1s)
+        ];
+        function heatmapColor(p99) {
+            const v = Math.max(0, p99 || 0);
+            if (v <= HEATMAP_STOPS[0][0]) {
+                const c = HEATMAP_STOPS[0][1];
+                return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+            }
+            for (let i = 0; i < HEATMAP_STOPS.length - 1; i++) {
+                const [m0, c0] = HEATMAP_STOPS[i];
+                const [m1, c1] = HEATMAP_STOPS[i + 1];
+                if (v <= m1) {
+                    const f = (v - m0) / (m1 - m0);
+                    const c = c0.map((x, k) => Math.round(x + (c1[k] - x) * f));
+                    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+                }
+            }
+            const c = HEATMAP_STOPS[HEATMAP_STOPS.length - 1][1];
+            return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+        }
+
+        let lastHeatmapSig = '';
+        // While the cursor is over the heatmap we freeze rendering so the user can
+        // inspect a bar without it shifting/rebuilding underneath them. The most
+        // recent series is stashed and flushed the moment the cursor leaves.
+        let heatmapPaused = false;
+        let latestHeatmapPoints = null;
+        function renderLatencyHeatmap(points) {
+            const grid = document.getElementById('heatmapGrid');
+            const empty = document.getElementById('heatmapEmpty');
+            const maxLabel = document.getElementById('heatmapMaxLabel');
+            if (!grid) return;
+            // Always remember the freshest data, even while paused, so we can catch
+            // up to "now" as soon as the user moves off the heatmap.
+            latestHeatmapPoints = points;
+            if (!Array.isArray(points) || points.length === 0) {
+                lastHeatmapSig = '';
+                grid.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                if (maxLabel) maxLabel.textContent = '';
+                hideHeatmapTooltip();
+                return;
+            }
+            // Paused (hovering): keep the current bars and tooltip stable.
+            if (heatmapPaused) return;
+            // Skip re-render (and tooltip flicker) when the series is unchanged.
+            const last = points[points.length - 1];
+            const sig = points.length + ':' + (last.elapsedSec || 0).toFixed(2) + ':' + (last.p99 || 0).toFixed(2);
+            if (sig === lastHeatmapSig) return;
+            lastHeatmapSig = sig;
+            if (empty) empty.style.display = 'none';
+            let maxP99 = 0;
+            points.forEach(p => { if (p.p99 > maxP99) maxP99 = p.p99; });
+            if (maxLabel) maxLabel.textContent = `max p99 ≈ ${maxP99.toFixed(1)} ms over ${points.length} windows (combined ops, ~1s each)`;
+            // Cap rendered columns to keep the DOM light on long runs.
+            const maxCols = 240;
+            const offset = points.length > maxCols ? points.length - maxCols : 0;
+            const shown = points.slice(offset);
+            const frag = document.createDocumentFragment();
+            shown.forEach((p, i) => {
+                const col = document.createElement('div');
+                col.className = 'heatmap-col';
+                const h = maxP99 > 0 ? Math.max(4, (p.p99 / maxP99) * 100) : 4;
+                col.style.height = h + '%';
+                col.style.background = heatmapColor(p.p99);
+                // Window duration (for ops/sec) from the gap to the previous bucket.
+                const globalIdx = offset + i;
+                const prevElapsed = globalIdx > 0 ? (points[globalIdx - 1].elapsedSec || 0) : 0;
+                const windowSec = Math.max(0.001, (p.elapsedSec || 0) - prevElapsed);
+                col._hm = {
+                    elapsedSec: p.elapsedSec || 0,
+                    windowSec: windowSec,
+                    count: p.count || 0,
+                    opsPerSec: (p.count || 0) / windowSec,
+                    p50: p.p50 || 0,
+                    p95: p.p95 || 0,
+                    p99: p.p99 || 0,
+                    max: p.max || 0
+                };
+                col.addEventListener('mousemove', onHeatmapHover);
+                col.addEventListener('mouseleave', hideHeatmapTooltip);
+                frag.appendChild(col);
+            });
+            grid.innerHTML = '';
+            grid.appendChild(frag);
+        }
+
+        function onHeatmapHover(e) {
+            const d = e.currentTarget._hm;
+            const tip = document.getElementById('heatmapTooltip');
+            if (!d || !tip) return;
+            const row = (k, v) => `<div class="htt-row"><span class="htt-k">${k}</span><span class="htt-v">${v}</span></div>`;
+            tip.innerHTML =
+                `<div class="htt-title">Window @ ${d.elapsedSec.toFixed(1)}s</div>` +
+                row('Ops in window', d.count.toLocaleString()) +
+                row('Throughput', d.opsPerSec.toFixed(0) + ' ops/s') +
+                row('p50', d.p50.toFixed(1) + ' ms') +
+                row('p95', d.p95.toFixed(1) + ' ms') +
+                row('p99', d.p99.toFixed(1) + ' ms') +
+                row('max', d.max.toFixed(1) + ' ms');
+            tip.style.display = 'block';
+            // Position near cursor, flipping left/up near the viewport edges.
+            const pad = 14;
+            let x = e.clientX + pad;
+            let y = e.clientY + pad;
+            const rect = tip.getBoundingClientRect();
+            if (x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - pad;
+            if (y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - pad;
+            tip.style.left = Math.max(8, x) + 'px';
+            tip.style.top = Math.max(8, y) + 'px';
+        }
+
+        function hideHeatmapTooltip() {
+            const tip = document.getElementById('heatmapTooltip');
+            if (tip) tip.style.display = 'none';
+        }
+
+        // Pause the live heatmap while the cursor is over it; resume (and catch up
+        // to the latest data) once the cursor leaves. Wired once on load.
+        let heatmapHoverWired = false;
+        function wireHeatmapHoverPause() {
+            if (heatmapHoverWired) return;
+            const grid = document.getElementById('heatmapGrid');
+            if (!grid) return;
+            grid.addEventListener('mouseenter', () => { heatmapPaused = true; });
+            grid.addEventListener('mouseleave', () => {
+                heatmapPaused = false;
+                hideHeatmapTooltip();
+                // Immediately render whatever arrived while paused so the view
+                // jumps back in sync with the running workload.
+                if (latestHeatmapPoints) renderLatencyHeatmap(latestHeatmapPoints);
+            });
+            heatmapHoverWired = true;
         }
 
         const definitionState = {
@@ -2823,8 +3336,8 @@
         let histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
         let histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
 
-        let latencyMetricVisibility = { avg: true, p95: false, p99: true };
-        let latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
+        let latencyMetricVisibility = { avg: false, p95: false, p99: true };
+        let latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
         let isLiveMode = true;
         let zoomState = {
             active: false,
@@ -2852,6 +3365,20 @@
                 if (!el) return;
                 el.classList.toggle('active', !!latencyOpVisibility[op]);
             });
+
+            // Reflect the quick-filter buttons against the current derived state so
+            // they highlight when their preset is active (All / None / Only Total).
+            const visibleOps = latencyOps.filter(op => latencyOpVisibility[op]);
+            const allOn = visibleOps.length === latencyOps.length;
+            const noneOn = visibleOps.length === 0;
+            const onlyTotal = visibleOps.length === 1 && visibleOps[0] === 'total';
+            const setQF = (id, on) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('active', on);
+            };
+            setQF('quickFilterAll', allOn);
+            setQF('quickFilterNone', noneOn);
+            setQF('quickFilterTotal', onlyTotal);
         }
 
         function toggleLatencyMetric(metric) {
@@ -3136,12 +3663,12 @@
                 data: {
                     labels: Array(WINDOW_SIZE).fill(''),
                     datasets: [
-                        { label: 'Total/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Total/s', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Find/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Aggregate/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Aggregate/s', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('throughput'),
                 plugins: [verticalLinePlugin, zoomSelectionPlugin]
@@ -3152,12 +3679,12 @@
                 data: {
                     labels: Array(WINDOW_SIZE).fill(''),
                     datasets: [
-                        { label: 'Total (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
+                        { label: 'Total (ms)', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Find (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Insert (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Update (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
                         { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Aggregate (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
+                        { label: 'Aggregate (ms)', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
                     ]
                 }, options: getLineOptions('latency'),
                 plugins: [verticalLinePlugin, zoomSelectionPlugin]
@@ -3396,6 +3923,9 @@
                 if (e.key === 'Escape') closeInsightsDrawer();
             });
             updateInsightsDrawerNavButtons();
+            wireHeatmapHoverPause();
+            onLoadProfileKindChange();
+            onAccessPatternKindChange();
             fetch('/api/config').then(r => r.json()).then(cfg => {
                 document.querySelector('[name="uri"]').value = cfg.URI || '';
                 document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
@@ -3503,31 +4033,59 @@
             if (!validateConfigForm()) {
                 return;
             }
-            const username = document.querySelector('[name="username"]').value;
+            const username = document.querySelector('[name="username"]').value.trim();
             const password = document.querySelector('[name="password"]').value;
-            if (username !== "" && password === "") {
-                document.getElementById('passwordModal').style.display = 'flex';
-                document.getElementById('modalPasswordInput').focus();
+            // Prompt for whichever credential is missing instead of launching and
+            // failing on an authentication error. Blanks are still allowed (via the
+            // modal) for deployments that do not require authentication.
+            if (username === "" || password === "") {
+                openCredentialModal(username === "", password === "");
                 return;
             }
             launchWorkload(new FormData(this));
         });
 
+        function openCredentialModal(needUser, needPass) {
+            const userGroup = document.getElementById('modalUsernameGroup');
+            const passGroup = document.getElementById('modalPasswordGroup');
+            const userInput = document.getElementById('modalUsernameInput');
+            const passInput = document.getElementById('modalPasswordInput');
+            const msg = document.getElementById('credModalMessage');
+
+            userGroup.style.display = needUser ? 'block' : 'none';
+            passGroup.style.display = needPass ? 'block' : 'none';
+            userInput.value = document.querySelector('[name="username"]').value || '';
+            passInput.value = document.querySelector('[name="password"]').value || '';
+
+            const what = (needUser && needPass) ? 'a username and password'
+                : needUser ? 'a username' : 'a password';
+            const it = (needUser && needPass) ? 'them' : 'it';
+            msg.textContent = `No ${what} was provided for the MongoDB connection. Enter ${it} below, `
+                + `or leave blank if your deployment does not require authentication.`;
+
+            document.getElementById('passwordModal').style.display = 'flex';
+            (needUser ? userInput : passInput).focus();
+        }
+
         function closeModal() { document.getElementById('passwordModal').style.display = 'none'; }
 
-        function submitWithPassword() {
-            const modalPass = document.getElementById('modalPasswordInput').value;
-            if (!modalPass) {
-                showError("Password is required.");
-                return;
-            }
+        function submitWithCredentials() {
             clearConfigInlineError();
             if (!validateConfigForm()) {
                 closeModal();
                 return;
             }
-            document.querySelector('[name="password"]').value = modalPass;
-            sessionStorage.setItem('plgm_password', modalPass);
+            const userGroup = document.getElementById('modalUsernameGroup');
+            const passGroup = document.getElementById('modalPasswordGroup');
+            if (userGroup.style.display !== 'none') {
+                document.querySelector('[name="username"]').value =
+                    document.getElementById('modalUsernameInput').value.trim();
+            }
+            if (passGroup.style.display !== 'none') {
+                const modalPass = document.getElementById('modalPasswordInput').value;
+                document.querySelector('[name="password"]').value = modalPass;
+                sessionStorage.setItem('plgm_password', modalPass);
+            }
             closeModal();
             launchWorkload(new FormData(document.getElementById('configForm')));
         }
@@ -4161,6 +4719,10 @@
                         document.getElementById('finishActions').style.display = 'none';
                         document.getElementById('insightsPanel').style.display = 'block';
                         showInsightsTab('overview');
+                        // Reset live dashboard to the first tab; this also hides the
+                        // panels that belong to other tabs (e.g. insights).
+                        showDashTab('overview');
+                        renderLatencyHeatmap([]);
                         document.getElementById('progressBar').style.width = "0%";
                         finalInsightsData = null;
                         renderFinalInsights({ metadata: { status: 'pending' }, summary: {} });
@@ -4177,8 +4739,8 @@
                         histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
                         histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
                         histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-                        latencyMetricVisibility = { avg: true, p95: false, p99: true };
-                        latencyOpVisibility = { total: true, find: false, insert: false, update: false, delete: false, aggregate: false, transaction: false };
+                        latencyMetricVisibility = { avg: false, p95: false, p99: true };
+                        latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
                         zoomState.active = false;
                         zoomState.dragging = false;
                         zoomState.sourceCanvasId = '';
@@ -4262,6 +4824,9 @@
                         document.getElementById('timerDisplay').textContent = `${timeStr} / ${formatTime(targetSeconds)}`;
 
                         if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((executionElapsed / targetSeconds) * 100, 100) + "%";
+
+                        // Latency heatmap (always update so the Latency Analysis tab is current).
+                        renderLatencyHeatmap(stats.latencyHeatmap);
 
                         // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
                         if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
@@ -4504,29 +5069,34 @@
                             histLats.delete.push(0);
                             histLats.aggregate.push(0);
 
-                            histLatTimelineAvg.total.push(null);
-                            histLatTimelineAvg.find.push(null);
-                            histLatTimelineAvg.insert.push(null);
-                            histLatTimelineAvg.update.push(null);
-                            histLatTimelineAvg.delete.push(null);
-                            histLatTimelineAvg.aggregate.push(null);
-                            histLatTimelineAvg.transaction.push(null);
+                            // Push a terminal 0 (not null) so the percentile timeline
+                            // descends smoothly to baseline at the end of the run, matching
+                            // how the throughput and live-latency charts taper to 0. Using
+                            // null here left the series ending on the last (often spiky)
+                            // window, giving the false impression the run was interrupted.
+                            histLatTimelineAvg.total.push(0);
+                            histLatTimelineAvg.find.push(0);
+                            histLatTimelineAvg.insert.push(0);
+                            histLatTimelineAvg.update.push(0);
+                            histLatTimelineAvg.delete.push(0);
+                            histLatTimelineAvg.aggregate.push(0);
+                            histLatTimelineAvg.transaction.push(0);
 
-                            histLatTimelineP95.total.push(null);
-                            histLatTimelineP95.find.push(null);
-                            histLatTimelineP95.insert.push(null);
-                            histLatTimelineP95.update.push(null);
-                            histLatTimelineP95.delete.push(null);
-                            histLatTimelineP95.aggregate.push(null);
-                            histLatTimelineP95.transaction.push(null);
+                            histLatTimelineP95.total.push(0);
+                            histLatTimelineP95.find.push(0);
+                            histLatTimelineP95.insert.push(0);
+                            histLatTimelineP95.update.push(0);
+                            histLatTimelineP95.delete.push(0);
+                            histLatTimelineP95.aggregate.push(0);
+                            histLatTimelineP95.transaction.push(0);
 
-                            histLatTimelineP99.total.push(null);
-                            histLatTimelineP99.find.push(null);
-                            histLatTimelineP99.insert.push(null);
-                            histLatTimelineP99.update.push(null);
-                            histLatTimelineP99.delete.push(null);
-                            histLatTimelineP99.aggregate.push(null);
-                            histLatTimelineP99.transaction.push(null);
+                            histLatTimelineP99.total.push(0);
+                            histLatTimelineP99.find.push(0);
+                            histLatTimelineP99.insert.push(0);
+                            histLatTimelineP99.update.push(0);
+                            histLatTimelineP99.delete.push(0);
+                            histLatTimelineP99.aggregate.push(0);
+                            histLatTimelineP99.transaction.push(0);
 
                             globalMarkers.push({ text: isFailed ? "Failed" : "Finished", color: isFailed ? colors.red : colors.forest });
 
@@ -4658,6 +5228,103 @@
                 .catch(err => {
                     showError("Failed to shut down backend: " + err);
                 });
+        }
+
+        // --- Load Modeling UI helpers ---
+        const loadProfileHints = {
+            fixed: 'A constant number of workers runs for the whole run — set it in Concurrency.',
+            ramp: 'Worker count moves linearly from Start to End over "Ramp Over"; it holds at End for the rest of the run.',
+            step: 'Worker count holds each stage\'s value for its duration, in order. The last stage holds until the run ends.',
+            spike: 'Runs at Base workers, then jumps to Peak for the spike window, then returns to Base.',
+            sine: 'Worker count oscillates smoothly between Min and Max, completing one full wave every Period. Period is one cycle length; Duration is the total run. Duration ÷ Period = number of waves (e.g. 120s ÷ 30s = 4).'
+        };
+
+        function onLoadProfileKindChange() {
+            const kind = (document.getElementById('loadProfileKind') || {}).value || 'fixed';
+            document.querySelectorAll('.lp-group').forEach(g => {
+                g.style.display = (g.getAttribute('data-lp') === kind) ? 'block' : 'none';
+            });
+
+            const hint = document.getElementById('loadProfileHint');
+            if (hint) hint.textContent = loadProfileHints[kind] || '';
+
+            // Concurrency is the worker count only for the Fixed profile. For
+            // dynamic profiles the profile fields drive concurrency, so relabel
+            // and explain to remove the apparent conflict.
+            const isFixed = (kind === 'fixed');
+            const label = document.getElementById('concurrencyLabel');
+            const managedHint = document.getElementById('concurrencyManagedHint');
+            const input = document.getElementById('concurrencyInput');
+            if (label) label.textContent = isFixed ? 'Concurrency (Active Workers)' : 'Fallback Concurrency';
+            if (managedHint) managedHint.style.display = isFixed ? 'none' : 'block';
+            if (input) input.classList.toggle('input-managed', !isFixed);
+        }
+
+        function onAccessPatternKindChange() {
+            const kind = (document.getElementById('accessPatternKind') || {}).value || 'uniform';
+            document.querySelectorAll('.ap-group').forEach(g => {
+                g.style.display = (g.getAttribute('data-ap') === kind) ? 'block' : 'none';
+            });
+        }
+
+        let lastInferredMix = null;
+        async function runSchemaInference() {
+            const input = document.getElementById('schemaInferInput');
+            const resultEl = document.getElementById('schemaInferResult');
+            const applyBtn = document.getElementById('applyMixBtn');
+            const text = (input && input.value || '').trim();
+            if (!text) {
+                resultEl.textContent = 'Paste a query log first.';
+                return;
+            }
+            resultEl.textContent = 'Analyzing…';
+            try {
+                const r = await fetch('/api/infer-schema', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ log: text })
+                });
+                const data = await r.json();
+                if (!r.ok) {
+                    resultEl.textContent = 'Error: ' + (data.message || ('HTTP ' + r.status));
+                    return;
+                }
+                lastInferredMix = data.suggestedMix || null;
+                const lines = [];
+                lines.push(`Parsed ${data.parsedEntries} entries (skipped ${data.skippedLines}).`);
+                (data.collections || []).forEach(c => {
+                    const ops = Object.entries(c.operationCounts || {}).map(([k, v]) => `${k}:${v}`).join(', ');
+                    lines.push(`• ${c.namespace} — ${ops}`);
+                });
+                if (data.suggestedMix) {
+                    const m = data.suggestedMix;
+                    lines.push(`Suggested mix → find ${m.findPercent}% / insert ${m.insertPercent}% / update ${m.updatePercent}% / delete ${m.deletePercent}% / aggregate ${m.aggregatePercent}%`);
+                }
+                (data.warnings || []).forEach(w => lines.push('⚠ ' + w));
+                resultEl.innerHTML = lines.map(l => `<div>${l.replace(/</g, '&lt;')}</div>`).join('');
+                if (applyBtn) applyBtn.style.display = lastInferredMix ? 'inline-flex' : 'none';
+            } catch (e) {
+                resultEl.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function applyInferredMix() {
+            if (!lastInferredMix) return;
+            const set = (name, val) => {
+                const el = document.querySelector(`[name="${name}"]`);
+                if (el) el.value = val;
+            };
+            set('find_percent', lastInferredMix.findPercent || 0);
+            set('insert_percent', lastInferredMix.insertPercent || 0);
+            set('update_percent', lastInferredMix.updatePercent || 0);
+            set('delete_percent', lastInferredMix.deletePercent || 0);
+            set('aggregate_percent', lastInferredMix.aggregatePercent || 0);
+            const resultEl = document.getElementById('schemaInferResult');
+            if (resultEl) resultEl.innerHTML += '<div>✓ Applied suggested mix to the distribution fields.</div>';
+        }
+
+        function openHtmlReport() {
+            window.open('/api/report', '_blank');
         }
 
         async function downloadSummaryReport() {

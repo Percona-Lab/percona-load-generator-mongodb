@@ -125,13 +125,53 @@ Current limitation:
 `plgm` features a completely embedded Web UI. It allows you to configure your database connection, upload custom workload schemas, adjust operation ratios, and monitor real-time throughput and latency without ever touching a YAML file. It has the same functionality as the CLI version, but with an awesome UI.
 
 ### 1. Starting the UI
-To launch the UI, simply pass the `--webui` flag. The application will start a secure local server and automatically open your default web browser listening on port 9999. You can also set a custom port instead, as shown in the example below:
+To launch the UI, simply pass the `--webui` flag. The application starts a local server bound to the loopback interface (`127.0.0.1`) and automatically opens your default web browser on port 9999. You can also set a custom port instead, as shown in the example below:
 
 ```bash
 ./bin/plgm --webui
 # Or, set a custom port:
 ./bin/plgm --webui --webui-port=32000
 ```
+
+#### HTTP vs. HTTPS (no certificate warnings)
+
+By default the UI is served over plain **HTTP bound to loopback** (`http://127.0.0.1:<port>/`). Because the server never listens on a public interface, traffic stays on your machine, and browsers treat `http://localhost`/`http://127.0.0.1` as a *secure context* — so you get **no "your connection is not private" / `ERR_CERT_AUTHORITY_INVALID` warnings**.
+
+Enable HTTPS only if you intend to expose the UI beyond loopback. For a **warning-free** HTTPS endpoint, supply a certificate/key that your clients already trust:
+
+```bash
+./bin/plgm --webui --webui-cert=/path/to/tls.crt --webui-key=/path/to/tls.key
+```
+
+If you enable TLS without providing a certificate (`--webui-tls` alone), PLGM falls back to a temporary self-signed certificate — browsers will warn until it is trusted, so this is not recommended for day-to-day use.
+
+Equivalent `config.yaml` (`web_ui.tls_enabled`, `web_ui.tls_cert_file`, `web_ui.tls_key_file`) and environment variables (`PLGM_WEBUI_TLS`, `PLGM_WEBUI_TLS_CERT`, `PLGM_WEBUI_TLS_KEY`) are also available.
+
+#### Accessing the UI on a remote host (recommended: SSH tunnel)
+
+When PLGM runs on a remote server (for example, in your lab or cluster), the **recommended and secure** way to reach the UI is an SSH local port-forward. Run PLGM normally on the remote host (default HTTP on loopback — no TLS needed), then from your workstation:
+
+```bash
+# Forward local port 9999 to 127.0.0.1:9999 on the remote host
+ssh -L 9999:127.0.0.1:9999 youruser@remote-host
+```
+
+Then open `http://localhost:9999` in your local browser.
+
+**This is safe and introduces no network vulnerability.** With this setup, the only unencrypted segments are the loopback interfaces on each end, which are never exposed to the network:
+
+```
+[your browser] --http--> localhost:9999 (your machine's loopback)
+                              │
+                              │  encrypted by SSH  ← the only network hop
+                              ▼
+   [sshd on remote] --http--> 127.0.0.1:9999 (remote loopback; PLGM listens here)
+```
+
+- SSH encrypts the entire network path between your workstation and the remote host — that is the only segment an attacker on the network could observe, and it is fully protected.
+- PLGM binds only to `127.0.0.1` on the remote host, and `ssh -L` binds only to your workstation's loopback, so the UI is never reachable from the network on either end.
+
+Because SSH already provides the encryption, **you do not need to enable HTTPS/TLS for this workflow** — doing so would be redundant and would reintroduce browser certificate warnings. Enabling TLS is only useful if you expose PLGM directly on a network interface without an SSH tunnel.
 
 ### PLGM UI Sample Usage
 
@@ -326,6 +366,12 @@ Flags:
       Start the interactive Web UI
   -webui-port int
       Port for the Web UI (default 9999)
+  -webui-tls
+      Serve the Web UI over HTTPS (default: HTTP on loopback, no cert warnings)
+  -webui-cert string
+      Path to a TLS certificate file for the Web UI (implies --webui-tls)
+  -webui-key string
+      Path to the TLS private key file for the Web UI (implies --webui-tls)
 
 Environment Variables (Overrides):
  [Connection]
@@ -339,6 +385,9 @@ Environment Variables (Overrides):
  [Web UI]
   PLGM_WEBUI_ENABLED                  Start the interactive Web UI (true/false)
   PLGM_WEBUI_PORT                     Port for the Web UI (default: 9999)
+  PLGM_WEBUI_TLS                      Serve Web UI over HTTPS (true/false)
+  PLGM_WEBUI_TLS_CERT                 TLS certificate file path for the Web UI
+  PLGM_WEBUI_TLS_KEY                  TLS private key file path for the Web UI
 
  [Workload Core]
   PLGM_DEFAULT_WORKLOAD               Use built-in workload (true/false)
@@ -614,6 +663,176 @@ The additional collection and query definitions can be found here:
 * [collections](./resources/collections/)
 * [queries](./resources/queries/)
 
+## Load Modeling & Analysis
+
+Beyond fixed-concurrency runs, PLGM can shape load over time, pace clients, skew
+access patterns, visualize latency drift, infer a workload from logs, and export
+shareable reports. All of these are configurable from the Web UI (the **Load
+Modeling** and **Schema Inference** cards) and via `config.yaml` / `PLGM_*`
+environment variables.
+
+### Load Profiles (load shaping)
+
+Instead of a constant worker count, you can ramp, step, spike, or oscillate
+concurrency over the run. The worker pool is sized to the profile's peak, and a
+controller gates how many workers are active at any moment. The live target and
+active worker counts are exposed in `/api/stats` (`concurrencyTarget`,
+`concurrencyActive`).
+
+```yaml
+# config.yaml
+concurrency: 16            # used as the fixed/fallback worker count
+load_profile:
+  kind: ramp               # fixed | ramp | step | spike | sine
+  start_workers: 1
+  end_workers: 50
+  ramp_over: 30s
+# step example:
+#   kind: step
+#   steps: [{workers: 5, duration: 30s}, {workers: 20, duration: 60s}]
+# spike example:
+#   kind: spike
+#   base_workers: 5
+#   peak_workers: 50
+#   spike_at: 20s
+#   spike_for: 5s
+# sine example:
+#   kind: sine
+#   min_workers: 5
+#   max_workers: 50
+#   period: 30s
+```
+
+Invalid profiles (bad durations, negative workers, malformed steps) are rejected
+with a clear error before the run starts. An empty/`fixed` profile preserves the
+historical fixed-concurrency behavior.
+
+Env overrides: `PLGM_LOAD_PROFILE_KIND`, `PLGM_LOAD_PROFILE_WORKERS`.
+
+#### `duration` vs. load-profile timings (`period`, `ramp_over`, `spike_at`, ...)
+
+These are two different kinds of setting and are easy to confuse:
+
+- **`duration`** is the **total run length** of the benchmark (per iteration) —
+  the whole window the workload executes for (e.g. `120s`, `5m`).
+- **Load-profile timings** describe **what happens *inside* that window**. They
+  are always *sub-intervals* of `duration`, so each should be shorter than it:
+  - `ramp_over` — how long the ramp from Start to End workers takes.
+  - `steps[].duration` — how long each step holds its worker count.
+  - `spike_at` / `spike_for` — when the spike starts and how long it lasts.
+  - **`period`** (Sine only) — the length of **one full oscillation**
+    (Min → Max → Min). It is *not* the run length.
+
+**How `period` relates to `duration` (Sine):** the run completes
+`duration ÷ period` oscillations. Keep `period ≤ duration`, and for whole,
+symmetric waves make `duration` an integer multiple of `period`.
+
+| `duration` | `period` | Result |
+| :--- | :--- | :--- |
+| `120s` | `30s` | 4 complete oscillations |
+| `60s` | `60s` | Exactly 1 oscillation |
+| `60s` | `120s` | Only half an oscillation (Min → Max, run ends before returning) |
+
+The same principle applies to the other profiles: e.g. a `ramp_over: 30s` inside
+a `duration: 120s` ramps for the first 30s, then holds at End workers for the
+remaining 90s.
+
+### Think Time / Pacing
+
+Add a per-worker delay between operations to emulate realistic clients or hold a
+steady, sub-saturation request rate. Pacing time is excluded from measured
+operation latency.
+
+```yaml
+think_time_ms: 0     # fixed delay between operations
+think_jitter_ms: 0   # extra uniform random 0..jitter ms per delay
+```
+
+Env overrides: `PLGM_THINK_TIME_MS`, `PLGM_THINK_JITTER_MS`.
+
+### Access-Pattern Skew
+
+Control which existing records are selected for find/update/delete targeting.
+Skewed access exposes cache pressure and lock/hot-shard contention that uniform
+access hides.
+
+```yaml
+access_pattern:
+  kind: uniform          # uniform | zipfian | hotspot
+  # zipfian:
+  #   kind: zipfian
+  #   zipfian_exponent: 1.5   # >= 1.0; higher = more skew
+  # hotspot:
+  #   kind: hotspot
+  #   hotspot_percent: 20        # share of records that are "hot"
+  #   hotspot_traffic_percent: 80 # share of traffic to the hot set
+```
+
+Env overrides: `PLGM_ACCESS_PATTERN_KIND`, `PLGM_ACCESS_PATTERN_ZIPFIAN_EXPONENT`,
+`PLGM_ACCESS_PATTERN_HOTSPOT_PERCENT`, `PLGM_ACCESS_PATTERN_HOTSPOT_TRAFFIC_PERCENT`.
+
+### Latency Heatmap Over Time
+
+PLGM buckets latency into ~1&nbsp;second time windows and records p50/p95/p99/max
+per window (across **all operation types combined**), so you can see
+tail-latency drift over the run. The series is exposed in `/api/stats`
+(`latencyHeatmap`) and rendered as an inline chart both in the live **Latency
+Analysis** tab and in the exported report.
+
+Each column in the heatmap is one time window. Two independent visual channels
+encode the data:
+
+- **Color = absolute p99 latency.** Colors map to fixed latency thresholds
+  (based on common database/APM norms), *not* to the run's own maximum. This
+  means a fast run stays green even if one window is relatively taller than the
+  others — the heatmap will never paint a healthy 10&nbsp;ms run red just
+  because it is the busiest window seen so far.
+
+  | p99 (this window) | Color | Interpretation |
+  | :--- | :--- | :--- |
+  | &le; 10 ms | Green | Excellent |
+  | ~25 ms | Lime | Very good |
+  | ~50 ms | Yellow | Good |
+  | ~100 ms | Orange | Moderate |
+  | ~250 ms | Red | Slow |
+  | ~500 ms | Strong red | Very slow |
+  | &ge; 1 s | Dark red | Critical |
+
+  Values between anchors are interpolated, so the color transitions smoothly.
+
+- **Bar height = relative drift.** Height is scaled to this run's own peak p99,
+  so you can always see *when* tail latency rose or fell during the run, even in
+  an all-green run where every window is objectively fast.
+
+Hover any column to see the full per-window breakdown (ops in window,
+throughput, and p50/p95/p99/max). While the cursor is over the heatmap it
+pauses updating so you can inspect a window; it resumes and catches up to the
+latest data as soon as the cursor leaves.
+
+> Note: because each window is short, an occasional slow operation (for example
+> a heavy aggregation) can lift a single window's p99 above the cumulative p99
+> shown in the distribution table. That is expected — surfacing exactly *when*
+> tail latency occurred is the purpose of this view.
+
+### Schema Inference from Query Logs
+
+Paste mongod JSON slow-query logs, `system.profile` documents, or raw command
+documents into the **Schema Inference** card (or `POST /api/infer-schema` with
+`{"log": "..."}`). PLGM infers the collections touched, per-operation
+filter/sort/update/projection fields, candidate queries, and a suggested
+operation mix (find/insert/update/delete/aggregate percentages) that can pre-fill
+the distribution fields. Malformed or unrecognized lines are skipped and reported
+rather than failing the whole inference.
+
+### Shareable Run Reports
+
+Click **Export HTML Report** (or open `GET /api/report`) to generate a
+self-contained HTML report — no external assets or JavaScript — that includes the
+run summary, full configuration, load profile, pacing, access pattern, latency
+table, an inline latency-over-time chart, and notable insights/warnings. Use the
+browser's Print → Save as PDF to export a PDF.
+Add `?download=1` to download the HTML file directly.
+
 ## CSV Metrics Export 
 When CSV export is enabled, PLGM writes a new row to the file every time the `status_refresh_rate_sec` ticker fires. Because it flushes to disk continuously, your benchmark data is completely preserved even if the test is forcefully interrupted.
 
@@ -795,6 +1014,9 @@ You can override any setting in `config.yaml` using environment variables. This 
 | **Web UI** | | | |
 | `enabled` | `PLGM_WEBUI_ENABLED` | Force launch the Web UI | `true` |
 | `port` | `PLGM_WEBUI_PORT` | Port for the Web UI | `9999` |
+| `tls_enabled` | `PLGM_WEBUI_TLS` | Serve the Web UI over HTTPS (default HTTP on loopback, no cert warnings) | `false` |
+| `tls_cert_file` | `PLGM_WEBUI_TLS_CERT` | TLS certificate file for the Web UI (for warning-free HTTPS) | `/etc/ssl/plgm.crt` |
+| `tls_key_file` | `PLGM_WEBUI_TLS_KEY` | TLS private key file for the Web UI | `/etc/ssl/plgm.key` |
 | **Metrics Export** | | | |
 | `csv_export_enabled` ||Continuously stream workload throughput metrics to a CSV file| `false` |
 | `csv_export_append` ||If true, appends to the file. If false, overwrites it.| `false` |
@@ -833,13 +1055,13 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `use_transactions` | `PLGM_USE_TRANSACTIONS` | Enable Transactional Workloads (`true`/`false`) | `false` |
 | `max_transaction_ops` | `PLGM_MAX_TRANSACTION_OPS` | Maximum number of operations to group into a single transaction block | `5` |
 | **Operation Ratios** | | (Must sum to ~100) | |
-| `find_percent` | `PLGM_FIND_PERCENT` | Percentage of Find operations | `50` |
-| `insert_percent` | `PLGM_INSERT_PERCENT` | Percentage of Insert operations (this is not related to the initial seed inserts) | `10` |
-| `bulk_insert_percent ` | `PLGM_BULK_INSERT_PERCENT` | Percentage of Bulk Insert operations (this is not related to the initial seed inserts) | `10` |
-| `update_percent` | `PLGM_UPDATE_PERCENT` | Percentage of Update operations | `10` |
+| `find_percent` | `PLGM_FIND_PERCENT` | Percentage of Find operations | `60` |
+| `insert_percent` | `PLGM_INSERT_PERCENT` | Percentage of Insert operations (this is not related to the initial seed inserts) | `5` |
+| `bulk_insert_percent ` | `PLGM_BULK_INSERT_PERCENT` | Percentage of Bulk Insert operations (this is not related to the initial seed inserts) | `5` |
+| `update_percent` | `PLGM_UPDATE_PERCENT` | Percentage of Update operations | `20` |
 | `delete_percent` | `PLGM_DELETE_PERCENT` | Percentage of Delete operations | `10` |
-| `aggregate_percent` | `PLGM_AGGREGATE_PERCENT` | Percentage of Aggregate operations | `5` |
-| `transaction_percent` | `PLGM_TRANSACTION_PERCENT` | Percentage of Transactional operations | `5` |
+| `aggregate_percent` | `PLGM_AGGREGATE_PERCENT` | Percentage of Aggregate operations | `0` |
+| `transaction_percent` | `PLGM_TRANSACTION_PERCENT` | Percentage of Transactional operations | `0` |
 | **Performance Optimization** | | | |
 | `find_batch_size` | `PLGM_FIND_BATCH_SIZE` | Documents returned per cursor batch | `100` |
 | `insert_batch_size` | `PLGM_INSERT_BATCH_SIZE` | Number of documents per insert batch | `100` |

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,20 +17,41 @@ import (
 
 // RecordPool tracks documents known to exist per collection namespace so find/update/delete
 // operations can target realistic filters instead of random unmatched values.
+//
+// selector controls which pooled record is chosen for a given operation,
+// enabling uniform, zipfian, or hotspot access patterns. It is stateless and
+// safe to share across worker goroutines.
 type RecordPool struct {
-	mu      sync.RWMutex
-	maxSize int
-	pools   map[string][]map[string]interface{}
+	mu       sync.RWMutex
+	maxSize  int
+	pools    map[string][]map[string]interface{}
+	selector accesspattern.Selector
 }
 
 func NewRecordPool(maxSize int) *RecordPool {
 	if maxSize <= 0 {
 		maxSize = 10000
 	}
+	sel, _ := accesspattern.Compile(accesspattern.Config{})
 	return &RecordPool{
-		maxSize: maxSize,
-		pools:   make(map[string][]map[string]interface{}),
+		maxSize:  maxSize,
+		pools:    make(map[string][]map[string]interface{}),
+		selector: sel,
 	}
+}
+
+// SetSelector overrides the access-pattern selector. A nil selector resets to
+// uniform selection.
+func (rp *RecordPool) SetSelector(sel accesspattern.Selector) {
+	if rp == nil {
+		return
+	}
+	rp.mu.Lock()
+	defer rp.mu.Unlock()
+	if sel == nil {
+		sel, _ = accesspattern.Compile(accesspattern.Config{})
+	}
+	rp.selector = sel
 }
 
 func collectionNamespace(db *mongo.Database, col config.CollectionDefinition) string {
@@ -78,7 +100,15 @@ func (rp *RecordPool) Random(namespace string, rng *rand.Rand) (map[string]inter
 		rp.mu.RUnlock()
 		return nil, false
 	}
-	idx := rng.Intn(len(records))
+	var idx int
+	if rp.selector != nil {
+		idx = rp.selector.Index(len(records), rng)
+		if idx < 0 || idx >= len(records) {
+			idx = rng.Intn(len(records))
+		}
+	} else {
+		idx = rng.Intn(len(records))
+	}
 	snap := snapshotDocument(records[idx])
 	rp.mu.RUnlock()
 	if snap == nil {

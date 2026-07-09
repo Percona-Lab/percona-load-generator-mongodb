@@ -15,6 +15,21 @@ import (
 	"time"
 )
 
+func TestConcurrencySnapshot(t *testing.T) {
+	c := NewCollector()
+	if target, active := c.ConcurrencySnapshot(); target != 0 || active != 0 {
+		t.Fatalf("expected zero initial concurrency, got target=%d active=%d", target, active)
+	}
+	c.SetConcurrency(50, 37)
+	if target, active := c.ConcurrencySnapshot(); target != 50 || active != 37 {
+		t.Fatalf("expected target=50 active=37, got target=%d active=%d", target, active)
+	}
+	c.SetConcurrency(10, 10)
+	if target, active := c.ConcurrencySnapshot(); target != 10 || active != 10 {
+		t.Fatalf("expected target=10 active=10, got target=%d active=%d", target, active)
+	}
+}
+
 func TestLatencyHistogramRecordAndStats(t *testing.T) {
 	h := &LatencyHistogram{Min: math.MaxFloat64}
 	h.Record(10.2)

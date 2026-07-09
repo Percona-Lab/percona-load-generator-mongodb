@@ -4,7 +4,116 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 )
+
+func TestValidateLoadProfile(t *testing.T) {
+	t.Run("valid_ramp_passes", func(t *testing.T) {
+		cfg := &AppConfig{Concurrency: 4, LoadProfile: loadprofile.Config{
+			Kind: "ramp", StartWorkers: 1, EndWorkers: 50, RampOver: "30s",
+		}}
+		if err := ValidateLoadProfile(cfg); err != nil {
+			t.Fatalf("expected valid ramp, got %v", err)
+		}
+	})
+	t.Run("empty_profile_passes", func(t *testing.T) {
+		if err := ValidateLoadProfile(&AppConfig{Concurrency: 4}); err != nil {
+			t.Fatalf("expected empty profile to be valid, got %v", err)
+		}
+	})
+	t.Run("invalid_step_fails", func(t *testing.T) {
+		cfg := &AppConfig{Concurrency: 4, LoadProfile: loadprofile.Config{
+			Kind: "step", Steps: []loadprofile.Stage{{Workers: -5, Duration: "10s"}},
+		}}
+		if err := ValidateLoadProfile(cfg); err == nil {
+			t.Fatalf("expected invalid step profile to fail validation")
+		}
+	})
+}
+
+func TestLoadAppConfigRejectsInvalidLoadProfileEnv(t *testing.T) {
+	t.Setenv("PLGM_LOAD_PROFILE_KIND", "bogus")
+	_, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false)
+	if err == nil {
+		t.Fatalf("expected LoadAppConfig to reject unknown load profile kind")
+	}
+}
+
+func TestThinkTimeEnvOverrideAndClamp(t *testing.T) {
+	t.Setenv("PLGM_THINK_TIME_MS", "75")
+	t.Setenv("PLGM_THINK_JITTER_MS", "20")
+	cfg, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error = %v", err)
+	}
+	if cfg.ThinkTimeMs != 75 || cfg.ThinkJitterMs != 20 {
+		t.Fatalf("expected think_time=75 jitter=20, got %d/%d", cfg.ThinkTimeMs, cfg.ThinkJitterMs)
+	}
+
+	// Negative values are clamped to 0 by applyBaseDefaults.
+	clamp := &AppConfig{ThinkTimeMs: -5, ThinkJitterMs: -3}
+	applyBaseDefaults(clamp)
+	if clamp.ThinkTimeMs != 0 || clamp.ThinkJitterMs != 0 {
+		t.Fatalf("expected negative pacing clamped to 0, got %d/%d", clamp.ThinkTimeMs, clamp.ThinkJitterMs)
+	}
+}
+
+func TestValidateAccessPattern(t *testing.T) {
+	valid := []*AppConfig{
+		{},
+		{AccessPattern: accesspattern.Config{Kind: "uniform"}},
+		{AccessPattern: accesspattern.Config{Kind: "zipfian", ZipfianExponent: 1.5}},
+		{AccessPattern: accesspattern.Config{Kind: "hotspot", HotspotPercent: 10, HotspotTrafficPercent: 90}},
+	}
+	for i, cfg := range valid {
+		if err := ValidateAccessPattern(cfg); err != nil {
+			t.Fatalf("valid[%d] unexpected error: %v", i, err)
+		}
+	}
+	invalid := []*AppConfig{
+		{AccessPattern: accesspattern.Config{Kind: "bogus"}},
+		{AccessPattern: accesspattern.Config{Kind: "zipfian", ZipfianExponent: 0.5}},
+		{AccessPattern: accesspattern.Config{Kind: "hotspot", HotspotPercent: 200}},
+	}
+	for i, cfg := range invalid {
+		if err := ValidateAccessPattern(cfg); err == nil {
+			t.Fatalf("invalid[%d] expected error, got nil", i)
+		}
+	}
+}
+
+func TestAccessPatternEnvOverride(t *testing.T) {
+	t.Setenv("PLGM_ACCESS_PATTERN_KIND", "zipfian")
+	t.Setenv("PLGM_ACCESS_PATTERN_ZIPFIAN_EXPONENT", "1.7")
+	cfg, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error = %v", err)
+	}
+	if cfg.AccessPattern.Kind != "zipfian" || cfg.AccessPattern.ZipfianExponent != 1.7 {
+		t.Fatalf("expected zipfian/1.7, got %q/%g", cfg.AccessPattern.Kind, cfg.AccessPattern.ZipfianExponent)
+	}
+}
+
+func TestLoadAppConfigRejectsInvalidAccessPatternEnv(t *testing.T) {
+	t.Setenv("PLGM_ACCESS_PATTERN_KIND", "bogus")
+	if _, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false); err == nil {
+		t.Fatalf("expected invalid access pattern kind to fail LoadAppConfig")
+	}
+}
+
+func TestLoadProfileEnvOverride(t *testing.T) {
+	t.Setenv("PLGM_LOAD_PROFILE_KIND", "fixed")
+	t.Setenv("PLGM_LOAD_PROFILE_WORKERS", "12")
+	cfg, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error = %v", err)
+	}
+	if cfg.LoadProfile.Kind != "fixed" || cfg.LoadProfile.Workers != 12 {
+		t.Fatalf("expected env-driven fixed/12 load profile, got %+v", cfg.LoadProfile)
+	}
+}
 
 func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	t.Setenv("PLGM_URI", "")
@@ -25,6 +134,9 @@ func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	if cfg.WebUI.Port != 9999 {
 		t.Fatalf("expected default web port 9999, got %d", cfg.WebUI.Port)
 	}
+	if cfg.WebUI.TLSEnabled {
+		t.Fatalf("expected TLS disabled by default (HTTP on loopback)")
+	}
 	if cfg.FindPercent+cfg.UpdatePercent+cfg.DeletePercent+cfg.InsertPercent+cfg.AggregatePercent+cfg.TransactionPercent+cfg.BulkInsertPercent != 100 {
 		t.Fatalf("expected normalized percentages to total 100")
 	}
@@ -33,6 +145,27 @@ func TestLoadAppConfigWebUIDefaultsAndBaseDefaults(t *testing.T) {
 	}
 	if cfg.ShardingMode != "auto" || !cfg.ShardingSkipGenericWithoutConfig {
 		t.Fatalf("expected sharding defaults mode=auto skip_without_config=true, got mode=%q skip=%v", cfg.ShardingMode, cfg.ShardingSkipGenericWithoutConfig)
+	}
+}
+
+func TestLoadAppConfigWebUITLSEnvOverrides(t *testing.T) {
+	t.Setenv("PLGM_URI", "")
+	t.Setenv("PLGM_WEBUI_TLS", "true")
+	t.Setenv("PLGM_WEBUI_TLS_CERT", "/etc/ssl/plgm.crt")
+	t.Setenv("PLGM_WEBUI_TLS_KEY", "/etc/ssl/plgm.key")
+
+	cfg, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error = %v", err)
+	}
+	if !cfg.WebUI.TLSEnabled {
+		t.Fatalf("expected TLS enabled via PLGM_WEBUI_TLS")
+	}
+	if cfg.WebUI.TLSCertFile != "/etc/ssl/plgm.crt" {
+		t.Fatalf("expected cert file override, got %q", cfg.WebUI.TLSCertFile)
+	}
+	if cfg.WebUI.TLSKeyFile != "/etc/ssl/plgm.key" {
+		t.Fatalf("expected key file override, got %q", cfg.WebUI.TLSKeyFile)
 	}
 }
 

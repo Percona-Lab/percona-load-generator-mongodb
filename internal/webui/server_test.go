@@ -40,6 +40,101 @@ func TestParseInt(t *testing.T) {
 	}
 }
 
+func TestHandleReportRendersHTML(t *testing.T) {
+	s := NewServer(&config.AppConfig{
+		URI:         "mongodb://user:secret@localhost:27017",
+		Duration:    "30s",
+		Concurrency: 8,
+		FindPercent: 100,
+	})
+	s.CurrentStats = stats.NewCollector()
+	s.CurrentStats.Track("find", 3*time.Millisecond)
+	s.CurrentStats.Track("find", 9*time.Millisecond)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/report", nil)
+	rec := httptest.NewRecorder()
+	s.handleReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "MongoDB Benchmark Report") {
+		t.Fatalf("expected report title in HTML")
+	}
+	if strings.Contains(body, "secret") {
+		t.Fatalf("expected password to be masked in report URI")
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/html") {
+		t.Fatalf("expected HTML content type, got %q", rec.Header().Get("Content-Type"))
+	}
+}
+
+func TestHandleReportDownloadSetsAttachment(t *testing.T) {
+	s := NewServer(&config.AppConfig{Duration: "10s"})
+	req := httptest.NewRequest(http.MethodGet, "/api/report?download=1", nil)
+	rec := httptest.NewRecorder()
+	s.handleReport(rec, req)
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment") {
+		t.Fatalf("expected attachment disposition, got %q", cd)
+	}
+}
+
+func TestHandleInferSchemaJSON(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+	body := `{"log":"{\"attr\":{\"ns\":\"shop.orders\",\"command\":{\"find\":\"orders\",\"filter\":{\"status\":\"open\"}}}}"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/infer-schema", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.handleInferSchema(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		ParsedEntries int `json:"parsedEntries"`
+		Operations    []struct {
+			Namespace string `json:"namespace"`
+			Operation string `json:"operation"`
+		} `json:"operations"`
+		SuggestedMix struct {
+			FindPercent int `json:"findPercent"`
+		} `json:"suggestedMix"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.ParsedEntries != 1 {
+		t.Fatalf("expected 1 parsed entry, got %d", resp.ParsedEntries)
+	}
+	if len(resp.Operations) == 0 || resp.Operations[0].Namespace != "shop.orders" {
+		t.Fatalf("unexpected operations: %+v", resp.Operations)
+	}
+	if resp.SuggestedMix.FindPercent != 100 {
+		t.Fatalf("expected find mix 100, got %d", resp.SuggestedMix.FindPercent)
+	}
+}
+
+func TestHandleInferSchemaEmptyBodyRejected(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+	req := httptest.NewRequest(http.MethodPost, "/api/infer-schema", strings.NewReader("   "))
+	rec := httptest.NewRecorder()
+	s.handleInferSchema(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty body, got %d", rec.Code)
+	}
+}
+
+func TestHandleInferSchemaRejectsGet(t *testing.T) {
+	s := NewServer(&config.AppConfig{})
+	req := httptest.NewRequest(http.MethodGet, "/api/infer-schema", nil)
+	rec := httptest.NewRecorder()
+	s.handleInferSchema(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for GET, got %d", rec.Code)
+	}
+}
+
 func TestHandleGetConfigMasksPassword(t *testing.T) {
 	s := NewServer(&config.AppConfig{
 		URI: "mongodb://localhost:27017",

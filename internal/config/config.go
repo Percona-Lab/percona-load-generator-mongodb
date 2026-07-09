@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"gopkg.in/yaml.v2"
 )
 
@@ -54,6 +56,24 @@ type AppConfig struct {
 	// workload streams are seeded per-worker from this base.
 	RandomSeed int64 `yaml:"random_seed"`
 
+	// ThinkTimeMs is an optional fixed delay each worker waits between operations
+	// to emulate realistic client pacing. ThinkJitterMs adds a uniform random
+	// 0..ThinkJitterMs milliseconds on top of each delay. Both default to 0
+	// (no pacing), preserving the historical "as fast as possible" behavior.
+	// Pacing time is excluded from measured operation latency.
+	ThinkTimeMs   int `yaml:"think_time_ms"`
+	ThinkJitterMs int `yaml:"think_jitter_ms"`
+
+	// LoadProfile shapes worker concurrency over the run (ramp/step/spike/sine).
+	// An empty/fixed profile preserves the historical fixed-concurrency behavior
+	// using Concurrency as the worker count.
+	LoadProfile loadprofile.Config `yaml:"load_profile"`
+
+	// AccessPattern controls how existing records are chosen for
+	// find/update/delete targeting (uniform/zipfian/hotspot). An empty/uniform
+	// pattern preserves the historical uniform-random selection.
+	AccessPattern accesspattern.Config `yaml:"access_pattern"`
+
 	ConnectionParams ConnectionParams       `yaml:"connection_params"`
 	CustomParamsMap  map[string]interface{} `yaml:"custom_params"`
 	Debug            bool                   `yaml:"debug"`
@@ -85,6 +105,17 @@ type AppConfig struct {
 type WebUIConfig struct {
 	Enabled bool `yaml:"enabled"`
 	Port    int  `yaml:"port"`
+
+	// TLS controls how the Web UI is served. By default the UI is served over
+	// plain HTTP bound to the loopback interface (127.0.0.1), which browsers
+	// treat as a secure context and therefore do NOT show certificate warnings.
+	// Enable TLS only when exposing the UI beyond loopback; in that case supply
+	// a trusted certificate/key via TLSCertFile/TLSKeyFile. If TLS is enabled
+	// without cert/key files, an in-memory self-signed certificate is generated
+	// (browsers will warn until it is trusted).
+	TLSEnabled  bool   `yaml:"tls_enabled"`
+	TLSCertFile string `yaml:"tls_cert_file"`
+	TLSKeyFile  string `yaml:"tls_key_file"`
 }
 
 type RawInjectorConfig struct {
@@ -147,6 +178,12 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 	if err := ValidateShardingConfig(cfg); err != nil {
 		return nil, err
 	}
+	if err := ValidateLoadProfile(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateAccessPattern(cfg); err != nil {
+		return nil, err
+	}
 
 	// 5. Balance the mix percentages
 	normalizePercentages(cfg, overriddenStats)
@@ -172,11 +209,11 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.IntervalDelay = "0s"
 
 	// --- MIX TAB ---
-	cfg.FindPercent = 50
+	cfg.FindPercent = 60
 	cfg.UpdatePercent = 20
 	cfg.DeletePercent = 10
-	cfg.InsertPercent = 20
-	cfg.BulkInsertPercent = 0
+	cfg.InsertPercent = 5
+	cfg.BulkInsertPercent = 5
 	cfg.AggregatePercent = 0
 	cfg.TransactionPercent = 0
 
@@ -318,6 +355,12 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	if cfg.MaxTransactionOps <= 0 {
 		cfg.MaxTransactionOps = 3
+	}
+	if cfg.ThinkTimeMs < 0 {
+		cfg.ThinkTimeMs = 0
+	}
+	if cfg.ThinkJitterMs < 0 {
+		cfg.ThinkJitterMs = 0
 	}
 
 	// --- RAW INJECTOR TAB ---
@@ -561,6 +604,45 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 			cfg.RandomSeed = n
 		}
 	}
+	if v := os.Getenv("PLGM_THINK_TIME_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.ThinkTimeMs = n
+		}
+	}
+	if v := os.Getenv("PLGM_THINK_JITTER_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.ThinkJitterMs = n
+		}
+	}
+	if v := os.Getenv("PLGM_ACCESS_PATTERN_KIND"); v != "" {
+		cfg.AccessPattern.Kind = v
+	}
+	if v := os.Getenv("PLGM_ACCESS_PATTERN_ZIPFIAN_EXPONENT"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			cfg.AccessPattern.ZipfianExponent = f
+		}
+	}
+	if v := os.Getenv("PLGM_ACCESS_PATTERN_HOTSPOT_PERCENT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.AccessPattern.HotspotPercent = n
+		}
+	}
+	if v := os.Getenv("PLGM_ACCESS_PATTERN_HOTSPOT_TRAFFIC_PERCENT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.AccessPattern.HotspotTrafficPercent = n
+		}
+	}
+	// --- Load Profile Overrides ---
+	// Full profile shaping is configured via YAML or the web UI; the env knobs
+	// cover the most common CI use case (selecting a kind and fixed worker count).
+	if v := os.Getenv("PLGM_LOAD_PROFILE_KIND"); v != "" {
+		cfg.LoadProfile.Kind = v
+	}
+	if v := os.Getenv("PLGM_LOAD_PROFILE_WORKERS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.LoadProfile.Workers = n
+		}
+	}
 
 	// --- RawInjector Overrides ---
 	if v := os.Getenv("PLGM_INJECTOR"); v != "" {
@@ -608,6 +690,17 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.WebUI.Port = n
 		}
+	}
+	if v := os.Getenv("PLGM_WEBUI_TLS"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WebUI.TLSEnabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_WEBUI_TLS_CERT"); v != "" {
+		cfg.WebUI.TLSCertFile = v
+	}
+	if v := os.Getenv("PLGM_WEBUI_TLS_KEY"); v != "" {
+		cfg.WebUI.TLSKeyFile = v
 	}
 
 	// --- Insights Overrides ---
@@ -690,6 +783,34 @@ func ValidateShardingConfig(cfg *AppConfig) error {
 	}
 	if cfg.ShardingMode == "force_on" && cfg.ShardingSkipGenericWithoutConfig {
 		return fmt.Errorf("invalid sharding configuration: sharding_mode=force_on conflicts with sharding_skip_generic_without_config=true")
+	}
+	return nil
+}
+
+// ValidateLoadProfile compiles the configured load profile to surface invalid
+// durations, negative worker counts, or malformed step definitions early.
+func ValidateLoadProfile(cfg *AppConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	fallback := cfg.Concurrency
+	if fallback < 1 {
+		fallback = 1
+	}
+	if _, err := loadprofile.Compile(cfg.LoadProfile, fallback); err != nil {
+		return fmt.Errorf("invalid load profile: %w", err)
+	}
+	return nil
+}
+
+// ValidateAccessPattern compiles the configured access pattern to surface
+// invalid distribution kinds or out-of-range parameters early.
+func ValidateAccessPattern(cfg *AppConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	if _, err := accesspattern.Compile(cfg.AccessPattern); err != nil {
+		return fmt.Errorf("invalid access pattern: %w", err)
 	}
 	return nil
 }

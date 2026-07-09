@@ -184,6 +184,45 @@ func (h *LatencyHistogram) GetStatsAndReset() map[string]float64 {
 	return stats
 }
 
+// SnapshotAndReset returns the count and p50/p95/p99/max for the current window
+// and then clears the histogram, so callers can build a per-interval latency
+// series (heatmap) without double-counting across windows.
+func (h *LatencyHistogram) SnapshotAndReset() (count int64, p50, p95, p99, max float64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.Count == 0 {
+		return 0, 0, 0, 0, 0
+	}
+
+	getPerc := func(p float64) float64 {
+		targetCount := int64(math.Ceil((p / 100.0) * float64(h.Count)))
+		var currentCount int64 = 0
+		for i, c := range h.Buckets {
+			currentCount += c
+			if currentCount >= targetCount {
+				return float64(i)
+			}
+		}
+		return float64(MaxLatencyBin)
+	}
+
+	count = h.Count
+	p50 = getPerc(50.0)
+	p95 = getPerc(95.0)
+	p99 = getPerc(99.0)
+	max = h.Max
+
+	h.Buckets = [MaxLatencyBin]int64{}
+	h.Overflow = 0
+	h.Count = 0
+	h.Sum = 0
+	h.Min = math.MaxFloat64
+	h.Max = 0
+
+	return count, p50, p95, p99, max
+}
+
 type Collector struct {
 	FindOps   uint64
 	InsertOps uint64
@@ -218,6 +257,14 @@ type Collector struct {
 	UITransHist        *LatencyHistogram
 	UITotalHist        *LatencyHistogram
 
+	// HeatmapHist accumulates total latency for the current heatmap window and is
+	// reset each time CaptureLatencyInterval snapshots it into the heatmap series.
+	HeatmapHist *LatencyHistogram
+	heatmap     *LatencyHeatmap
+	// lastHeatmapCapUnix is the unix-nanosecond time of the last heatmap capture,
+	// used by CaptureLatencyIntervalEvery to enforce a stable window size.
+	lastHeatmapCapUnix int64
+
 	CurrentIteration int
 
 	startTime  time.Time
@@ -240,6 +287,46 @@ type Collector struct {
 	finalInsights     *InsightsReport
 
 	acc accuracyCounters
+
+	// workloadStartUnix marks the start of the measured workload window (after
+	// initialization/seeding/sharding), in unix nanoseconds. 0 means unset.
+	workloadStartUnix int64
+
+	// concurrencyTarget/concurrencyActive expose the live load-profile state:
+	// the worker count the schedule currently requests, and the number of
+	// workers actually executing operations. They are written only by the
+	// runner's profile controller and read by the monitor/web UI.
+	concurrencyTarget int64
+	concurrencyActive int64
+}
+
+// SetConcurrency records the live load-profile worker counts. target is what the
+// schedule requests for the current elapsed time; active is how many workers are
+// presently executing (un-parked) operations.
+func (c *Collector) SetConcurrency(target, active int) {
+	atomic.StoreInt64(&c.concurrencyTarget, int64(target))
+	atomic.StoreInt64(&c.concurrencyActive, int64(active))
+}
+
+// ConcurrencySnapshot returns the most recent (target, active) worker counts.
+func (c *Collector) ConcurrencySnapshot() (target, active int) {
+	return int(atomic.LoadInt64(&c.concurrencyTarget)), int(atomic.LoadInt64(&c.concurrencyActive))
+}
+
+// MarkWorkloadStart records the start of the measured workload window. Only the
+// first call takes effect, so the elapsed timer reflects the true execution
+// window and excludes preparation time.
+func (c *Collector) MarkWorkloadStart() {
+	atomic.CompareAndSwapInt64(&c.workloadStartUnix, 0, time.Now().UnixNano())
+}
+
+// WorkloadStart returns the recorded workload start time and whether it is set.
+func (c *Collector) WorkloadStart() (time.Time, bool) {
+	v := atomic.LoadInt64(&c.workloadStartUnix)
+	if v == 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(0, v), true
 }
 
 // accuracyCounters track how well the workload actually exercises existing data.
@@ -353,10 +440,77 @@ func NewCollector() *Collector {
 		UIAggHist:          &LatencyHistogram{Min: math.MaxFloat64},
 		UITransHist:        &LatencyHistogram{Min: math.MaxFloat64},
 		UITotalHist:        &LatencyHistogram{Min: math.MaxFloat64},
+		HeatmapHist:        &LatencyHistogram{Min: math.MaxFloat64},
+		heatmap:            NewLatencyHeatmap(0),
 		startTime:          time.Now(),
 	}
 	c.configureInsights(nil)
 	return c
+}
+
+// CaptureLatencyInterval snapshots the latency accumulated since the last call
+// into a new heatmap bucket. Empty windows are skipped so the series only
+// contains intervals where work happened. Callers invoke this on their polling
+// cadence (e.g. the web UI stats poll), which defines the heatmap resolution.
+func (c *Collector) CaptureLatencyInterval() {
+	if c == nil || c.HeatmapHist == nil || c.heatmap == nil {
+		return
+	}
+	count, p50, p95, p99, max := c.HeatmapHist.SnapshotAndReset()
+	if count == 0 {
+		return
+	}
+	elapsed := time.Since(c.startTime).Seconds()
+	if start, ok := c.WorkloadStart(); ok {
+		elapsed = time.Since(start).Seconds()
+	}
+	c.heatmap.Append(LatencyBucket{
+		ElapsedSec:      elapsed,
+		TimestampUnixMs: time.Now().UnixMilli(),
+		Count:           count,
+		P50:             p50,
+		P95:             p95,
+		P99:             p99,
+		Max:             max,
+	})
+}
+
+// CaptureLatencyIntervalEvery snapshots a heatmap bucket only when at least
+// minWindow has elapsed since the previous capture. This decouples the heatmap
+// window size from the UI polling cadence.
+//
+// Without this gate the window equals the poll interval (500ms by default), so
+// each window holds very few samples; with fewer than ~100 samples the 99th
+// percentile collapses onto the single slowest operation in that window, which
+// makes the heatmap look far worse than the cumulative p99 (a stray slow
+// aggregate dominates a tiny window). A stable ~1s window gives each bucket a
+// statistically meaningful sample count.
+func (c *Collector) CaptureLatencyIntervalEvery(minWindow time.Duration) {
+	if c == nil || c.HeatmapHist == nil || c.heatmap == nil {
+		return
+	}
+	if minWindow <= 0 {
+		c.CaptureLatencyInterval()
+		return
+	}
+	now := time.Now().UnixNano()
+	last := atomic.LoadInt64(&c.lastHeatmapCapUnix)
+	if last != 0 && time.Duration(now-last) < minWindow {
+		return
+	}
+	// CAS guards against two concurrent pollers both snapshotting the window.
+	if !atomic.CompareAndSwapInt64(&c.lastHeatmapCapUnix, last, now) {
+		return
+	}
+	c.CaptureLatencyInterval()
+}
+
+// LatencyHeatmap returns a copy of the captured latency-over-time series.
+func (c *Collector) LatencyHeatmap() []LatencyBucket {
+	if c == nil || c.heatmap == nil {
+		return nil
+	}
+	return c.heatmap.Snapshot()
 }
 
 func (c *Collector) Track(opType string, duration time.Duration) {
@@ -364,6 +518,9 @@ func (c *Collector) Track(opType string, duration time.Duration) {
 	c.TotalHist.Record(ms)
 	c.IntervalTotalHist.Record(ms)
 	c.UITotalHist.Record(ms)
+	if c.HeatmapHist != nil {
+		c.HeatmapHist.Record(ms)
+	}
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, 1)
@@ -408,6 +565,9 @@ func (c *Collector) Add(opType string, count int64, duration time.Duration) {
 	c.TotalHist.RecordBatch(ms, count)
 	c.IntervalTotalHist.RecordBatch(ms, count)
 	c.UITotalHist.RecordBatch(ms, count)
+	if c.HeatmapHist != nil {
+		c.HeatmapHist.RecordBatch(ms, count)
+	}
 	switch opType {
 	case "find":
 		atomic.AddUint64(&c.FindOps, uint64(count))

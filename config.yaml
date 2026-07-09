@@ -50,6 +50,16 @@ pprof_enabled: false
 web_ui:
   enabled: false
   port: 9999
+  # By default the Web UI is served over plain HTTP bound to the loopback
+  # interface (127.0.0.1). Browsers treat http://localhost as a secure context,
+  # so there are NO certificate warnings. Only enable TLS if you expose the UI
+  # beyond loopback.
+  tls_enabled: false
+  # When tls_enabled is true, provide a certificate/key trusted by your clients
+  # to avoid browser warnings. If left blank while TLS is enabled, a temporary
+  # self-signed certificate is used (browsers will warn until it is trusted).
+  tls_cert_file: ""
+  tls_key_file: ""
 
 # ==============================================================================
 # Metrics Export
@@ -120,11 +130,76 @@ documents_count: 100000
 
 # Number of concurrent "Active Workers" to spawn.
 # Higher = more load, provided the client CPU/Network can handle it.
+# When a non-fixed load_profile is configured (see below), this acts as the
+# default/fallback worker count; the profile controls active workers over time.
 concurrency: 4
+
+# -----------------------------------------------------------------------------
+# Load Profile (dynamic concurrency / load shaping)
+# -----------------------------------------------------------------------------
+# Shapes how many workers are active over the run instead of a flat concurrency.
+# The worker pool is sized to the profile's peak; a controller scales how many
+# are actively issuing operations as the run progresses. Omit this block (or use
+# kind: fixed) to keep the classic fixed-concurrency behavior.
+#
+# kind: fixed | ramp | step | spike | sine
+#
+# load_profile:
+#   kind: ramp            # ramp from start_workers to end_workers over ramp_over
+#   start_workers: 1
+#   end_workers: 50
+#   ramp_over: "30s"
+#
+#   # kind: step          # hold each stage's workers for its duration, then next
+#   steps:
+#     - { workers: 5,  duration: "30s" }
+#     - { workers: 20, duration: "60s" }
+#     - { workers: 5,  duration: "30s" }
+#
+#   # kind: spike         # run at base_workers, jump to peak_workers in a window
+#   base_workers: 4
+#   peak_workers: 40
+#   spike_at: "20s"
+#   spike_for: "10s"
+#
+#   # kind: sine          # oscillate between min_workers and max_workers
+#   min_workers: 5
+#   max_workers: 40
+#   period: "30s"
+load_profile:
+  kind: fixed
 
 # Duration of the test run. Accepts the following time formats: (e.g., "1m", "30s", "1h").
 # Set to "0" to run the queries exactly once and exit.
 duration: "10s"
+
+# Client pacing / think time (per worker, between operations).
+# think_time_ms: fixed delay each worker waits between operations.
+# think_jitter_ms: extra uniform random 0..jitter ms added to each delay.
+# Both default to 0 (no pacing = run as fast as possible). Pacing time is
+# excluded from measured operation latency. Useful to emulate realistic clients
+# or to hold a steady, sub-saturation request rate.
+think_time_ms: 0
+think_jitter_ms: 0
+
+# Access-pattern skew: how existing records are chosen for find/update/delete.
+# kind: uniform (default) | zipfian | hotspot
+#   uniform  - every record equally likely (historical behavior).
+#   zipfian  - power-law skew toward a few hot records. zipfian_exponent (>=1.0)
+#              controls intensity; higher = more skew. Default 1.2.
+#   hotspot  - hotspot_percent of records receive hotspot_traffic_percent of
+#              traffic (e.g. 20% of records take 80% of operations).
+# Example zipfian:
+#   access_pattern:
+#     kind: zipfian
+#     zipfian_exponent: 1.5
+# Example hotspot:
+#   access_pattern:
+#     kind: hotspot
+#     hotspot_percent: 20
+#     hotspot_traffic_percent: 80
+access_pattern:
+  kind: uniform
 
 # Number of times to repeat the workload execution.
 iterations: 1
@@ -142,13 +217,13 @@ max_transaction_ops: 5
 # --- Operation Mix ---
 # The percentage of operations allocated to each type.
 # Will be normalized automatically if the sum != 100.
-find_percent: 50
+find_percent: 60
 update_percent: 20
 delete_percent: 10
 insert_percent: 5
 bulk_insert_percent: 5
-aggregate_percent: 5
-transaction_percent: 5
+aggregate_percent: 0
+transaction_percent: 0
 
 # Enable application-level debug
 debug_mode: false

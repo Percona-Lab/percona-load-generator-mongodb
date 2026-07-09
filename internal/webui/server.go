@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -29,11 +30,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/benchmark"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/definitions"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/report"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/schemainfer"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
@@ -203,6 +208,8 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/start", s.handleStart)
 	mux.HandleFunc("/api/stop", s.handleStop)
 	mux.HandleFunc("/api/stats", s.handleStats)
+	mux.HandleFunc("/api/infer-schema", s.handleInferSchema)
+	mux.HandleFunc("/api/report", s.handleReport)
 	mux.HandleFunc("/api/insights", s.handleInsights)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
@@ -210,19 +217,55 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/collection-definitions", s.handleCollectionDefinitions)
 	mux.HandleFunc("/api/collection-definitions/", s.handleCollectionDefinitionItem)
 
+	// TLS is opt-in. The default is plain HTTP bound to loopback, which browsers
+	// treat as a secure context and serve WITHOUT certificate warnings. TLS on a
+	// loopback-only dev tool otherwise forces an untrusted self-signed cert and
+	// the "your connection is not private" / "unknown certificate" errors.
+	var tlsEnabled, tlsCertFile, tlsKeyFile = false, "", ""
+	if s.AppConfig != nil {
+		tlsEnabled = s.AppConfig.WebUI.TLSEnabled
+		tlsCertFile = s.AppConfig.WebUI.TLSCertFile
+		tlsKeyFile = s.AppConfig.WebUI.TLSKeyFile
+	}
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
+		Handler: mux,
+	}
+
+	if !tlsEnabled {
+		url := fmt.Sprintf("http://127.0.0.1:%d/", port)
+		log.Printf("Starting Web UI on %s \n", url)
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			openBrowser(url)
+		}()
+		return server.ListenAndServe()
+	}
+
+	url := fmt.Sprintf("https://127.0.0.1:%d/", port)
+
+	// A user-supplied certificate/key pair is the way to get a trusted, warning
+	// free HTTPS endpoint. ListenAndServeTLS loads and watches these files.
+	if tlsCertFile != "" && tlsKeyFile != "" {
+		log.Printf("Starting SECURE Web UI on %s (using certificate %s)\n", url, tlsCertFile)
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			openBrowser(url)
+		}()
+		return server.ListenAndServeTLS(tlsCertFile, tlsKeyFile)
+	}
+
+	// TLS requested without a certificate: fall back to a self-signed cert.
 	cert, err := generateSelfSignedCert()
 	if err != nil {
 		return err
 	}
-
-	server := &http.Server{
-		Addr:      fmt.Sprintf("127.0.0.1:%d", port),
-		Handler:   mux,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
-	}
-
-	url := fmt.Sprintf("https://127.0.0.1:%d/", port)
+	server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
 	log.Printf("Starting SECURE Web UI on %s\n", url)
+	log.Printf("Note: using a self-signed certificate. Browsers will warn until it is trusted. " +
+		"To avoid warnings, either use the default HTTP mode (disable web_ui.tls_enabled) " +
+		"or provide a trusted certificate via web_ui.tls_cert_file/tls_key_file.\n")
 
 	go func() {
 		time.Sleep(500 * time.Millisecond)
@@ -692,10 +735,14 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.Duration = d
 	}
 	cfg.MaxTransactionOps = parseInt(r.FormValue("max_transaction_ops"), cfg.MaxTransactionOps)
+	cfg.ThinkTimeMs = parseInt(r.FormValue("think_time_ms"), cfg.ThinkTimeMs)
+	cfg.ThinkJitterMs = parseInt(r.FormValue("think_jitter_ms"), cfg.ThinkJitterMs)
+	applyAccessPatternForm(cfg, r)
 	cfg.Iterations = parseInt(r.FormValue("iterations"), cfg.Iterations)
 	if v := r.FormValue("interval_delay"); v != "" {
 		cfg.IntervalDelay = v
 	}
+	applyLoadProfileForm(cfg, r)
 
 	cfg.FindPercent = parseInt(r.FormValue("find_percent"), cfg.FindPercent)
 	cfg.UpdatePercent = parseInt(r.FormValue("update_percent"), cfg.UpdatePercent)
@@ -882,11 +929,27 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if cfg.MaxTransactionOps <= 0 {
 		cfg.MaxTransactionOps = 1
 	}
+	if cfg.ThinkTimeMs < 0 {
+		cfg.ThinkTimeMs = 0
+	}
+	if cfg.ThinkJitterMs < 0 {
+		cfg.ThinkJitterMs = 0
+	}
 	if cfg.Duration == "" {
 		cfg.Duration = "10s"
 	}
 	if err := config.ValidateShardingConfig(cfg); err != nil {
 		s.abortRun("Invalid sharding settings: " + err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateLoadProfile(cfg); err != nil {
+		s.abortRun("Invalid load profile: " + err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateAccessPattern(cfg); err != nil {
+		s.abortRun("Invalid access pattern: " + err.Error())
 		writeStartError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -1251,6 +1314,56 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// applyLoadProfileForm populates the load profile from the start form. An empty
+// load_profile_kind leaves the config untouched (fixed concurrency default).
+// Step stages are accepted as a JSON array, e.g.
+// [{"workers":5,"duration":"30s"},{"workers":20,"duration":"60s"}].
+func applyLoadProfileForm(cfg *config.AppConfig, r *http.Request) {
+	kind := strings.TrimSpace(r.FormValue("load_profile_kind"))
+	if kind == "" || strings.EqualFold(kind, "fixed") {
+		// Preserve fixed behavior but still honor an explicit fixed worker count.
+		if kind == "" {
+			return
+		}
+	}
+	lp := loadprofile.Config{
+		Kind:         kind,
+		Workers:      parseInt(r.FormValue("load_profile_workers"), 0),
+		StartWorkers: parseInt(r.FormValue("load_profile_start_workers"), 0),
+		EndWorkers:   parseInt(r.FormValue("load_profile_end_workers"), 0),
+		RampOver:     strings.TrimSpace(r.FormValue("load_profile_ramp_over")),
+		BaseWorkers:  parseInt(r.FormValue("load_profile_base_workers"), 0),
+		PeakWorkers:  parseInt(r.FormValue("load_profile_peak_workers"), 0),
+		SpikeAt:      strings.TrimSpace(r.FormValue("load_profile_spike_at")),
+		SpikeFor:     strings.TrimSpace(r.FormValue("load_profile_spike_for")),
+		MinWorkers:   parseInt(r.FormValue("load_profile_min_workers"), 0),
+		MaxWorkers:   parseInt(r.FormValue("load_profile_max_workers"), 0),
+		Period:       strings.TrimSpace(r.FormValue("load_profile_period")),
+	}
+	if raw := strings.TrimSpace(r.FormValue("load_profile_steps")); raw != "" {
+		var steps []loadprofile.Stage
+		if err := json.Unmarshal([]byte(raw), &steps); err == nil {
+			lp.Steps = steps
+		}
+	}
+	cfg.LoadProfile = lp
+}
+
+// applyAccessPatternForm populates the access-pattern config from the start
+// form. An empty access_pattern_kind leaves the config untouched (uniform).
+func applyAccessPatternForm(cfg *config.AppConfig, r *http.Request) {
+	kind := strings.TrimSpace(r.FormValue("access_pattern_kind"))
+	if kind == "" {
+		return
+	}
+	cfg.AccessPattern = accesspattern.Config{
+		Kind:                  kind,
+		ZipfianExponent:       parseFloat(r.FormValue("access_pattern_zipfian_exponent"), 0),
+		HotspotPercent:        parseInt(r.FormValue("access_pattern_hotspot_percent"), 0),
+		HotspotTrafficPercent: parseInt(r.FormValue("access_pattern_hotspot_traffic_percent"), 0),
+	}
+}
+
 func (s *WebServer) abortRun(reason string) {
 	log.Println("Run aborted:", reason)
 	s.mu.Lock()
@@ -1285,8 +1398,14 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	running := s.IsRunning
 	lastErr := s.LastError
 	durationStr := "0s"
+	loadProfileKind := "fixed"
+	configuredConcurrency := 0
 	if s.AppConfig != nil {
 		durationStr = s.AppConfig.Duration
+		if k := strings.TrimSpace(s.AppConfig.LoadProfile.Kind); k != "" {
+			loadProfileKind = strings.ToLower(k)
+		}
+		configuredConcurrency = s.AppConfig.Concurrency
 	}
 	curIter := s.CurrentIteration
 	totIter := s.TotalIterations
@@ -1345,19 +1464,28 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 	}
+	// Prefer the precise workload-start timestamp recorded by the runner (set
+	// when the measured window actually begins, excluding preparation time).
+	// Fall back to the lifecycle ExecStartedAt when it is unavailable.
+	workloadStart := execStartedAt
+	if collector != nil {
+		if ws, ok := collector.WorkloadStart(); ok {
+			workloadStart = ws
+		}
+	}
 	execElapsedSec := 0.0
 	switch lifecyclePhase {
 	case "running":
-		if !execStartedAt.IsZero() {
-			execElapsedSec = now.Sub(execStartedAt).Seconds()
+		if !workloadStart.IsZero() {
+			execElapsedSec = now.Sub(workloadStart).Seconds()
 		}
 	case "completed", "failed":
-		if !execStartedAt.IsZero() {
+		if !workloadStart.IsZero() {
 			end := completedAt
 			if end.IsZero() {
 				end = now
 			}
-			execElapsedSec = end.Sub(execStartedAt).Seconds()
+			execElapsedSec = end.Sub(workloadStart).Seconds()
 		}
 	}
 	if execElapsedSec < 0 {
@@ -1382,6 +1510,10 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"isRunning":                 running,
 			"lastError":                 lastErr,
+			"loadProfileKind":           loadProfileKind,
+			"configuredConcurrency":     configuredConcurrency,
+			"concurrencyTarget":         0,
+			"concurrencyActive":         0,
 			"lifecyclePhase":            lifecyclePhase,
 			"lifecycleMessage":          lifecycleMessage,
 			"lifecycleStep":             lifecycleStep,
@@ -1410,10 +1542,23 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// collector is guaranteed non-nil here (the nil case returned above).
+	// Capture a latency-over-time heatmap bucket on a stable ~1s window rather
+	// than the (sub-second) UI polling cadence. Tying the window to the poll
+	// rate produced tiny samples where the per-window p99 collapsed onto the
+	// single slowest op, badly overstating tail latency versus the cumulative
+	// distribution. A 1s window keeps each bucket statistically meaningful.
+	collector.CaptureLatencyIntervalEvery(time.Second)
+	concTarget, concActive := collector.ConcurrencySnapshot()
+
 	statsResp := map[string]interface{}{
 		"isRunning":                 running,
 		"lastError":                 lastErr,
 		"duration":                  durationStr,
+		"loadProfileKind":           loadProfileKind,
+		"configuredConcurrency":     configuredConcurrency,
+		"concurrencyTarget":         concTarget,
+		"concurrencyActive":         concActive,
 		"currentIteration":          curIter,
 		"totalIterations":           totIter,
 		"isWaiting":                 isWait,
@@ -1465,8 +1610,231 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"distTrans":       collector.TransHist.GetStats(),
 		"distTotal":       collector.TotalHist.GetStats(),
 		"intervalLatency": collector.GetUILatencyTimelineAndReset(),
+		"latencyHeatmap":  collector.LatencyHeatmap(),
 	}
 	json.NewEncoder(w).Encode(statsResp)
+}
+
+// handleReport renders a self-contained HTML report for the current/last run.
+// Pass ?download=1 to receive it as a file attachment; otherwise it renders
+// inline (and can be printed to PDF from the browser).
+func (s *WebServer) handleReport(w http.ResponseWriter, r *http.Request) {
+	data := s.buildReportData()
+	html, err := report.RenderBytes(data)
+	if err != nil {
+		writeStartError(w, http.StatusInternalServerError, "failed to render report: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.URL.Query().Get("download") == "1" {
+		filename := fmt.Sprintf("plgm-report-%s.html", time.Now().Format("20060102-150405"))
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	}
+	w.Write(html)
+}
+
+// buildReportData snapshots the current run state into a render-ready ReportData.
+func (s *WebServer) buildReportData() report.ReportData {
+	s.mu.Lock()
+	collector := s.CurrentStats
+	cfg := s.AppConfig
+	lastErr := s.LastError
+	isRunning := s.IsRunning
+	completedAt := s.CompletedAt
+	s.mu.Unlock()
+
+	data := report.ReportData{
+		Title:       "MongoDB Benchmark Report",
+		GeneratedAt: time.Now(),
+		Warnings:    []string{},
+		Insights:    []string{},
+	}
+	if lastErr != "" {
+		data.Warnings = append(data.Warnings, lastErr)
+	}
+
+	if cfg != nil {
+		data.ConfigItems = []report.KV{
+			{Key: "Target URI", Value: maskMongoURI(cfg.URI)},
+			{Key: "Duration", Value: cfg.Duration},
+			{Key: "Configured Concurrency", Value: strconv.Itoa(cfg.Concurrency)},
+			{Key: "Find %", Value: strconv.Itoa(cfg.FindPercent)},
+			{Key: "Insert %", Value: strconv.Itoa(cfg.InsertPercent)},
+			{Key: "Update %", Value: strconv.Itoa(cfg.UpdatePercent)},
+			{Key: "Delete %", Value: strconv.Itoa(cfg.DeletePercent)},
+			{Key: "Aggregate %", Value: strconv.Itoa(cfg.AggregatePercent)},
+			{Key: "Transaction %", Value: strconv.Itoa(cfg.TransactionPercent)},
+		}
+
+		if sched, err := loadprofile.Compile(cfg.LoadProfile, cfg.Concurrency); err == nil {
+			if strings.TrimSpace(cfg.LoadProfile.Kind) != "" && !strings.EqualFold(cfg.LoadProfile.Kind, "fixed") {
+				data.LoadProfileItems = []report.KV{
+					{Key: "Kind", Value: cfg.LoadProfile.Kind},
+					{Key: "Summary", Value: sched.Summary()},
+					{Key: "Peak Workers", Value: strconv.Itoa(sched.MaxWorkers())},
+				}
+			}
+		}
+
+		data.PacingItems = []report.KV{
+			{Key: "Think Time", Value: strconv.Itoa(cfg.ThinkTimeMs) + " ms"},
+			{Key: "Think Jitter", Value: strconv.Itoa(cfg.ThinkJitterMs) + " ms"},
+		}
+		apSummary := "uniform"
+		if sel, err := accesspattern.Compile(cfg.AccessPattern); err == nil {
+			apSummary = sel.Summary()
+		}
+		data.AccessPatternItems = []report.KV{{Key: "Access Pattern", Value: apSummary}}
+
+		data.DurationSeconds = parseDurationSeconds(cfg.Duration)
+	}
+
+	if collector != nil {
+		data.Latency = buildLatencyRows(collector)
+		var total int64
+		for _, row := range data.Latency {
+			if row.Type == "total" {
+				total = row.Count
+			}
+		}
+		data.TotalOps = total
+		if elapsed, ok := collector.WorkloadStart(); ok {
+			secs := time.Since(elapsed).Seconds()
+			if !isRunning && !completedAt.IsZero() {
+				secs = completedAt.Sub(elapsed).Seconds()
+			}
+			if secs > 0 {
+				data.DurationSeconds = secs
+			}
+		}
+		if data.DurationSeconds > 0 {
+			data.AvgOpsPerSec = float64(total) / data.DurationSeconds
+		}
+		for _, hp := range collector.LatencyHeatmap() {
+			data.Heatmap = append(data.Heatmap, report.HeatmapPoint{
+				ElapsedSec: hp.ElapsedSec, Count: hp.Count, P50: hp.P50, P95: hp.P95, P99: hp.P99, Max: hp.Max,
+			})
+		}
+		acc := collector.AccuracyStats()
+		if acc.TargetExisting+acc.TargetRandom > 0 {
+			rate := 100 * float64(acc.TargetExisting) / float64(acc.TargetExisting+acc.TargetRandom)
+			data.Insights = append(data.Insights, fmt.Sprintf("Existing-record targeting: %.1f%% of filters hit known records.", rate))
+		}
+	}
+
+	return data
+}
+
+// buildLatencyRows converts the collector's per-type histograms into report rows.
+func buildLatencyRows(c *stats.Collector) []report.LatencyRow {
+	type entry struct {
+		name string
+		hist *stats.LatencyHistogram
+	}
+	entries := []entry{
+		{"find", c.FindHist},
+		{"insert", c.InsertHist},
+		{"upsert", c.UpsertHist},
+		{"update", c.UpdateHist},
+		{"delete", c.DeleteHist},
+		{"aggregate", c.AggHist},
+		{"transaction", c.TransHist},
+		{"total", c.TotalHist},
+	}
+	var rows []report.LatencyRow
+	for _, e := range entries {
+		if e.hist == nil {
+			continue
+		}
+		st := e.hist.GetStats()
+		if st["count"] == 0 && e.name != "total" {
+			continue
+		}
+		rows = append(rows, report.LatencyRow{
+			Type:  e.name,
+			Count: int64(st["count"]),
+			AvgMs: st["avg"],
+			MinMs: st["min"],
+			MaxMs: st["max"],
+			P95Ms: st["p95"],
+			P99Ms: st["p99"],
+		})
+	}
+	return rows
+}
+
+// maskMongoURI hides any password embedded in a MongoDB connection string.
+func maskMongoURI(uri string) string {
+	u, err := url.Parse(uri)
+	if err == nil && u.User != nil {
+		if p, has := u.User.Password(); has && p != "" {
+			return strings.Replace(uri, p, "******", 1)
+		}
+	}
+	return uri
+}
+
+// parseDurationSeconds parses a duration string like "30s" into seconds, 0 on error.
+func parseDurationSeconds(s string) float64 {
+	d, err := time.ParseDuration(strings.TrimSpace(s))
+	if err != nil {
+		return 0
+	}
+	return d.Seconds()
+}
+
+// handleInferSchema parses a pasted/uploaded MongoDB query log and returns an
+// inferred workload model (collections, operation patterns, suggested mix, and
+// candidate queries) the user can review and use to pre-fill a benchmark.
+func (s *WebServer) handleInferSchema(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeStartError(w, http.StatusMethodNotAllowed, "POST required")
+		return
+	}
+	defer r.Body.Close()
+
+	var logText string
+	contentType := r.Header.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(contentType, "application/json"):
+		var payload struct {
+			Log string `json:"log"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			writeStartError(w, http.StatusBadRequest, "invalid JSON payload: "+err.Error())
+			return
+		}
+		logText = payload.Log
+	case strings.HasPrefix(contentType, "multipart/form-data"):
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			writeStartError(w, http.StatusBadRequest, "invalid form upload: "+err.Error())
+			return
+		}
+		logText = r.FormValue("log")
+		if logText == "" {
+			if file, _, err := r.FormFile("logfile"); err == nil {
+				defer file.Close()
+				data, _ := io.ReadAll(io.LimitReader(file, 64<<20))
+				logText = string(data)
+			}
+		}
+	default:
+		data, err := io.ReadAll(io.LimitReader(r.Body, 64<<20))
+		if err != nil {
+			writeStartError(w, http.StatusBadRequest, "failed to read body: "+err.Error())
+			return
+		}
+		logText = string(data)
+	}
+
+	if strings.TrimSpace(logText) == "" {
+		writeStartError(w, http.StatusBadRequest, "no query log content provided")
+		return
+	}
+
+	result := schemainfer.Infer(logText)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *WebServer) handleInsights(w http.ResponseWriter, r *http.Request) {
@@ -2541,20 +2909,41 @@ func containsStage(v interface{}, stage string) bool {
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{Organization: []string{"PLGM Web UI"}},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(time.Hour * 24 * 365),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("generate key: %w", err)
 	}
-	derBytes, _ := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("generate serial: %w", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{Organization: []string{"PLGM Web UI"}, CommonName: "localhost"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour * 24 * 365),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		// Cover the loopback names the UI is reachable by so hostname
+		// verification passes for both http://localhost and http://127.0.0.1.
+		DNSNames:    []string{"localhost"},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("create certificate: %w", err)
+	}
 	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	b, _ := x509.MarshalECPrivateKey(priv)
-	keyPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
+	keyDER, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("marshal key: %w", err)
+	}
+	keyPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 	return tls.X509KeyPair(certPem, keyPem)
 }
 

@@ -12,10 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -53,6 +56,42 @@ type workloadConfig struct {
 	primaryFilterField string
 	collector          *stats.Collector
 	recordPool         *RecordPool
+
+	// schedule shapes how many workers are active over the run. activeTarget and
+	// activeCount are shared atomics: the profile controller publishes the target
+	// to activeTarget; workers maintain activeCount as they park/un-park. They are
+	// pointers so the by-value workloadConfig copies handed to workers share state.
+	schedule     loadprofile.Schedule
+	activeTarget *int64
+	activeCount  *int64
+
+	// thinkTime/thinkJitter pace each worker between operations to emulate
+	// realistic clients. Zero means no pacing. Pacing happens outside the
+	// measured latency window.
+	thinkTime   time.Duration
+	thinkJitter time.Duration
+}
+
+// applyPacing pauses a worker between operations by thinkTime plus a uniform
+// random 0..jitter, returning early if the context is cancelled. It is a no-op
+// when both durations are zero so fixed-rate runs are unaffected.
+func applyPacing(ctx context.Context, rng *rand.Rand, thinkTime, jitter time.Duration) {
+	if thinkTime <= 0 && jitter <= 0 {
+		return
+	}
+	d := thinkTime
+	if jitter > 0 && rng != nil {
+		d += time.Duration(rng.Int63n(int64(jitter) + 1))
+	}
+	if d <= 0 {
+		return
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 var InsertDocumentCache chan map[string]interface{}
@@ -467,12 +506,49 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 
 	seq := int64(id) * 100000000
 
+	// parked tracks whether this worker is currently counted as active so the
+	// shared activeCount gauge stays balanced as the load profile scales.
+	parked := true
+	defer func() {
+		if !parked && wCfg.activeCount != nil {
+			atomic.AddInt64(wCfg.activeCount, -1)
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
+
+		// Load-profile gating: workers with id within the current target run;
+		// the rest park briefly and re-check, so concurrency tracks the schedule.
+		if wCfg.activeTarget != nil {
+			shouldRun := int64(id) <= atomic.LoadInt64(wCfg.activeTarget)
+			if shouldRun && parked {
+				if wCfg.activeCount != nil {
+					atomic.AddInt64(wCfg.activeCount, 1)
+				}
+				parked = false
+			} else if !shouldRun {
+				if !parked {
+					if wCfg.activeCount != nil {
+						atomic.AddInt64(wCfg.activeCount, -1)
+					}
+					parked = true
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(25 * time.Millisecond):
+				}
+				continue
+			}
+		}
+
+		// Optional client pacing between operations (excluded from latency).
+		applyPacing(ctx, rng, wCfg.thinkTime, wCfg.thinkJitter)
 
 		currentCol := wCfg.collections[rng.Intn(len(wCfg.collections))]
 		opType := selectOperation(wCfg.percentages, rng)
@@ -989,10 +1065,19 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 
 	cachedFilterField := getPrimaryFilterFieldFn(ctx, db, collections[0])
 
+	// Compile the load profile. An empty/fixed profile yields a constant
+	// schedule equal to cfg.Concurrency, preserving historical behavior. The
+	// worker pool is sized to the schedule peak; the controller gates how many
+	// are active at any moment.
+	schedule, err := loadprofile.Compile(cfg.LoadProfile, cfg.Concurrency)
+	if err != nil {
+		return fmt.Errorf("invalid load profile: %w", err)
+	}
+
 	wCfg := workloadConfig{
 		database:    db,
 		appConfig:   cfg,
-		concurrency: cfg.Concurrency,
+		concurrency: schedule.MaxWorkers(),
 		duration:    duration,
 		collections: collections,
 		queryMap:    qMap,
@@ -1011,14 +1096,53 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		maxInsertCache:     cfg.InsertCacheSize,
 		primaryFilterField: cachedFilterField,
 		collector:          collector,
+		schedule:           schedule,
+		thinkTime:          time.Duration(cfg.ThinkTimeMs) * time.Millisecond,
+		thinkJitter:        time.Duration(cfg.ThinkJitterMs) * time.Millisecond,
 	}
 
 	return runContinuousWorkloadFn(ctx, wCfg)
 }
 
 func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
+	// Directly-constructed configs (and tests) may not carry a compiled schedule.
+	// Fall back to a fixed schedule from the requested concurrency so the worker
+	// pool and gating logic always have a valid target.
+	if wCfg.schedule.IsZero() {
+		workers := wCfg.concurrency
+		if workers < 1 {
+			workers = 1
+		}
+		schedule, err := loadprofile.Compile(loadprofile.Config{Kind: string(loadprofile.KindFixed), Workers: workers}, workers)
+		if err != nil {
+			return err
+		}
+		wCfg.schedule = schedule
+	}
+	wCfg.concurrency = wCfg.schedule.MaxWorkers()
+	if wCfg.concurrency < 1 {
+		wCfg.concurrency = 1
+	}
+
+	// Shared load-profile state: the controller publishes the desired target;
+	// workers maintain the active count as they park/un-park.
+	var activeTarget int64 = int64(wCfg.schedule.TargetAt(0))
+	var activeCount int64
+	wCfg.activeTarget = &activeTarget
+	wCfg.activeCount = &activeCount
+
 	if wCfg.recordPool == nil {
 		wCfg.recordPool = NewRecordPool(wCfg.appConfig.RecordPoolMaxSize)
+	}
+	if wCfg.appConfig != nil {
+		if sel, err := accesspattern.Compile(wCfg.appConfig.AccessPattern); err != nil {
+			log.Printf("[AccessPattern] invalid configuration (%v); falling back to uniform access", err)
+		} else {
+			wCfg.recordPool.SetSelector(sel)
+			if wCfg.debug {
+				log.Printf("[AccessPattern] using %s", sel.Summary())
+			}
+		}
 	}
 	bootstrapRecordPool(ctx, wCfg.database, wCfg.collections, wCfg.recordPool, wCfg.appConfig.RecordPoolBootstrapSample)
 	if wCfg.debug {
@@ -1031,6 +1155,15 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	}
 
 	InsertDocumentCache = make(chan map[string]interface{}, wCfg.maxInsertCache)
+
+	// Mark the precise start of the measured workload window. This is done after
+	// all preparation (seeding, sharding, record-pool bootstrap) so the UI/CLI
+	// elapsed timer reflects the true execution duration rather than a late,
+	// poll-dependent estimate.
+	if wCfg.collector != nil {
+		wCfg.collector.MarkWorkloadStart()
+	}
+
 	workloadCtx, cancel := context.WithTimeout(ctx, wCfg.duration)
 	defer cancel()
 
@@ -1067,6 +1200,37 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 			}
 		}()
 		wCfg.collector.Monitor(monitorDone, wCfg.appConfig.StatusRefreshRateSec, wCfg.concurrency, wCfg.appConfig.CSVExportEnabled, wCfg.appConfig.CSVExportAppend, wCfg.appConfig.CSVExportPath, wCfg.appConfig.WebUI.Enabled)
+	}()
+
+	// Load-profile controller: periodically recompute the target active worker
+	// count from the schedule and publish it (along with the observed active
+	// count) to the collector for live metrics. For a fixed profile the target is
+	// constant, so this loop is effectively a no-op beyond reporting.
+	runStart := time.Now()
+	if wCfg.collector != nil {
+		wCfg.collector.SetConcurrency(wCfg.schedule.TargetAt(0), 0)
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				reportPanic("load profile controller", r)
+			}
+		}()
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workloadCtx.Done():
+				return
+			case <-ticker.C:
+				target := wCfg.schedule.TargetAt(time.Since(runStart))
+				atomic.StoreInt64(wCfg.activeTarget, int64(target))
+				if wCfg.collector != nil {
+					active := int(atomic.LoadInt64(wCfg.activeCount))
+					wCfg.collector.SetConcurrency(target, active)
+				}
+			}
+		}
 	}()
 
 	var wg sync.WaitGroup

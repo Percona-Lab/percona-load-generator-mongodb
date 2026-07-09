@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 )
 
@@ -158,6 +159,56 @@ func TestRegisterInsertedDocumentAndDeleteRemoval(t *testing.T) {
 	pool.RemoveMatching(ns, filter)
 	if pool.Len(ns) != 0 {
 		t.Fatalf("expected deleted record removed from pool, got len=%d", pool.Len(ns))
+	}
+}
+
+func TestRecordPoolHotspotSelectorConcentratesSelection(t *testing.T) {
+	pool := NewRecordPool(1000)
+	ns := "app.users"
+	for i := 0; i < 100; i++ {
+		pool.Add(ns, map[string]interface{}{"idx": int64(i)})
+	}
+	sel, err := accesspattern.Compile(accesspattern.Config{Kind: "hotspot", HotspotPercent: 10, HotspotTrafficPercent: 90})
+	if err != nil {
+		t.Fatalf("Compile hotspot: %v", err)
+	}
+	pool.SetSelector(sel)
+
+	rng := rand.New(rand.NewSource(11))
+	hot := 0
+	total := 20000
+	for i := 0; i < total; i++ {
+		rec, ok := pool.Random(ns, rng)
+		if !ok {
+			t.Fatalf("expected a record")
+		}
+		if v, _ := rec["idx"].(int64); v < 10 {
+			hot++
+		}
+	}
+	share := float64(hot) / float64(total)
+	if share < 0.75 {
+		t.Fatalf("expected most traffic on hot set, got share %.2f", share)
+	}
+}
+
+func TestRecordPoolDefaultSelectorIsUniform(t *testing.T) {
+	pool := NewRecordPool(1000)
+	ns := "app.users"
+	for i := 0; i < 20; i++ {
+		pool.Add(ns, map[string]interface{}{"idx": int64(i)})
+	}
+	rng := rand.New(rand.NewSource(5))
+	seen := map[int64]int{}
+	for i := 0; i < 20000; i++ {
+		rec, ok := pool.Random(ns, rng)
+		if !ok {
+			t.Fatalf("expected record")
+		}
+		seen[rec["idx"].(int64)]++
+	}
+	if len(seen) != 20 {
+		t.Fatalf("expected uniform selection to touch all 20 records, touched %d", len(seen))
 	}
 }
 
