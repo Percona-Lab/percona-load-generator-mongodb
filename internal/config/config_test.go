@@ -169,6 +169,36 @@ func TestLoadAppConfigWebUITLSEnvOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadAppConfigTLSClientEnvOverrides(t *testing.T) {
+	t.Setenv("PLGM_TLS_CA_FILE", "/etc/ssl/ca.crt")
+	t.Setenv("PLGM_TLS_CERTIFICATE_KEY_FILE", "/etc/ssl/client.pem")
+
+	cfg, err := LoadAppConfig(filepath.Join(t.TempDir(), "missing.yaml"), false)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() error = %v", err)
+	}
+	if cfg.ConnectionParams.TLSCAFile != "/etc/ssl/ca.crt" {
+		t.Fatalf("expected tls ca file override, got %q", cfg.ConnectionParams.TLSCAFile)
+	}
+	if cfg.ConnectionParams.TLSCertificateKeyFile != "/etc/ssl/client.pem" {
+		t.Fatalf("expected tls cert file override, got %q", cfg.ConnectionParams.TLSCertificateKeyFile)
+	}
+}
+
+func TestLoadAppConfigRejectsPartialTLSClientConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	content := []byte(`connection_params:
+  tls_ca_file: /etc/ssl/ca.crt
+`)
+	if err := os.WriteFile(cfgPath, content, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := LoadAppConfig(cfgPath, false); err == nil {
+		t.Fatalf("expected partial TLS config to fail validation")
+	}
+}
+
 func TestLoadAppConfigWithYAMLAndEnvOverrides(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yaml")

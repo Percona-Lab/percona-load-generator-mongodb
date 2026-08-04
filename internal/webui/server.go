@@ -17,11 +17,13 @@ import (
 	"io/fs"
 	"log"
 	"math/big"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -193,6 +195,28 @@ func openBrowser(url string) error {
 
 	args = append(args, url)
 	return exec.Command(cmd, args...).Run()
+}
+
+func tempNamePattern(prefix string, header *multipart.FileHeader) string {
+	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		ext = ".pem"
+	}
+	return prefix + ext
+}
+
+func saveUploadedTempFile(file multipart.File, pattern string) (string, error) {
+	tmp, err := os.CreateTemp("", pattern)
+	if err != nil {
+		return "", err
+	}
+	defer tmp.Close()
+
+	if _, err := io.Copy(tmp, file); err != nil {
+		_ = os.Remove(tmp.Name())
+		return "", err
+	}
+	return tmp.Name(), nil
 }
 
 func (s *WebServer) Start(port int) error {
@@ -671,6 +695,26 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if v := r.FormValue("read_preference"); v != "" {
 		cfg.ConnectionParams.ReadPreference = v
 	}
+	if file, _, err := r.FormFile("tls_ca_file"); err == nil {
+		uploadedPath, uploadErr := saveUploadedTempFile(file, "plgm-tls-ca-*")
+		file.Close()
+		if uploadErr != nil {
+			s.abortRun("Failed to store TLS CA file: " + uploadErr.Error())
+			writeStartError(w, http.StatusBadRequest, "failed to store TLS CA file: "+uploadErr.Error())
+			return
+		}
+		cfg.ConnectionParams.TLSCAFile = uploadedPath
+	}
+	if file, header, err := r.FormFile("tlsCertificateKeyFile"); err == nil {
+		uploadedPath, uploadErr := saveUploadedTempFile(file, tempNamePattern("plgm-tls-client-*", header))
+		file.Close()
+		if uploadErr != nil {
+			s.abortRun("Failed to store TLS certificate key file: " + uploadErr.Error())
+			writeStartError(w, http.StatusBadRequest, "failed to store TLS certificate key file: "+uploadErr.Error())
+			return
+		}
+		cfg.ConnectionParams.TLSCertificateKeyFile = uploadedPath
+	}
 	if uiPassword := r.FormValue("password"); uiPassword != "" {
 		cfg.ConnectionParams.Password = uiPassword
 	}
@@ -950,6 +994,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := config.ValidateAccessPattern(cfg); err != nil {
 		s.abortRun("Invalid access pattern: " + err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateConnectionParams(cfg); err != nil {
+		s.abortRun("Invalid connection settings: " + err.Error())
 		writeStartError(w, http.StatusBadRequest, err.Error())
 		return
 	}

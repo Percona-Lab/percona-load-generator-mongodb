@@ -2097,6 +2097,22 @@
                     </div>
                 </section>
                 <section class="settings-card">
+                    <h4>TLS Client Settings</h4>
+                    <div class="settings-help">Upload a CA certificate and matching client cert/key PEM file from your computer, or leave both empty to reuse the paths already in the loaded config. When both uploads are present, PLGM automatically sets <code>tls=true</code> in the generated MongoDB URI.</div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>TLS CA File</label>
+                            <input type="file" name="tls_ca_file" accept=".crt,.pem">
+                            <div class="settings-help">Loaded path: <input type="text" id="tlsCaCurrent" readonly value="" style="width:100%; margin-top:6px;"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>TLS Certificate Key File</label>
+                            <input type="file" name="tlsCertificateKeyFile" accept=".pem">
+                            <div class="settings-help">Loaded path: <input type="text" id="tlsCertCurrent" readonly value="" style="width:100%; margin-top:6px;"></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="settings-card">
                     <h4>Runtime Transport & Pooling</h4>
                     <div class="settings-help">Connection pool values should align with concurrency and target cluster capacity.</div>
                     <div class="grid-3">
@@ -3256,6 +3272,13 @@
                 showTab('tab-conn', document.querySelectorAll('.tab-btn')[0]);
                 return false;
             }
+            const tlsCA = document.querySelector('[name="tls_ca_file"]')?.files?.length || 0;
+            const tlsCert = document.querySelector('[name="tlsCertificateKeyFile"]')?.files?.length || 0;
+            if ((tlsCA && !tlsCert) || (!tlsCA && tlsCert)) {
+                showConfigInlineError('Provide both TLS CA File and TLS Certificate Key File, or leave both blank.');
+                showTab('tab-conn', document.querySelectorAll('.tab-btn')[0]);
+                return false;
+            }
 
             const insightsSampling = Number(document.querySelector('[name="insights_sampling_rate"]')?.value || 0);
             if (insightsSampling <= 0 || insightsSampling > 1) {
@@ -3869,6 +3892,7 @@
         let lastFormData = null;
         let lastRuntimeErrorShown = '';
         let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
+        let lastExecutionElapsed = 0;
         let lastLat = {
             total: { sum: 0, count: 0 },
             find: { sum: 0, count: 0 },
@@ -3949,6 +3973,8 @@
                     document.querySelector('[name="auth_source"]').value = cfg.ConnectionParams.AuthSource || 'admin';
                     document.querySelector('[name="replicaset_name"]').value = cfg.ConnectionParams.ReplicaSetName || '';
                     document.querySelector('[name="read_preference"]').value = cfg.ConnectionParams.ReadPreference || 'nearest';
+                    document.getElementById('tlsCaCurrent').value = cfg.ConnectionParams.TLSCAFile || '';
+                    document.getElementById('tlsCertCurrent').value = cfg.ConnectionParams.TLSCertificateKeyFile || '';
                     document.getElementById('directConn').checked = cfg.ConnectionParams.DirectConnection;
                     document.querySelector('[name="max_pool_size"]').value = cfg.ConnectionParams.MaxPoolSize || 200;
                     document.querySelector('[name="min_pool_size"]').value = cfg.ConnectionParams.MinPoolSize || 10;
@@ -4694,7 +4720,7 @@
 
         function launchWorkload(formData) {
             lastFormData = formData;
-            lastRuntimeErrorShown = '';
+                        lastRuntimeErrorShown = '';
             fetch('/api/start', { method: 'POST', body: formData })
                 .then(async r => {
                     const bodyText = await r.text();
@@ -4747,6 +4773,7 @@
                         updateZoomControls();
                         updateLatencyToggleUI();
                         lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
+                        lastExecutionElapsed = 0;
                         lastLat = {
                             total: { sum: 0, count: 0 },
                             find: { sum: 0, count: 0 },
@@ -4866,7 +4893,11 @@
                             const cAggregate = stats.aggOps || 0;
                             const cTotal = cFind + cInsert + cUpdate + cDelete + cAggregate;
 
-                            const rateMultiplier = 1000 / currentRefreshRate;
+                            const elapsedDelta = executionElapsed > lastExecutionElapsed
+                                ? (executionElapsed - lastExecutionElapsed)
+                                : (currentRefreshRate / 1000);
+                            const safeElapsedDelta = Math.max(0.001, elapsedDelta);
+                            const rateMultiplier = 1 / safeElapsedDelta;
                             const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
                             const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
                             const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
@@ -4956,6 +4987,7 @@
                             }
 
                             lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
+                            lastExecutionElapsed = executionElapsed;
 
                             let currentMarker = null;
                             if (stats.currentIteration && stats.currentIteration !== lastKnownIteration) {
@@ -5097,6 +5129,10 @@
                             histLatTimelineP99.delete.push(0);
                             histLatTimelineP99.aggregate.push(0);
                             histLatTimelineP99.transaction.push(0);
+
+                            if (executionElapsed > lastExecutionElapsed) {
+                                lastExecutionElapsed = executionElapsed;
+                            }
 
                             globalMarkers.push({ text: isFailed ? "Failed" : "Finished", color: isFailed ? colors.red : colors.forest });
 

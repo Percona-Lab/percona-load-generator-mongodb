@@ -69,6 +69,40 @@ func TestBuildMongoURI(t *testing.T) {
 			},
 		},
 		{
+			name: "tls_client_settings_are_added_and_enable_tls",
+			cfg: &config.AppConfig{
+				URI: "mongodb://localhost:27017",
+				ConnectionParams: config.ConnectionParams{
+					TLSCAFile:             "/etc/ssl/ca.crt",
+					TLSCertificateKeyFile: "/etc/ssl/client.pem",
+				},
+			},
+			want: func(t *testing.T, u *url.URL) {
+				q := u.Query()
+				if q.Get("tls") != "true" {
+					t.Fatalf("expected tls=true when TLS files are configured, got %q", q.Get("tls"))
+				}
+				if q.Get("tlsCAFile") != "/etc/ssl/ca.crt" {
+					t.Fatalf("expected tlsCAFile to be set, got %q", q.Get("tlsCAFile"))
+				}
+				if q.Get("tlsCertificateKeyFile") != "/etc/ssl/client.pem" {
+					t.Fatalf("expected tlsCertificateKeyFile to be set, got %q", q.Get("tlsCertificateKeyFile"))
+				}
+			},
+		},
+		{
+			name: "tls_defaults_false_without_client_material",
+			cfg: &config.AppConfig{
+				URI: "mongodb://localhost:27017",
+			},
+			want: func(t *testing.T, u *url.URL) {
+				q := u.Query()
+				if q.Get("tls") != "false" {
+					t.Fatalf("expected tls=false when no TLS files are configured, got %q", q.Get("tls"))
+				}
+			},
+		},
+		{
 			name: "invalid_uri",
 			cfg:  &config.AppConfig{URI: "://bad-uri"},
 			want: func(t *testing.T, u *url.URL) {

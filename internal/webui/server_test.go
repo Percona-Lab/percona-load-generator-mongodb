@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -356,6 +357,63 @@ func TestHandleStartInvalidCustomCollectionsFile(t *testing.T) {
 	}
 	if s.IsRunning {
 		t.Fatalf("expected aborted run to reset IsRunning")
+	}
+}
+
+func TestHandleStartUploadsTLSClientFilesToTempPaths(t *testing.T) {
+	var seenCA string
+	var seenCert string
+
+	withWebUISeams(t, webuiSeams{
+		connect: func(ctx context.Context, cfg *config.AppConfig, dbName string) (*db.Connection, error) {
+			seenCA = cfg.ConnectionParams.TLSCAFile
+			seenCert = cfg.ConnectionParams.TLSCertificateKeyFile
+			return &db.Connection{}, nil
+		},
+		disconnect: func(c *db.Connection, ctx context.Context) {},
+		createCollections: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile, drop bool) error {
+			return nil
+		},
+		createIndexes: func(ctx context.Context, database *driverMongo.Database, cfg *config.CollectionsFile) error {
+			return nil
+		},
+		runWorkload: func(ctx context.Context, database *driverMongo.Database, collections []config.CollectionDefinition, queries []config.QueryDefinition, cfg *config.AppConfig, uiCollector ...*stats.Collector) error {
+			return nil
+		},
+	})
+
+	s := NewServer(&config.AppConfig{URI: "mongodb://localhost:27017", Duration: "1s", Concurrency: 1})
+	req, rec := newMultipartRequest(t,
+		map[string]string{"default_workload": "false"},
+		map[string]string{
+			"collections_file":      `{"collections":[{"database":"shop","collection":"orders","fields":{}}]}`,
+			"queries_file":          `{"queries":[{"name":"find_orders","database":"shop","collection":"orders","operation":"find","filter":{}}]}`,
+			"tls_ca_file":           "-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----\n",
+			"tlsCertificateKeyFile": "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n",
+		},
+	)
+
+	s.handleStart(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if seenCA == "" || seenCert == "" {
+		t.Fatalf("expected TLS uploads to be persisted to temp files, got ca=%q cert=%q", seenCA, seenCert)
+	}
+	caBytes, err := os.ReadFile(seenCA)
+	if err != nil {
+		t.Fatalf("read persisted CA file: %v", err)
+	}
+	certBytes, err := os.ReadFile(seenCert)
+	if err != nil {
+		t.Fatalf("read persisted cert file: %v", err)
+	}
+	if !strings.Contains(string(caBytes), "-----BEGIN CERTIFICATE-----") {
+		t.Fatalf("expected CA upload contents to be preserved, got %q", string(caBytes))
+	}
+	if !strings.Contains(string(certBytes), "-----BEGIN PRIVATE KEY-----") {
+		t.Fatalf("expected cert upload contents to be preserved, got %q", string(certBytes))
 	}
 }
 

@@ -141,6 +141,8 @@ type ConnectionParams struct {
 	MaxIdleTime            int    `yaml:"max_idle_time"`
 	ReplicaSetName         string `yaml:"replicaset_name"`
 	ReadPreference         string `yaml:"read_preference"`
+	TLSCAFile              string `yaml:"tls_ca_file"`
+	TLSCertificateKeyFile  string `yaml:"tlsCertificateKeyFile"`
 }
 
 func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
@@ -182,6 +184,9 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 		return nil, err
 	}
 	if err := ValidateAccessPattern(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateConnectionParams(cfg); err != nil {
 		return nil, err
 	}
 
@@ -429,6 +434,12 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	}
 	if v, exists := os.LookupEnv("PLGM_READ_PREFERENCE"); exists {
 		cfg.ConnectionParams.ReadPreference = v
+	}
+	if v := os.Getenv("PLGM_TLS_CA_FILE"); v != "" {
+		cfg.ConnectionParams.TLSCAFile = v
+	}
+	if v := os.Getenv("PLGM_TLS_CERTIFICATE_KEY_FILE"); v != "" {
+		cfg.ConnectionParams.TLSCertificateKeyFile = v
 	}
 
 	// Paths
@@ -811,6 +822,20 @@ func ValidateAccessPattern(cfg *AppConfig) error {
 	}
 	if _, err := accesspattern.Compile(cfg.AccessPattern); err != nil {
 		return fmt.Errorf("invalid access pattern: %w", err)
+	}
+	return nil
+}
+
+// ValidateConnectionParams catches incomplete TLS client configuration before
+// we attempt to build the MongoDB URI or open a connection.
+func ValidateConnectionParams(cfg *AppConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	hasCA := strings.TrimSpace(cfg.ConnectionParams.TLSCAFile) != ""
+	hasCert := strings.TrimSpace(cfg.ConnectionParams.TLSCertificateKeyFile) != ""
+	if hasCA != hasCert {
+		return fmt.Errorf("invalid TLS connection configuration: tls_ca_file and tlsCertificateKeyFile must be set together")
 	}
 	return nil
 }

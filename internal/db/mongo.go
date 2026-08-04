@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -17,6 +18,10 @@ type Connection struct {
 }
 
 func BuildMongoURI(cfg *config.AppConfig) (string, error) {
+	if err := config.ValidateConnectionParams(cfg); err != nil {
+		return "", err
+	}
+
 	u, err := url.Parse(cfg.URI)
 	if err != nil {
 		return "", fmt.Errorf("invalid base URI: %w", err)
@@ -47,6 +52,16 @@ func BuildMongoURI(cfg *config.AppConfig) (string, error) {
 		q.Set("readPreference", cfg.ConnectionParams.ReadPreference)
 	}
 
+	hasTLSArtifacts := false
+	if cfg.ConnectionParams.TLSCAFile != "" {
+		q.Set("tlsCAFile", cfg.ConnectionParams.TLSCAFile)
+		hasTLSArtifacts = true
+	}
+	if cfg.ConnectionParams.TLSCertificateKeyFile != "" {
+		q.Set("tlsCertificateKeyFile", cfg.ConnectionParams.TLSCertificateKeyFile)
+		hasTLSArtifacts = true
+	}
+
 	// If a Replica Set name is provided, we assume we are targeting that specific set
 	// and force a direct connection to the node provided in the URI.
 	// If Replica Set is EMPTY (e.g. connecting to mongos), we skip both.
@@ -63,7 +78,17 @@ func BuildMongoURI(cfg *config.AppConfig) (string, error) {
 
 	// --- custom params ---
 	for key, val := range cfg.CustomParamsMap {
+		switch strings.ToLower(key) {
+		case "tls", "tlscafile", "tlscertificatekeyfile":
+			continue
+		}
 		q.Set(key, fmt.Sprintf("%v", val))
+	}
+
+	if hasTLSArtifacts {
+		q.Set("tls", "true")
+	} else {
+		q.Set("tls", "false")
 	}
 
 	// Default compressor if user did NOT provide any

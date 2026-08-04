@@ -25,6 +25,11 @@ connection_params:
   max_pool_size: 200             
   min_pool_size: 10              
   max_idle_time: 30              # Max time (minutes) an idle connection stays open (prevents churn)
+  # TLS client settings are optional.
+  # If both fields are provided, PLGM automatically sets tls=true in the MongoDB URI.
+  # Leave both blank to connect without TLS.
+  tls_ca_file: ""
+  tlsCertificateKeyFile: ""
 
 # --- Custom Driver Options ---
 # Arbitrary key-values appended to the connection string URI.
@@ -33,9 +38,6 @@ custom_params:
   # Network compression. Use "zlib" for slow networks, "snappy" for speed, or remove for none.
   # Disabling compressors could speed up the workload
   compressors: "zlib,snappy"
-  # Disable SSL for local testing to save CPU cycles on handshake/encryption.
-  # Use true when connecting using tls(ssl). Make sure to add additional parameters as needed, e.g. tlsInsecure=true&tlsCertificateKeyFile=/path/to/tls.pem
-  tls: false
   
 # Enable debug logging (verbose).
 debug: false

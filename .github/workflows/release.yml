@@ -21,9 +21,23 @@ jobs:
       - name: Build and Package
         run: make build
 
+      - name: Prepare Release Notes
+        run: |
+          awk '
+            /^## v/ {
+              if (found) { exit }
+              found = 1
+            }
+            found {
+              if (/^## Release Template/) { exit }
+              print
+            }
+          ' CHANGELOG.md > release-notes.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: bin/*.tar.gz
+          body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
