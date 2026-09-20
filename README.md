@@ -401,6 +401,7 @@ Environment Variables (Overrides):
   PLGM_DROP_COLLECTIONS               Drop collections on start (true/false)
   PLGM_SKIP_SEED                      Do not seed initial data on start (true/false)
   PLGM_SEED_BATCH_SIZE                Number of documents to insert per batch during SEED phase
+  PLGM_SEED_CONCURRENCY               Number of concurrent seed writers (default: 1)
   PLGM_DEBUG_MODE                     Enable verbose logic logs (true/false)
   PLGM_PPROF_ENABLED                  Enable pprof server on localhost:6060 (true/false)
   PLGM_USE_TRANSACTIONS               Enable transactional workloads (true/false)
@@ -1050,6 +1051,7 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `drop_collections` | `PLGM_DROP_COLLECTIONS` | Drop collections before starting (`true`/`false`) | `true` |
 | `skip_seed` | `PLGM_SKIP_SEED` | Do not seed initial data on start (`true`/`false`) | `true` |
 | `seed_batch_size` | `PLGM_SEED_BATCH_SIZE` | Number of documents to insert per batch during SEED phase | `1000` |
+| `seed_concurrency` | `PLGM_SEED_CONCURRENCY` | Concurrent seed writers, independent of workload concurrency | `1` |
 | `debug_mode` | `PLGM_DEBUG_MODE` | Enable verbose debug logging (`true`/`false`) | `false` |
 | `pprof_enabled` | `PLGM_PPROF_ENABLED` | Enable pprof server on localhost:6060 (`true`/`false`) | `false` |
 | `use_transactions` | `PLGM_USE_TRANSACTIONS` | Enable Transactional Workloads (`true`/`false`) | `false` |
@@ -1252,10 +1254,40 @@ The final summary includes a **WORKLOAD ACCURACY** section reporting existing-re
 find match/miss rate, documents returned, update matched/modified counts, and delete hit rate — so a
 fast-but-misleading run (mostly missing records) is easy to spot.
 
+### Parallel Initial Seeding
+Set `seed_concurrency` (or `PLGM_SEED_CONCURRENCY`) to run multiple `InsertMany`
+calls concurrently during initialization. It defaults to `1`; omitted or non-positive
+YAML values fall back to `1`. Like `PLGM_SEED_BATCH_SIZE`, the environment override
+accepts only positive integers. Workload `concurrency` does not control seeding.
+The Web UI exposes **Seed Concurrency** next to **Seed Batch Size** in the Advanced tab.
+
+```yaml
+skip_seed: false
+documents_count: 1000000  # Per collection, not per writer
+seed_batch_size: 1000
+seed_concurrency: 8
+```
+
+Collections are still seeded sequentially. Within each collection, one producer
+generates documents and up to `seed_concurrency` writers insert separate batches.
+The writer count is capped at the number of batches. Memory for generated documents
+is bounded by at most `(writers + 1) * seed_batch_size` documents, plus driver buffers.
+Size the MongoDB connection pool for the desired concurrency; document generation,
+indexes, server resources, and available connections can limit the speedup.
+
+Batch completion order is unspecified when using multiple writers; writes within
+each batch retain the driver's default ordered behavior. Progress counts only fully
+successful batches. On an insert error or cancellation, seeding stops dispatching
+new batches, cancels in-flight writes, and waits for all writers before returning.
+Already accepted writes (including a partially successful batch) are not rolled back.
+
 ### Deterministic Generation
-Set `random_seed` (or `PLGM_RANDOM_SEED`) to a non-zero value to reproduce datasets. The single-threaded
-seed phase is fully reproducible; concurrent workload streams are seeded per-worker from the base
-(best-effort). Leave `0` for time-based, non-deterministic generation.
+Set `random_seed` (or `PLGM_RANDOM_SEED`) to a non-zero value to seed random generation.
+Seed document generation remains serial, so writer scheduling does not change the
+random seed sequence. Parallel insertion does not preserve insertion order. Overall
+reproducibility is best-effort (for example, generated ObjectIds and time-based fields
+can vary); concurrent workload streams are seeded per-worker from the base.
+Leave `0` for time-based, non-deterministic generation.
 
 ---
 
@@ -1331,6 +1363,8 @@ These settings affect the efficiency of individual database operations and memor
 * **`seed_batch_size`**: The number of documents grouped into a single InsertMany call during the initial data seeding phase.
     * *Tip:* Keeps memory usage stable when seeding millions of documents. A value of 1000 is recommended for performance.
     * *Default:* `1000`
+* **`seed_concurrency`**: Maximum concurrent InsertMany calls during initial seeding. Independent of workload `concurrency`.
+    * *Default:* `1`
 * **`find_limit`**: The hard limit on documents returned for `find` operations.
     * *Default:* `5`
 * **`insert_cache_size`**: The buffer size for the document generator channel.

@@ -2381,6 +2381,7 @@
                             <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
                             <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size" value="10"></div>
                             <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000"></div>
+                            <div class="form-group"><label>Seed Concurrency</label><input type="number" name="seed_concurrency" value="1" min="1" title="Concurrent seed writers, independent of workload concurrency"></div>
                             <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size" value="1000"></div>
                             <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500"></div>
                         </div>
@@ -4000,6 +4001,7 @@
                 document.querySelector('[name="find_limit"]').value = cfg.FindLimit || 5;
                 document.querySelector('[name="insert_batch_size"]').value = cfg.InsertBatchSize || 10;
                 document.querySelector('[name="seed_batch_size"]').value = cfg.SeedBatchSize || 1000;
+                document.querySelector('[name="seed_concurrency"]').value = cfg.SeedConcurrency || 1;
                 document.getElementById('useFindOne').checked = cfg.UseFindOneForLimitOne;
                 document.getElementById('csvExport').checked = cfg.CSVExportEnabled || false;
                 document.getElementById('csvAppend').checked = cfg.CSVExportAppend || false;

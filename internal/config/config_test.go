@@ -392,3 +392,35 @@ func TestApplyEnvOverridesShardingSettings(t *testing.T) {
 		t.Fatalf("expected sharding skip-without-config true from env")
 	}
 }
+
+func TestSeedConcurrencyConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name, yaml, env string
+		want            int
+	}{
+		{"default", "", "", 1},
+		{"yaml", "seed_concurrency: 4\n", "", 4},
+		{"env_overrides_yaml", "seed_concurrency: 4\n", "8", 8},
+		{"zero_yaml", "seed_concurrency: 0\n", "", 1},
+		{"negative_yaml", "seed_concurrency: -2\n", "", 1},
+		{"invalid_env", "seed_concurrency: 4\n", "invalid", 4},
+		{"zero_env", "seed_concurrency: 4\n", "0", 4},
+		{"negative_env", "seed_concurrency: 4\n", "-2", 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PLGM_SEED_CONCURRENCY", tc.env)
+			t.Setenv("PLGM_CONCURRENCY", "32")
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tc.yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := LoadAppConfig(path, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.SeedConcurrency != tc.want || cfg.Concurrency != 32 {
+				t.Fatalf("seed/workload concurrency = %d/%d, want %d/32", cfg.SeedConcurrency, cfg.Concurrency, tc.want)
+			}
+		})
+	}
+}

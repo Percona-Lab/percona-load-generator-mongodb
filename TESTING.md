@@ -44,6 +44,7 @@ Tests for the load-modeling / analysis features live next to their packages:
 | Query-log schema inference | `internal/schemainfer` | mongod logs, profiler docs, raw commands, malformed input |
 | Shareable run reports | `internal/report` | Self-contained HTML + inline SVG chart |
 | Web API endpoints | `internal/webui` | `/api/infer-schema`, `/api/report` |
+| Parallel initial seeding | `internal/mongo`, `internal/config`, `internal/webui` | `TestInsertRandomDocuments*`, `TestSeedConcurrencyConfig`, `TestHandleStartSeedConcurrency` |
 
 Timing-sensitive tests (pacing) assert lower bounds / ranges rather than
 exact durations to avoid flakiness.
@@ -54,6 +55,7 @@ Integration tests are behind the `integration` build tag and are skipped from de
 
 Current integration smoke test:
 
+- `internal/mongo/TestInsertRandomDocumentsIntegrationParallel` (serial/parallel seed counts, final partial batch, target database routing)
 - `internal/mongo/TestRunWorkloadIntegration_OneShotExecutesFindUpdateAndSkipsInsert`
 - `internal/mongo/TestRunWorkloadIntegration_OneShotMultiDBMixedShardConfig`
 - `internal/mongo/TestRunWorkloadIntegration_MongosMixedShardedAndUnshardedCollections` (mongos-only, gated)

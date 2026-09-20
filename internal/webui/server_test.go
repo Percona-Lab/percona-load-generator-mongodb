@@ -1357,3 +1357,57 @@ func TestHandleStartLoadCollectionsErrorReturnsErrorResponse(t *testing.T) {
 		t.Fatalf("expected IsRunning reset after load error")
 	}
 }
+
+func TestHandleStartSeedConcurrency(t *testing.T) {
+	for _, tc := range []struct {
+		name, form string
+		base, want int
+	}{
+		{"default", "", 0, 1},
+		{"loaded_config", "", 3, 3},
+		{"form_override", "4", 3, 4},
+		{"nonpositive", "-2", 3, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seeded := make(chan int, 1)
+			finished := make(chan struct{})
+			withWebUISeams(t, webuiSeams{
+				connect:           func(context.Context, *config.AppConfig, string) (*db.Connection, error) { return &db.Connection{}, nil },
+				disconnect:        func(*db.Connection, context.Context) { close(finished) },
+				createCollections: func(context.Context, *driverMongo.Database, *config.CollectionsFile, bool) error { return nil },
+				createIndexes:     func(context.Context, *driverMongo.Database, *config.CollectionsFile) error { return nil },
+				insertRandomDocs: func(ctx context.Context, database *driverMongo.Database, col config.CollectionDefinition, count int, cfg *config.AppConfig) error {
+					seeded <- cfg.SeedConcurrency
+					return nil
+				},
+				runWorkload: func(context.Context, *driverMongo.Database, []config.CollectionDefinition, []config.QueryDefinition, *config.AppConfig, ...*stats.Collector) error {
+					return nil
+				},
+			})
+			s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1, SeedConcurrency: tc.base})
+			req, rec := newMultipartRequest(t, map[string]string{
+				"documents_count": "5", "seed_concurrency": tc.form,
+			}, map[string]string{
+				"collections_file": `{"collections":[{"database":"db","collection":"docs","fields":{}}]}`,
+				"queries_file":     `{"queries":[{"name":"find_docs","collection":"docs","operation":"find","filter":{}}]}`,
+			})
+			s.handleStart(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+			}
+			select {
+			case <-finished:
+			case <-time.After(5 * time.Second):
+				t.Fatal("run did not finish")
+			}
+			select {
+			case got := <-seeded:
+				if got != tc.want {
+					t.Fatalf("seed concurrency = %d, want %d", got, tc.want)
+				}
+			default:
+				t.Fatal("seeding was not invoked")
+			}
+		})
+	}
+}

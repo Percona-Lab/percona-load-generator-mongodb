@@ -244,6 +244,7 @@ use_findone_for_limit_one: true # Optimization: use FindOne() if limit is 1.
 insert_cache_size: 1000         # Size of the internal buffer for generated documents.
 insert_batch_size: 10           # Number of documents per InsertMany call during WORKLOAD phase.
 seed_batch_size: 1000           # Number of documents per InsertMany call during SEED phase.
+seed_concurrency: 1             # Concurrent seed writers, independent of workload concurrency.
 
 # --- Monitoring ---
 status_refresh_rate_sec: 1      # How often (seconds) to print the "AVG Ops/Sec" log line.
@@ -268,8 +269,8 @@ record_pool_max_size: 10000
 # Sample up to this many existing documents per collection at workload start (0 disables).
 record_pool_bootstrap_sample: 500
 
-# Deterministic data generation. When non-zero, the seed dataset is fully reproducible
-# and each worker stream is seeded from this base (best-effort under concurrency).
+# Seed random generation. Seed document generation remains serial even with multiple
+# seed writers; reproducibility is best-effort (ObjectIds/time-based fields may vary).
 # Leave 0 (default) for time-based, non-deterministic generation.
 # Can be overridden via env: PLGM_RANDOM_SEED
 random_seed: 0
