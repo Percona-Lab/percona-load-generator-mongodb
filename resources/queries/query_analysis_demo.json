@@ -1,0 +1,199 @@
+[
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "find",
+        "label": "[optimized] order by id",
+        "description": "Equality on order_id, served by order_id_1. Expected: index-supported and efficient.",
+        "filter": {
+            "order_id": "<int>"
+        },
+        "projection": {
+            "_id": 0,
+            "order_id": 1,
+            "status": 1,
+            "total_cents": 1
+        },
+        "limit": 1
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "find",
+        "label": "[optimized] orders for customer",
+        "description": "Equality on customer_id, served by the prefix of customer_id_1_total_cents_-1. Expected: index-supported and efficient.",
+        "filter": {
+            "customer_id": "<int>"
+        },
+        "limit": 20
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "find",
+        "label": "[optimized] orders by region and category",
+        "description": "Equality on both fields of region_1_category_1 with a limit. Expected: index-supported and efficient.",
+        "filter": {
+            "region": "<string>",
+            "category": "<string>"
+        },
+        "limit": 20
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "aggregate",
+        "label": "[optimized] top orders for customer",
+        "description": "The $match equality and $sort follow the customer_id_1_total_cents_-1 key order, so the index returns documents already sorted. Expected: no in-memory sort.",
+        "pipeline": [
+            {
+                "$match": {
+                    "customer_id": "<int>"
+                }
+            },
+            {
+                "$sort": {
+                    "total_cents": -1
+                }
+            },
+            {
+                "$limit": 5
+            }
+        ]
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "update",
+        "label": "[optimized] mark order shipped by id",
+        "description": "Write targeted through order_id_1. Expected: index-supported and efficient.",
+        "filter": {
+            "order_id": "<int>"
+        },
+        "update": {
+            "$set": {
+                "status": "shipped"
+            }
+        }
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "delete",
+        "label": "[optimized] delete order by id",
+        "description": "Delete targeted through order_id_1. Expected: index-supported and efficient.",
+        "filter": {
+            "order_id": "<int>"
+        }
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "find",
+        "label": "[not optimized] orders by customer email",
+        "description": "customer_email has no index, so a selective equality reads the whole collection. Expected: COLLSCAN with a selective filter and an index recommendation on customer_email.",
+        "filter": {
+            "customer_email": "<string>"
+        },
+        "limit": 10
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "find",
+        "label": "[not optimized] orders by status and shipping city",
+        "description": "Only status is indexed and it has six values, so status_1 reads about a sixth of the collection to find the few documents for one city. Expected: index with low selectivity.",
+        "filter": {
+            "status": "<string>",
+            "shipping.city": "<string>"
+        },
+        "limit": 10
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "update",
+        "label": "[not optimized] flag gift orders by customer email",
+        "description": "Write filtered on the unindexed customer_email. Expected: COLLSCAN for a single-document update.",
+        "filter": {
+            "customer_email": "<string>"
+        },
+        "update": {
+            "$set": {
+                "is_gift": true
+            }
+        }
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "aggregate",
+        "label": "[not optimized] biggest orders in region",
+        "description": "region_1_category_1 finds the region, but its key order cannot provide total_cents order, so every matching document is sorted in memory. Expected: blocking (in-memory) sort; an index on { region: 1, total_cents: -1 } would remove it.",
+        "pipeline": [
+            {
+                "$match": {
+                    "region": "<string>"
+                }
+            },
+            {
+                "$sort": {
+                    "total_cents": -1
+                }
+            },
+            {
+                "$limit": 10
+            }
+        ]
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "aggregate",
+        "label": "[not optimized] first order per region by notes",
+        "description": "Sorts the whole collection on the large unindexed notes field before grouping. Expected: blocking sort that spills to disk once the sorted data exceeds the server sort memory limit (100 MB by default; about 100,000 documents with this collection definition).",
+        "pipeline": [
+            {
+                "$sort": {
+                    "notes": 1
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$region",
+                    "first_order_id": {
+                        "$first": "$order_id"
+                    },
+                    "orders": {
+                        "$sum": 1
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "operation": "aggregate",
+        "label": "[expected full scan] revenue by category",
+        "description": "Reporting query with no filter: a collection scan is expected and an index would not help. Expected: unfiltered COLLSCAN reported as expected, not as an indexing problem.",
+        "pipeline": [
+            {
+                "$group": {
+                    "_id": "$category",
+                    "orders": {
+                        "$sum": 1
+                    },
+                    "revenue_cents": {
+                        "$sum": "$total_cents"
+                    }
+                }
+            },
+            {
+                "$sort": {
+                    "revenue_cents": -1
+                }
+            }
+        ]
+    }
+]

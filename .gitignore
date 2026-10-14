@@ -1,9 +1,15 @@
 __pycache__*
 todo.txt
 demo.tape
+AGENTS.md
+PROJECT_HISTORY_ARCHIVE.md 
+PROJECT_STATUS.md
 # Binaries
 # Ignore all binaries in the bin folder
 bin/
+
+# Web UI test dependencies
+internal/webui/uitest/node_modules/
 
 # OS Specific
 .DS_Store

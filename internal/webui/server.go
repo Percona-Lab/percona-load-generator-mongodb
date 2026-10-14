@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"math/big"
 	"mime/multipart"
 	"net"
@@ -25,7 +27,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,27 +44,29 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/schemainfer"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
-	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 //go:embed static
 var staticFiles embed.FS
 
 type WebServer struct {
-	mu                sync.Mutex
-	IsRunning         bool
-	LastError         string
-	CurrentStats      *stats.Collector
-	ActiveCancel      context.CancelFunc
-	AppConfig         *config.AppConfig
-	CurrentIteration  int
-	TotalIterations   int
-	IsWaiting         bool
-	IntervalStr       string
-	RunID             int64
-	InsightsCache     *stats.InsightsReport
-	ShapeTrendBase    map[string]float64
+	mu               sync.Mutex
+	runWG            sync.WaitGroup
+	IsRunning        bool
+	LastError        string
+	CurrentStats     *stats.Collector
+	ActiveCancel     context.CancelFunc
+	AppConfig        *config.AppConfig
+	CurrentIteration int
+	TotalIterations  int
+	IsWaiting        bool
+	IntervalStr      string
+	RunID            int64
+	InsightsCache    *stats.InsightsReport
+	TrendStore       *stats.TrendStore
+	insightsBuildMu  sync.Mutex
+	// explainCancel stops in-flight post-run explains when a new run starts.
+	explainCancel     context.CancelFunc
 	LifecyclePhase    string
 	LifecycleMessage  string
 	LifecycleStep     string
@@ -110,7 +113,7 @@ func NewServer(cfg *config.AppConfig) *WebServer {
 	}
 	return &WebServer{
 		AppConfig:       cfg,
-		ShapeTrendBase:  make(map[string]float64),
+		TrendStore:      stats.OpenDefaultTrendStore(),
 		LifecyclePhase:  "idle",
 		DefinitionStore: defStore,
 	}
@@ -235,6 +238,7 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/infer-schema", s.handleInferSchema)
 	mux.HandleFunc("/api/report", s.handleReport)
 	mux.HandleFunc("/api/insights", s.handleInsights)
+	mux.HandleFunc("/api/trend-baselines", s.handleTrendBaselines)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
 	mux.HandleFunc("/api/query-definitions/", s.handleQueryDefinitionItem)
@@ -356,9 +360,24 @@ func (s *WebServer) handleDefinitionCollection(w http.ResponseWriter, r *http.Re
 			writeAPIError(w, http.StatusBadRequest, "invalid JSON request body: "+err.Error())
 			return
 		}
+		if isBuiltinDefinitionID(strings.TrimSpace(in.SourceDefinitionID)) {
+			// Built-in definitions are always in declared sort order; only the version is checked.
+			source, err := s.getDefinition(kind, strings.TrimSpace(in.SourceDefinitionID))
+			if errors.Is(err, os.ErrNotExist) {
+				err = fmt.Errorf("%w: source %s definition %q does not exist", definitions.ErrSourceDefinitionChanged, kind, in.SourceDefinitionID)
+			}
+			if err == nil {
+				err = definitions.CheckCopySource(source, in)
+			}
+			if err != nil {
+				writeDefinitionCreateError(w, err)
+				return
+			}
+			in.SourceDefinitionID, in.SourceUpdatedAt, in.SourceContentVersion = "", "", 0
+		}
 		def, err := s.DefinitionStore.Create(kind, in)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, err.Error())
+			writeDefinitionCreateError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, def)
@@ -408,6 +427,9 @@ func (s *WebServer) handleDefinitionItem(w http.ResponseWriter, r *http.Request,
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				writeAPIError(w, http.StatusNotFound, "definition not found")
+				return
+			}
+			if writeSortOrderReviewError(w, err) {
 				return
 			}
 			writeAPIError(w, http.StatusBadRequest, err.Error())
@@ -541,6 +563,7 @@ func (s *WebServer) builtinDefinition(kind definitions.Kind, includeContent bool
 			Content:        content,
 			Format:         "json",
 			SourceFilename: "resources/queries/default.json",
+			ContentVersion: definitions.ContentVersionOrderedSorts,
 			CreatedAt:      builtinDefinitionTimestamp,
 			UpdatedAt:      builtinDefinitionTimestamp,
 		}, nil
@@ -570,6 +593,33 @@ func writeDefinitionLookupError(w http.ResponseWriter, err error) {
 		return
 	}
 	writeAPIError(w, http.StatusBadRequest, err.Error())
+}
+
+func writeDefinitionCreateError(w http.ResponseWriter, err error) {
+	if writeSortOrderReviewError(w, err) {
+		return
+	}
+	if errors.Is(err, definitions.ErrSourceDefinitionChanged) {
+		writeAPIError(w, http.StatusConflict, err.Error())
+		return
+	}
+	writeAPIError(w, http.StatusBadRequest, err.Error())
+}
+
+// writeSortOrderReviewError writes a *definitions.SortOrderReviewError as a
+// 409 with its structured review and reports whether err was one.
+func writeSortOrderReviewError(w http.ResponseWriter, err error) bool {
+	var reviewErr *definitions.SortOrderReviewError
+	if !errors.As(err, &reviewErr) {
+		return false
+	}
+	writeJSON(w, http.StatusConflict, map[string]interface{}{
+		"status":          "error",
+		"code":            definitions.SortOrderReviewErrorCode,
+		"message":         reviewErr.Message,
+		"sortOrderReview": reviewErr.Review,
+	})
+	return true
 }
 
 func writeAPIError(w http.ResponseWriter, statusCode int, message string) {
@@ -605,6 +655,24 @@ func parseFloat(val string, defaultVal float64) float64 {
 		return defaultVal
 	}
 	return parsed
+}
+
+// applyLatencyTargetForm sets the latency targets that were submitted; a
+// submitted empty, non-positive, or invalid value clears that target.
+func applyLatencyTargetForm(cfg *config.AppConfig, form url.Values) {
+	for field, dst := range map[string]*float64{
+		"insights_latency_target_avg_ms": &cfg.InsightsLatencyTargetAvgMs,
+		"insights_latency_target_p95_ms": &cfg.InsightsLatencyTargetP95Ms,
+		"insights_latency_target_p99_ms": &cfg.InsightsLatencyTargetP99Ms,
+	} {
+		if _, ok := form[field]; ok {
+			if v := parseFloat(form.Get(field), 0); v > 0 && !math.IsInf(v, 0) {
+				*dst = v
+			} else {
+				*dst = 0
+			}
+		}
+	}
 }
 
 func writeStartError(w http.ResponseWriter, statusCode int, message string) {
@@ -655,6 +723,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.IsRunning = true
 	s.RunID++
 	s.InsightsCache = nil
+	if s.explainCancel != nil {
+		s.explainCancel()
+	}
 	s.LastError = ""
 	s.InitStartedAt = time.Now()
 	s.ExecStartedAt = time.Time{}
@@ -750,6 +821,10 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	if mode := r.FormValue("insights_explain_severity_mode"); mode != "" {
 		cfg.InsightsExplainSeverityMode = mode
 	}
+	if mode := r.FormValue("insights_explain_efficiency_mode"); mode != "" {
+		cfg.InsightsExplainEfficiencyMode = mode
+	}
+	cfg.InsightsExplainEfficiencyMode = config.NormalizeExplainEfficiencyMode(cfg.InsightsExplainEfficiencyMode)
 	switch cfg.InsightsExplainSeverityMode {
 	case "high_and_low", "medium_only", "critical_only", "high_only":
 	default:
@@ -758,6 +833,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainWorkers = parseInt(r.FormValue("insights_explain_workers"), cfg.InsightsExplainWorkers)
 	cfg.InsightsExplainRetries = parseInt(r.FormValue("insights_explain_retries"), cfg.InsightsExplainRetries)
 	cfg.InsightsExplainBackoffMS = parseInt(r.FormValue("insights_explain_backoff_ms"), cfg.InsightsExplainBackoffMS)
+	applyLatencyTargetForm(cfg, r.Form)
 	if mode := r.FormValue("sharding_mode"); mode != "" {
 		cfg.ShardingMode = config.NormalizeShardingMode(mode)
 	} else {
@@ -906,6 +982,13 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				writeStartError(w, http.StatusBadRequest, err.Error())
 				return
 			}
+			if err := def.CheckSortOrder(parsed.Queries); err != nil {
+				s.abortRun("Ambiguous sort order in selected query definition: " + err.Error())
+				if !writeSortOrderReviewError(w, err) {
+					writeStartError(w, http.StatusBadRequest, err.Error())
+				}
+				return
+			}
 			customQueries = parsed
 		}
 
@@ -1042,7 +1125,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
+		s.runWG.Add(1)
 		go func() {
+			defer s.runWG.Done()
 			defer func() {
 				if r := recover(); r != nil {
 					msg := fmt.Sprintf("Raw Injector crashed unexpectedly: %v", r)
@@ -1054,7 +1139,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 					s.mu.Unlock()
 				}
 			}()
-			defer disconnectFn(benchConn, context.Background())
+			// Deferred LIFO: disconnect must finish before IsRunning is cleared,
+			// otherwise a new run can start while the old connection closes.
 			defer func() {
 				s.mu.Lock()
 				s.IsRunning = false
@@ -1063,6 +1149,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				}
 				s.mu.Unlock()
 			}()
+			defer disconnectFn(benchConn, context.Background())
 
 			s.mu.Lock()
 			s.setLifecyclePhaseLocked("initializing", "Preparing raw injector execution")
@@ -1216,7 +1303,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
+	s.runWG.Add(1)
 	go func() {
+		defer s.runWG.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				msg := fmt.Sprintf("Workload crashed unexpectedly: %v", r)
@@ -1228,7 +1317,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				s.mu.Unlock()
 			}
 		}()
-		defer disconnectFn(benchConn, context.Background())
+		// Deferred LIFO: disconnect must finish before IsRunning is cleared,
+		// otherwise a new run can start while the old connection closes.
 		defer func() {
 			s.mu.Lock()
 			s.IsRunning = false
@@ -1237,6 +1327,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			}
 			s.mu.Unlock()
 		}()
+		defer disconnectFn(benchConn, context.Background())
 
 		s.mu.Lock()
 		s.setLifecycleStepLocked("Preparing collections", 4, 5)
@@ -1769,9 +1860,70 @@ func (s *WebServer) buildReportData() report.ReportData {
 			rate := 100 * float64(acc.TargetExisting) / float64(acc.TargetExisting+acc.TargetRandom)
 			data.Insights = append(data.Insights, fmt.Sprintf("Existing-record targeting: %.1f%% of filters hit known records.", rate))
 		}
+		if !isRunning {
+			if rep, _ := s.finalInsightsReport(); rep != nil {
+				data.Impact = reportImpactSection(rep.Impact)
+				data.Efficiency = reportEfficiencySection(rep.EfficiencyView, rep.Recommendations)
+				data.Trends = reportTrendSection(rep.Trends)
+				data.Recommendations = reportRecommendations(rep.Recommendations)
+			}
+		}
 	}
 
 	return data
+}
+
+// reportRecommendations maps insights recommendations into the HTML report
+// model so the report shows the same list as /api/insights.
+func reportRecommendations(recs []stats.InsightRecommendation) []report.RecommendationRow {
+	out := make([]report.RecommendationRow, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, report.RecommendationRow{
+			Rank:       r.Rank,
+			Priority:   r.Priority,
+			Title:      r.Title,
+			Details:    r.Details,
+			Confidence: r.Confidence,
+			Source:     r.Source,
+		})
+	}
+	return out
+}
+
+// reportImpactSection maps the insights impact view into the HTML report model
+// so the report shows the same values as /api/insights.
+func reportImpactSection(v stats.ImpactView) *report.ImpactSection {
+	if v.Status == "" || v.Status == "disabled" {
+		return nil
+	}
+	sec := &report.ImpactSection{
+		Status:             v.Status,
+		TimeBasisNote:      v.Coverage.TimeBasisNote,
+		InterpretationNote: v.Coverage.InterpretationNote,
+		ObservedOps:        v.Coverage.ObservedOperations,
+		ObservedMs:         v.Coverage.ObservedOperationMs,
+		Limitations:        v.Coverage.Limitations,
+	}
+	for _, g := range v.Groups {
+		p95 := g.SamplePercentileStatus
+		if g.SampleP95Ms != nil {
+			p95 = fmt.Sprintf("%.2f", *g.SampleP95Ms)
+		}
+		sec.Rows = append(sec.Rows, report.ImpactRow{
+			Rank:           g.Rank,
+			Namespace:      g.Namespace,
+			Operation:      g.Operation,
+			Shape:          g.ShapeSummary,
+			OperationCount: g.OperationCount,
+			TotalMs:        g.TotalOperationMs,
+			SharePct:       g.ShareOfObservedTime * 100,
+			AvgMs:          g.AvgMs,
+			SampleCount:    g.SampleCount,
+			SampleP95:      p95,
+			Explanation:    g.Explanation,
+		})
+	}
+	return sec
 }
 
 // buildLatencyRows converts the collector's per-type histograms into report rows.
@@ -1887,1040 +2039,110 @@ func (s *WebServer) handleInferSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *WebServer) handleInsights(w http.ResponseWriter, r *http.Request) {
+	rep, state := s.finalInsightsReport()
+	w.Header().Set("Content-Type", "application/json")
+	if rep == nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"metadata": map[string]interface{}{"status": state},
+		})
+		return
+	}
+	json.NewEncoder(w).Encode(rep)
+}
+
+// finalInsightsReport returns the post-run insights with explain enrichment,
+// computing them once per run so the API, HTML report, and exports share one
+// result. It returns nil with state "inactive" or "pending" when unavailable.
+func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
+	s.insightsBuildMu.Lock()
+	defer s.insightsBuildMu.Unlock()
+
 	s.mu.Lock()
 	collector := s.CurrentStats
 	running := s.IsRunning
 	runID := s.RunID
 	cached := s.InsightsCache
 	appCfg := s.AppConfig
-	baseTrends := make(map[string]float64, len(s.ShapeTrendBase))
-	for k, v := range s.ShapeTrendBase {
-		baseTrends[k] = v
-	}
+	trendStore := s.TrendStore
 	s.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
 	if collector == nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"metadata": map[string]interface{}{"status": "inactive"},
-		})
-		return
+		return nil, "inactive"
 	}
 	if running {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"metadata": map[string]interface{}{"status": "pending"},
-		})
-		return
+		return nil, "pending"
 	}
 	if cached != nil {
-		json.NewEncoder(w).Encode(cached)
-		return
+		return cached, "ready"
 	}
 
 	rep := collector.GetFinalInsights()
-	events := collector.SnapshotOperationEvents()
 	explainEnabled, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
 	if explainEnabled {
-		enrichInsightsWithExplain(rep.Metadata.Status, &rep, events, appCfg, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs)
+		ctx, cancel := context.WithCancel(context.Background())
+		s.mu.Lock()
+		s.explainCancel = cancel
+		s.mu.Unlock()
+		enrichInsightsWithExplain(ctx, rep.Metadata.Status, &rep, collector.SnapshotExplainInventory(), appCfg, explainParams{
+			topN: explainTopN, maxTimeMs: explainMaxMs, verbosity: explainVerbosity, severityMode: explainSeverityMode,
+			efficiencyMode: collector.GetExplainEfficiencyMode(), workers: explainWorkers, retries: explainRetries, backoffMs: explainBackoffMs,
+		})
+		s.mu.Lock()
+		s.explainCancel = nil
+		s.mu.Unlock()
+		cancel()
 	}
-	applyTrends(&rep, baseTrends)
+	stats.ApplyEfficiencyView(&rep)
+	if trendStore == nil {
+		trendStore = stats.DisabledTrendStore()
+	}
+	now := time.Now()
+	run := stats.NewTrendRunContext(rep, stats.TrendWorkloadFromConfig(appCfg), newTrendRunID(now, runID), now)
+	stats.ApplyTrends(&rep, run, trendStore.Snapshot(), trendStore.Status(), now)
 
 	s.mu.Lock()
-	if !s.IsRunning && s.RunID == runID {
+	record := !s.IsRunning && s.RunID == runID
+	if record {
 		s.InsightsCache = &rep
-		updateTrendBase(&s.ShapeTrendBase, rep)
 	}
 	s.mu.Unlock()
-
-	json.NewEncoder(w).Encode(rep)
-}
-
-func applyTrends(rep *stats.InsightsReport, base map[string]float64) {
-	for i := range rep.SlowQueries {
-		cur := rep.SlowQueries[i]
-		prev, ok := base[cur.ShapeID]
-		if !ok {
-			continue
-		}
-		delta := cur.P95Ms - prev
-		dir := "flat"
-		if delta > 1 {
-			dir = "worse"
-		} else if delta < -1 {
-			dir = "improved"
-		}
-		rep.SlowQueries[i].Trend = &stats.ShapeTrend{
-			PreviousP95Ms: prev,
-			CurrentP95Ms:  cur.P95Ms,
-			DeltaP95Ms:    delta,
-			Direction:     dir,
+	if record && rep.Metadata.Status == "ready" {
+		if err := trendStore.Record(run, stats.CurrentTrendBaselines(rep, run)); err != nil {
+			log.Printf("Warning: trend baselines not saved: %v", err)
 		}
 	}
+	return &rep, "ready"
 }
 
-func updateTrendBase(base *map[string]float64, rep stats.InsightsReport) {
-	if *base == nil {
-		*base = make(map[string]float64)
+func newTrendRunID(now time.Time, runID int64) string {
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	return fmt.Sprintf("%s-%d-%s", now.UTC().Format("20060102T150405Z"), runID, hex.EncodeToString(b[:]))
+}
+
+func (s *WebServer) handleTrendBaselines(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	store := s.TrendStore
+	s.mu.Unlock()
+	if store == nil {
+		store = stats.DisabledTrendStore()
 	}
-	for _, s := range rep.SlowQueries {
-		(*base)[s.ShapeID] = s.P95Ms
-	}
-}
-
-type explainEvidence struct {
-	collscan bool
-	ixscan   bool
-	status   string
-	reason   string
-	diag     *stats.ExplainDiagnostics
-}
-
-type explainCommandSpec struct {
-	cmd           bson.D
-	verbosity     string
-	serverMaxTime int
-	clientTimeout time.Duration
-	commandType   string
-	stageSummary  string
-}
-
-type explainSignals struct {
-	planStages         []string
-	indexesUsed        []string
-	collectionScan     bool
-	indexScan          bool
-	fetch              bool
-	group              bool
-	sort               bool
-	limit              bool
-	blockingSort       bool
-	usedDisk           bool
-	docsExamined       int64
-	keysExamined       int64
-	nReturned          int64
-	collectionScans    int64
-	indexSeeks         int64
-	executionTimeMS    int64
-	spills             int64
-	winningPlanSummary string
-	shardSummary       string
-}
-
-func enrichInsightsWithExplain(status string, rep *stats.InsightsReport, events []stats.OperationEvent, cfg *config.AppConfig, topN int, maxTimeMs int, explainVerbosity string, explainSeverityMode string, workers int, retries int, backoffMs int) {
-	if status != "ready" || cfg == nil || topN <= 0 || len(rep.SlowQueries) == 0 {
+	switch r.Method {
+	case http.MethodGet:
+	case http.MethodDelete:
+		if err := store.Reset(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+	default:
+		w.Header().Set("Allow", "GET, DELETE")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if workers <= 0 {
-		workers = 1
-	}
-	if retries < 0 {
-		retries = 0
-	}
-	if backoffMs < 0 {
-		backoffMs = 0
-	}
-	rep.Metadata.ExplainWorkers = workers
-	rep.Metadata.ExplainRetries = retries
-	rep.Metadata.ExplainBackoffMS = backoffMs
-	if explainVerbosity == "queryPlanner" {
-		rep.Metadata.ExplainVerbosity = "queryPlanner"
-	} else {
-		rep.Metadata.ExplainVerbosity = "executionStats"
-	}
-
-	indexIssueShapes := make(map[string]struct{}, len(rep.PotentialIndexIssues))
-	for _, issue := range rep.PotentialIndexIssues {
-		indexIssueShapes[issue.ShapeID] = struct{}{}
-	}
-
-	results := make(map[string]explainEvidence, len(rep.SlowQueries))
-	candidates := make(map[string]stats.OperationEvent, topN)
-	for _, sq := range rep.SlowQueries {
-		if !supportsExplainOperation(sq.Operation) {
-			results[sq.ShapeID] = explainEvidence{
-				status: "not_supported",
-				reason: fmt.Sprintf("operation_%s_not_supported", sq.Operation),
-			}
-			continue
-		}
-		if !isExplainCandidatePriorityShape(sq, indexIssueShapes, rep.Metadata.SlowThresholdMs, explainSeverityMode) {
-			results[sq.ShapeID] = explainEvidence{
-				status: "explain_unavailable",
-				reason: "low_value_shape_filtered",
-			}
-			continue
-		}
-
-		if len(candidates) >= topN {
-			results[sq.ShapeID] = explainEvidence{
-				status: "explain_unavailable",
-				reason: fmt.Sprintf("not_selected_top_n_%d", topN),
-			}
-			continue
-		}
-
-		candidate, reason, ok := findExplainCandidate(events, sq)
-		if !ok {
-			results[sq.ShapeID] = explainEvidence{
-				status: "insufficient_metadata",
-				reason: reason,
-			}
-			continue
-		}
-
-		candidates[sq.ShapeID] = candidate
-		results[sq.ShapeID] = explainEvidence{
-			status: "explain_unavailable",
-			reason: "candidate_selected_explain_pending",
-		}
-	}
-
-	shapeIDs := make([]string, 0, len(candidates))
-	for shapeID := range candidates {
-		shapeIDs = append(shapeIDs, shapeID)
-	}
-	sort.Strings(shapeIDs)
-	applyExplainCandidatesConcurrently(results, candidates, shapeIDs, workers, cfg, maxTimeMs, explainVerbosity, retries, backoffMs)
-
-	appliedExplain := false
-	for _, ev := range results {
-		if ev.status == "explained" {
-			appliedExplain = true
-			break
-		}
-	}
-	if appliedExplain {
-		rep.Metadata.EvidenceLevel = "heuristic_plus_explain_samples"
-	}
-
-	applyExplainToSlowQueries(rep, results)
-
-	for i := range rep.PotentialIndexIssues {
-		issue := &rep.PotentialIndexIssues[i]
-		ev, ok := results[issue.ShapeID]
-		if !ok {
-			issue.ExplainStatus = "explain_unavailable"
-			issue.ExplainReason = "shape_not_in_top_slow_queries"
-			issue.EvidenceLevel = "heuristic_explain_unavailable"
-			issue.Confidence = "low"
-			issue.Message = "No representative explain sample was available for this shape. Keeping heuristic guidance."
-			continue
-		}
-		issue.ExplainStatus = ev.status
-		issue.ExplainReason = ev.reason
-		if ev.diag != nil && ev.status == "explained" {
-			issue.Recommendation = ev.diag.Recommendation
-			issue.Confidence = ev.diag.RecommendationConfidence
-			issue.Message = ev.diag.Interpretation
-		}
-		if ev.collscan {
-			issue.EvidenceLevel = "explain_collscan_observed"
-			issue.Confidence = "high"
-			issue.Message = "Representative explain sample showed COLLSCAN. This is strong evidence for index investigation."
-			issue.Recommendation = "Create and test a candidate index for these filter fields, then compare explain and latency before rollout."
-			continue
-		}
-		if ev.ixscan {
-			issue.EvidenceLevel = "explain_index_scan_observed"
-			issue.Confidence = "medium"
-			issue.Message = "Representative explain sample used an index scan. Index presence was observed, but query/index fit may still be suboptimal."
-			issue.Recommendation = "Review index key order/selectivity and validate with additional representative explain samples."
-			continue
-		}
-		switch ev.status {
-		case "explained":
-			issue.EvidenceLevel = "explain_structured_plan_signal"
-			if ev.diag == nil || strings.TrimSpace(ev.diag.Interpretation) == "" {
-				issue.Confidence = "low"
-				issue.Message = "Explain succeeded, but parsed plan evidence was limited. Keep guidance cautious and validate with additional explain samples."
-			}
-		case "not_supported":
-			issue.EvidenceLevel = "heuristic_not_supported"
-			issue.Confidence = "low"
-			issue.Message = "This operation type is not currently explain-supported in post-run analysis. Keeping heuristic guidance."
-		case "insufficient_metadata":
-			issue.EvidenceLevel = "heuristic_insufficient_metadata"
-			issue.Confidence = "low"
-			issue.Message = "Explain could not run because required sampled filter/pipeline metadata was unavailable."
-		case "timed_out":
-			issue.EvidenceLevel = "heuristic_explain_timed_out"
-			issue.Confidence = "low"
-			issue.Message = "Explain timed out for this representative shape. Guidance remains heuristic unless a higher explain budget succeeds."
-		case "execution_failed":
-			issue.EvidenceLevel = "heuristic_explain_execution_failed"
-			issue.Confidence = "low"
-			issue.Message = "Explain execution failed for this representative shape; guidance remains heuristic."
-		default:
-			issue.EvidenceLevel = "heuristic_explain_unavailable"
-			issue.Confidence = "low"
-			issue.Message = "Explain sampling was enabled, but this shape was not selected for explain in this run. Keeping heuristic guidance."
-		}
-	}
-}
-
-func isExplainCandidatePriorityShape(sq stats.SlowQueryInsight, indexIssueShapes map[string]struct{}, slowThresholdMs float64, explainSeverityMode string) bool {
-	switch explainSeverityMode {
-	case "high_and_low":
-	case "medium_only":
-		switch sq.Severity {
-		case "critical", "high", "medium":
-		default:
-			return false
-		}
-	case "critical_only":
-		if sq.Severity != "critical" {
-			return false
-		}
-	default: // high_only
-		switch sq.Severity {
-		case "critical", "high":
-		default:
-			return false
-		}
-	}
-	if _, ok := indexIssueShapes[sq.ShapeID]; ok {
-		return true
-	}
-	if sq.P95Ms >= slowThresholdMs || sq.P99Ms >= slowThresholdMs {
-		return true
-	}
-	switch sq.Severity {
-	case "critical", "high":
-		return true
-	default:
-		return false
-	}
-}
-
-func applyExplainCandidatesConcurrently(
-	results map[string]explainEvidence,
-	candidates map[string]stats.OperationEvent,
-	shapeIDs []string,
-	workers int,
-	cfg *config.AppConfig,
-	maxTimeMs int,
-	explainVerbosity string,
-	retries int,
-	backoffMs int,
-) {
-	type job struct {
-		shapeID string
-		event   stats.OperationEvent
-	}
-	type out struct {
-		shapeID  string
-		evidence explainEvidence
-	}
-
-	jobs := make(chan job)
-	outs := make(chan out, len(shapeIDs))
-
-	var wg sync.WaitGroup
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			conns := make(map[string]*db.Connection)
-			defer func() {
-				for _, c := range conns {
-					disconnectFn(c, context.Background())
-				}
-			}()
-
-			for j := range jobs {
-				dbName := j.event.Database
-				if dbName == "" {
-					dbName = "admin"
-				}
-				conn, ok := conns[dbName]
-				if !ok {
-					ctxConn, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					newConn, err := connectFn(ctxConn, cfg, dbName)
-					cancel()
-					if err != nil {
-						outs <- out{
-							shapeID: j.shapeID,
-							evidence: explainEvidence{
-								status: "execution_failed",
-								reason: "connect_failed",
-							},
-						}
-						continue
-					}
-					conn = newConn
-					conns[dbName] = conn
-				}
-				evidence := runExplainForEventWithRetry(conn.Database, j.event, maxTimeMs, explainVerbosity, retries, backoffMs)
-				outs <- out{shapeID: j.shapeID, evidence: evidence}
-			}
-		}()
-	}
-
-	go func() {
-		for _, shapeID := range shapeIDs {
-			jobs <- job{shapeID: shapeID, event: candidates[shapeID]}
-		}
-		close(jobs)
-		wg.Wait()
-		close(outs)
-	}()
-
-	for o := range outs {
-		results[o.shapeID] = o.evidence
-	}
-}
-
-func runExplainForEventWithRetry(database *mongodrv.Database, ev stats.OperationEvent, baseMaxTimeMs int, explainVerbosity string, retries int, backoffMs int) explainEvidence {
-	return retryExplainEvidence(baseMaxTimeMs, retries, backoffMs, func(maxTimeMs int) explainEvidence {
-		return runExplainForEvent(database, ev, maxTimeMs, explainVerbosity)
-	})
-}
-
-func retryExplainEvidence(baseMaxTimeMs int, retries int, backoffMs int, run func(maxTimeMs int) explainEvidence) explainEvidence {
-	if baseMaxTimeMs <= 0 {
-		baseMaxTimeMs = 1000
-	}
-	if retries < 0 {
-		retries = 0
-	}
-	maxTime := baseMaxTimeMs
-	var last explainEvidence
-	for attempt := 0; attempt <= retries; attempt++ {
-		last = run(maxTime)
-		if last.status != "timed_out" {
-			return last
-		}
-		if attempt == retries {
-			return last
-		}
-		if backoffMs > 0 {
-			time.Sleep(time.Duration(backoffMs*(attempt+1)) * time.Millisecond)
-		}
-		if maxTime < 60000 {
-			maxTime *= 2
-			if maxTime > 60000 {
-				maxTime = 60000
-			}
-		}
-	}
-	return last
-}
-
-func runExplainForEvent(database *mongodrv.Database, ev stats.OperationEvent, maxTimeMs int, explainVerbosity string) explainEvidence {
-	spec, reason := buildExplainCommandSpec(ev, maxTimeMs, explainVerbosity)
-	if reason != "" {
-		if reason == "unsupported_operation" {
-			return explainEvidence{status: "not_supported", reason: reason}
-		}
-		return explainEvidence{status: "insufficient_metadata", reason: reason}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), spec.clientTimeout)
-	defer cancel()
-	start := time.Now()
-	baseDiag := &stats.ExplainDiagnostics{
-		ReplayDB:         nonEmptyOrFallback(ev.Database, database.Name()),
-		ReplayCollection: ev.Collection,
-		Verbosity:        spec.verbosity,
-		ServerMaxTimeMS:  spec.serverMaxTime,
-		ClientTimeoutMS:  int(spec.clientTimeout / time.Millisecond),
-		StageSummary:     spec.stageSummary,
-	}
-
-	var out bson.M
-	if err := database.RunCommand(ctx, spec.cmd, options.RunCmd()).Decode(&out); err != nil {
-		reason := classifyExplainCommandError(err)
-		baseDiag.ElapsedMS = int(time.Since(start) / time.Millisecond)
-		log.Printf("[Insights Explain] op=%s db=%s coll=%s shape=%s mode=%s server_max_ms=%d client_timeout_ms=%d stages=%s result=%s elapsed_ms=%d",
-			ev.Operation,
-			baseDiag.ReplayDB,
-			ev.Collection,
-			stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey),
-			spec.verbosity,
-			spec.serverMaxTime,
-			int(spec.clientTimeout/time.Millisecond),
-			spec.stageSummary,
-			reason,
-			int(time.Since(start)/time.Millisecond),
-		)
-		if reason == "max_time_exceeded" || reason == "client_deadline_exceeded" {
-			return explainEvidence{
-				status: "timed_out",
-				reason: reason,
-				diag:   baseDiag,
-			}
-		}
-		return explainEvidence{
-			status: "execution_failed",
-			reason: reason,
-			diag:   baseDiag,
-		}
-	}
-	reasonSignal := "no_scan_stage_detected"
-	signals := parseExplainSignals(out)
-	if signals.collectionScan {
-		reasonSignal = "collscan_observed"
-	} else if signals.indexScan {
-		reasonSignal = "ixscan_observed"
-	}
-	baseDiag.ElapsedMS = int(time.Since(start) / time.Millisecond)
-	applyExplainSignalsToDiagnostics(baseDiag, signals)
-	log.Printf("[Insights Explain] op=%s db=%s coll=%s shape=%s mode=%s server_max_ms=%d client_timeout_ms=%d stages=%s result=explained elapsed_ms=%d",
-		ev.Operation,
-		baseDiag.ReplayDB,
-		ev.Collection,
-		stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey),
-		spec.verbosity,
-		spec.serverMaxTime,
-		int(spec.clientTimeout/time.Millisecond),
-		spec.stageSummary,
-		int(time.Since(start)/time.Millisecond),
-	)
-	return explainEvidence{
-		collscan: signals.collectionScan,
-		ixscan:   signals.indexScan,
-		status:   "explained",
-		reason:   reasonSignal,
-		diag:     baseDiag,
-	}
-}
-
-func buildExplainCommandSpec(ev stats.OperationEvent, maxTimeMs int, explainVerbosity string) (explainCommandSpec, string) {
-	if maxTimeMs <= 0 {
-		maxTimeMs = 1000
-	}
-	if explainVerbosity != "queryPlanner" {
-		explainVerbosity = "executionStats"
-	}
-	spec := explainCommandSpec{
-		verbosity:     explainVerbosity,
-		serverMaxTime: maxTimeMs,
-		clientTimeout: time.Duration(maxTimeMs+2000) * time.Millisecond,
-		commandType:   ev.Operation,
-	}
-	if spec.clientTimeout < 3*time.Second {
-		spec.clientTimeout = 3 * time.Second
-	}
-
-	switch ev.Operation {
-	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
-		if len(ev.FilterSample) == 0 {
-			return explainCommandSpec{}, "missing_filter_sample"
-		}
-		inner := bson.D{
-			{Key: "find", Value: ev.Collection},
-			{Key: "filter", Value: ev.FilterSample},
-			{Key: "limit", Value: 1},
-			{Key: "maxTimeMS", Value: maxTimeMs},
-		}
-		spec.cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: spec.verbosity}}
-		spec.stageSummary = summarizeFilterForLog(ev.FilterSample)
-		return spec, ""
-	case "aggregate":
-		if len(ev.PipelineSample) == 0 {
-			return explainCommandSpec{}, "missing_pipeline_sample"
-		}
-		inner := bson.D{
-			{Key: "aggregate", Value: ev.Collection},
-			{Key: "pipeline", Value: ev.PipelineSample},
-			{Key: "cursor", Value: bson.M{}},
-			{Key: "allowDiskUse", Value: true},
-			{Key: "maxTimeMS", Value: maxTimeMs},
-		}
-		spec.cmd = bson.D{{Key: "explain", Value: inner}, {Key: "verbosity", Value: spec.verbosity}}
-		spec.stageSummary = summarizePipelineForLog(ev.PipelineSample)
-		return spec, ""
-	default:
-		return explainCommandSpec{}, "unsupported_operation"
-	}
-}
-
-func classifyExplainCommandError(err error) string {
-	if err == nil {
-		return "run_command_failed"
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return "client_deadline_exceeded"
-	}
-	if errors.Is(err, context.Canceled) {
-		return "client_context_canceled"
-	}
-	msg := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(msg, "not authorized"):
-		return "not_authorized"
-	case strings.Contains(msg, "ns does not exist"), strings.Contains(msg, "namespace does not exist"):
-		return "namespace_not_found"
-	case strings.Contains(msg, "command not found"), strings.Contains(msg, "commandnotfound"):
-		return "command_not_found"
-	case strings.Contains(msg, "max time ms expired"), strings.Contains(msg, "maxtimems"):
-		return "max_time_exceeded"
-	default:
-		return "run_command_failed"
-	}
-}
-
-func supportsExplainOperation(op string) bool {
-	switch op {
-	case "find", "aggregate", "updateOne", "updateMany", "deleteOne", "deleteMany":
-		return true
-	default:
-		return false
-	}
-}
-
-func findExplainCandidate(events []stats.OperationEvent, sq stats.SlowQueryInsight) (stats.OperationEvent, string, bool) {
-	shapeSeen := false
-	var bestSuccess *stats.OperationEvent
-	var bestAny *stats.OperationEvent
-	for _, ev := range events {
-		if stats.StableShapeID(ev.Operation, ev.Collection, ev.ShapeKey) != sq.ShapeID {
-			continue
-		}
-		shapeSeen = true
-		hasMetadata := false
-		switch sq.Operation {
-		case "aggregate":
-			hasMetadata = len(ev.PipelineSample) > 0
-		case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
-			hasMetadata = len(ev.FilterSample) > 0
-		}
-		if !hasMetadata {
-			continue
-		}
-
-		candidate := ev
-		if bestAny == nil || candidate.DurationMs < bestAny.DurationMs {
-			bestAny = &candidate
-		}
-		if candidate.Success && (bestSuccess == nil || candidate.DurationMs < bestSuccess.DurationMs) {
-			bestSuccess = &candidate
-		}
-	}
-	if bestSuccess != nil {
-		return *bestSuccess, "", true
-	}
-	if bestAny != nil {
-		return *bestAny, "", true
-	}
-	if !shapeSeen {
-		return stats.OperationEvent{}, "shape_event_not_retained", false
-	}
-	if sq.Operation == "aggregate" {
-		return stats.OperationEvent{}, "missing_pipeline_sample", false
-	}
-	return stats.OperationEvent{}, "missing_filter_sample", false
-}
-
-func summarizePipelineForLog(pipeline []interface{}) string {
-	if len(pipeline) == 0 {
-		return "[]"
-	}
-	stages := make([]string, 0, len(pipeline))
-	for _, raw := range pipeline {
-		stage, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		keys := make([]string, 0, len(stage))
-		for k := range stage {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		stages = append(stages, strings.Join(keys, "+"))
-	}
-	if len(stages) == 0 {
-		return "unknown_stages"
-	}
-	return strings.Join(stages, " -> ")
-}
-
-func summarizeFilterForLog(filter map[string]interface{}) string {
-	if len(filter) == 0 {
-		return "{}"
-	}
-	keys := make([]string, 0, len(filter))
-	for k := range filter {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return "{" + strings.Join(keys, ",") + "}"
-}
-
-func parseExplainSignals(out bson.M) explainSignals {
-	s := explainSignals{}
-	stageSeen := make(map[string]struct{})
-	indexSeen := make(map[string]struct{})
-
-	addStage := func(stage string) {
-		stage = strings.ToUpper(strings.TrimSpace(stage))
-		if stage == "" {
-			return
-		}
-		if _, ok := stageSeen[stage]; ok {
-			return
-		}
-		stageSeen[stage] = struct{}{}
-		s.planStages = append(s.planStages, stage)
-	}
-	addIndex := func(idx string) {
-		idx = strings.TrimSpace(idx)
-		if idx == "" {
-			return
-		}
-		if _, ok := indexSeen[idx]; ok {
-			return
-		}
-		indexSeen[idx] = struct{}{}
-		s.indexesUsed = append(s.indexesUsed, idx)
-	}
-	updateMax := func(dst *int64, v int64) {
-		if v > *dst {
-			*dst = v
-		}
-	}
-	processKey := func(k string, val interface{}) {
-		if strings.HasPrefix(k, "$") && len(k) > 1 {
-			addStage(strings.TrimPrefix(k, "$"))
-		}
-		kl := strings.ToLower(k)
-		switch kl {
-		case "stage", "stagename", "nodetype":
-			if sv, ok := val.(string); ok {
-				addStage(sv)
-			}
-		case "indexname":
-			if sv, ok := val.(string); ok {
-				addIndex(sv)
-			}
-		case "indexesused":
-			for _, iv := range toStringSlice(val) {
-				addIndex(iv)
-			}
-		case "totaldocsexamined":
-			updateMax(&s.docsExamined, toInt64(val))
-		case "totalkeysexamined":
-			updateMax(&s.keysExamined, toInt64(val))
-		case "nreturned":
-			updateMax(&s.nReturned, toInt64(val))
-		case "collectionscans":
-			updateMax(&s.collectionScans, toInt64(val))
-		case "seeks", "indexseeks", "totalseeks":
-			updateMax(&s.indexSeeks, toInt64(val))
-		case "executiontimemillis", "executiontimemillisestimate":
-			updateMax(&s.executionTimeMS, toInt64(val))
-		case "useddisk":
-			if bv, ok := val.(bool); ok && bv {
-				s.usedDisk = true
-			}
-		case "spills":
-			sp := toInt64(val)
-			if sp > 0 {
-				updateMax(&s.spills, sp)
-				s.usedDisk = true
-			}
-		}
-	}
-
-	var walk func(v interface{}, path string)
-	walk = func(v interface{}, path string) {
-		switch t := v.(type) {
-		case bson.M:
-			keys := make([]string, 0, len(t))
-			for k := range t {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				val := t[k]
-				processKey(k, val)
-				walk(val, path+"."+k)
-			}
-		case map[string]interface{}:
-			keys := make([]string, 0, len(t))
-			for k := range t {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				val := t[k]
-				processKey(k, val)
-				walk(val, path+"."+k)
-			}
-		case bson.D:
-			for _, elem := range t {
-				processKey(elem.Key, elem.Value)
-				walk(elem.Value, path+"."+elem.Key)
-			}
-		case []bson.E:
-			for _, elem := range t {
-				processKey(elem.Key, elem.Value)
-				walk(elem.Value, path+"."+elem.Key)
-			}
-		case []interface{}:
-			for i := range t {
-				walk(t[i], fmt.Sprintf("%s[%d]", path, i))
-			}
-		case bson.A:
-			for i := range t {
-				walk(t[i], fmt.Sprintf("%s[%d]", path, i))
-			}
-		}
-	}
-	walk(out, "root")
-
-	s.collectionScan = hasPlanStage(s.planStages, "COLLSCAN") || s.collectionScans > 0
-	s.indexScan = hasAnyPlanStage(s.planStages, "IXSCAN", "IXSEEK", "DISTINCT_SCAN", "COUNT_SCAN") || len(s.indexesUsed) > 0 || s.indexSeeks > 0
-	s.fetch = hasPlanStage(s.planStages, "FETCH")
-	s.group = hasPlanStage(s.planStages, "GROUP")
-	s.sort = hasPlanStage(s.planStages, "SORT")
-	s.limit = hasPlanStage(s.planStages, "LIMIT")
-	s.blockingSort = s.sort && !s.indexScan
-
-	s.winningPlanSummary = strings.Join(s.planStages, " -> ")
-	if s.winningPlanSummary == "" {
-		s.winningPlanSummary = "stage_chain_unavailable"
-	}
-	s.shardSummary = buildShardSummary(out)
-	return s
-}
-
-func applyExplainSignalsToDiagnostics(diag *stats.ExplainDiagnostics, sig explainSignals) {
-	if diag == nil {
-		return
-	}
-	diag.WinningPlanSummary = sig.winningPlanSummary
-	diag.PlanStages = sig.planStages
-	diag.IndexesUsed = sig.indexesUsed
-	diag.CollectionScanDetected = sig.collectionScan
-	diag.IndexScanDetected = sig.indexScan
-	diag.FetchDetected = sig.fetch
-	diag.GroupDetected = sig.group
-	diag.SortDetected = sig.sort
-	diag.LimitDetected = sig.limit
-	diag.BlockingSortDetected = sig.blockingSort
-	diag.UsedDisk = sig.usedDisk
-	diag.DocsExamined = sig.docsExamined
-	diag.KeysExamined = sig.keysExamined
-	diag.NReturned = sig.nReturned
-	diag.CollectionScans = sig.collectionScans
-	diag.IndexSeeks = sig.indexSeeks
-	diag.ExecutionTimeMillis = sig.executionTimeMS
-	diag.Spills = sig.spills
-	if sig.nReturned > 0 {
-		diag.ExaminedToReturnedRatio = float64(sig.docsExamined) / float64(sig.nReturned)
-		diag.KeysToReturnedRatio = float64(sig.keysExamined) / float64(sig.nReturned)
-	}
-	diag.ShardDetailsSummary = sig.shardSummary
-	diag.Interpretation, diag.Recommendation, diag.RecommendationConfidence, diag.EvidenceSummary = buildExplainRecommendation(sig)
-}
-
-func buildExplainRecommendation(sig explainSignals) (interpretation, recommendation, confidence, evidence string) {
-	evidenceParts := make([]string, 0, 8)
-	if sig.indexScan {
-		evidenceParts = append(evidenceParts, "IXSCAN detected")
-	} else {
-		evidenceParts = append(evidenceParts, "IXSCAN not detected")
-	}
-	if sig.collectionScan {
-		evidenceParts = append(evidenceParts, "COLLSCAN detected")
-	} else {
-		evidenceParts = append(evidenceParts, "COLLSCAN not detected")
-	}
-	if sig.docsExamined > 0 {
-		evidenceParts = append(evidenceParts, fmt.Sprintf("docsExamined=%d", sig.docsExamined))
-	}
-	if sig.keysExamined > 0 {
-		evidenceParts = append(evidenceParts, fmt.Sprintf("keysExamined=%d", sig.keysExamined))
-	}
-	if sig.nReturned > 0 {
-		evidenceParts = append(evidenceParts, fmt.Sprintf("nReturned=%d", sig.nReturned))
-	}
-	if len(sig.indexesUsed) > 0 {
-		evidenceParts = append(evidenceParts, "indexesUsed="+strings.Join(sig.indexesUsed, ","))
-	}
-	evidence = strings.Join(evidenceParts, "; ")
-
-	highFanout := sig.nReturned > 0 && sig.docsExamined > sig.nReturned*20
-	switch {
-	case sig.collectionScan:
-		interpretation = "Explain indicates a collection scan path. Query appears under-indexed for its filter shape."
-		recommendation = "Add or validate a selective index on the match/filter fields, then compare docsExamined and latency before rollout."
-		confidence = "high"
-	case sig.indexScan && highFanout:
-		interpretation = "An index is used, but examined-document volume is still high relative to rows returned."
-		recommendation = "Refine index selectivity (for example, a more targeted compound index) and review predicate/cardinality to reduce scanned documents."
-		confidence = "high"
-	case sig.indexScan && (sig.group || sig.sort):
-		interpretation = "Query is index-backed, but aggregation/sort stages are likely contributing most of the runtime cost."
-		recommendation = "Focus on reducing post-match workload: tighten early match/project stages, review group cardinality, and evaluate sort pressure."
-		confidence = "medium"
-	case sig.indexScan:
-		interpretation = "Index-backed plan detected with no collection scan signal."
-		recommendation = "Treat this as index-supported; investigate residual latency via cardinality, document size, and pipeline/operator cost."
-		confidence = "medium"
-	default:
-		interpretation = "Explain completed, but a clear index/scan signal was not detected in parsed plan fields."
-		recommendation = "Capture additional explain samples and verify winning plan details directly before making index changes."
-		confidence = "low"
-	}
-
-	if sig.usedDisk {
-		recommendation += " Explain reports disk/spill usage; review memory-heavy sort/group stages."
-	}
-	return interpretation, recommendation, confidence, evidence
-}
-
-func hasPlanStage(stages []string, target string) bool {
-	target = strings.ToUpper(strings.TrimSpace(target))
-	for _, s := range stages {
-		if strings.EqualFold(s, target) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasAnyPlanStage(stages []string, targets ...string) bool {
-	for _, target := range targets {
-		if hasPlanStage(stages, target) {
-			return true
-		}
-	}
-	return false
-}
-
-func toInt64(v interface{}) int64 {
-	switch t := v.(type) {
-	case int:
-		return int64(t)
-	case int32:
-		return int64(t)
-	case int64:
-		return t
-	case float32:
-		return int64(t)
-	case float64:
-		return int64(t)
-	case json.Number:
-		i, _ := t.Int64()
-		return i
-	default:
-		return 0
-	}
-}
-
-func toStringSlice(v interface{}) []string {
-	switch t := v.(type) {
-	case []string:
-		return t
-	case []interface{}:
-		out := make([]string, 0, len(t))
-		for _, item := range t {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	case bson.A:
-		out := make([]string, 0, len(t))
-		for _, item := range t {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-func buildShardSummary(out bson.M) string {
-	shardsRaw, ok := out["shards"]
-	if !ok {
-		return ""
-	}
-	var shardsMap map[string]interface{}
-	switch t := shardsRaw.(type) {
-	case map[string]interface{}:
-		shardsMap = t
-	case bson.M:
-		shardsMap = map[string]interface{}(t)
-	default:
-		return ""
-	}
-	if len(shardsMap) == 0 {
-		return ""
-	}
-	names := make([]string, 0, len(shardsMap))
-	for name := range shardsMap {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	parts := make([]string, 0, len(names))
-	for _, name := range names {
-		sig := explainSignals{}
-		switch t := shardsMap[name].(type) {
-		case map[string]interface{}:
-			b, _ := json.Marshal(t)
-			var m bson.M
-			_ = json.Unmarshal(b, &m)
-			sig = parseExplainSignals(m)
-		case bson.M:
-			sig = parseExplainSignals(t)
-		default:
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s docs=%d keys=%d returned=%d", name, sig.docsExamined, sig.keysExamined, sig.nReturned))
-	}
-	return strings.Join(parts, "; ")
-}
-
-func nonEmptyOrFallback(v, fb string) string {
-	if strings.TrimSpace(v) == "" {
-		return fb
-	}
-	return v
-}
-
-func applyExplainToSlowQueries(rep *stats.InsightsReport, results map[string]explainEvidence) {
-	for i := range rep.SlowQueries {
-		s := &rep.SlowQueries[i]
-		if ev, ok := results[s.ShapeID]; ok {
-			s.ExplainStatus = ev.status
-			s.ExplainReason = ev.reason
-			s.ExplainDiag = ev.diag
-			continue
-		}
-		if supportsExplainOperation(s.Operation) {
-			s.ExplainStatus = "explain_unavailable"
-			s.ExplainReason = "shape_not_in_explain_results"
-		} else {
-			s.ExplainStatus = "not_supported"
-			s.ExplainReason = fmt.Sprintf("operation_%s_not_supported", s.Operation)
-		}
-	}
-
-	byShape := make(map[string]explainEvidence, len(results))
-	for k, v := range results {
-		byShape[k] = v
-	}
-	for i := range rep.QueryShapes {
-		s := &rep.QueryShapes[i]
-		if ev, ok := byShape[s.ShapeID]; ok {
-			s.ExplainStatus = ev.status
-			s.ExplainReason = ev.reason
-			s.ExplainDiag = ev.diag
-			continue
-		}
-		if supportsExplainOperation(s.Operation) {
-			s.ExplainStatus = "explain_unavailable"
-			s.ExplainReason = "shape_not_in_explain_results"
-		} else {
-			s.ExplainStatus = "not_supported"
-			s.ExplainReason = fmt.Sprintf("operation_%s_not_supported", s.Operation)
-		}
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"store": store.Status(), "criteria": stats.DefaultTrendCriteria()})
 }
 
 func containsStage(v interface{}, stage string) bool {

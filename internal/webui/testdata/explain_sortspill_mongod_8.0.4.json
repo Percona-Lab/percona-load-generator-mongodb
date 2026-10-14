@@ -1,0 +1,1278 @@
+{
+ "forceClassicEngine_agg_facet_sort_mem": {
+  "explainVersion": "1",
+  "ok": 1,
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  },
+  "stages": [
+   {
+    "$cursor": {
+     "executionStats": {
+      "executionStages": {
+       "advanced": 1000,
+       "direction": "forward",
+       "docsExamined": 5000,
+       "executionTimeMillisEstimate": 0,
+       "filter": {
+        "g": {
+         "$lt": 10
+        }
+       },
+       "isCached": false,
+       "isEOF": 1,
+       "nReturned": 1000,
+       "needTime": 4000,
+       "needYield": 0,
+       "restoreState": 6,
+       "saveState": 6,
+       "stage": "COLLSCAN",
+       "works": 5001
+      },
+      "executionSuccess": true,
+      "executionTimeMillis": 1,
+      "nReturned": 1000,
+      "totalDocsExamined": 5000,
+      "totalKeysExamined": 0
+     },
+     "queryPlanner": {
+      "indexFilterSet": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxIndexedOrSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "namespace": "plgm_fixture_sortspill.c",
+      "optimizationTimeMillis": 0,
+      "prunedSimilarIndexes": false,
+      "rejectedPlans": [],
+      "winningPlan": {
+       "direction": "forward",
+       "filter": {
+        "g": {
+         "$lt": 10
+        }
+       },
+       "isCached": false,
+       "stage": "COLLSCAN"
+      }
+     }
+    },
+    "executionTimeMillisEstimate": 1,
+    "nReturned": 1000
+   },
+   {
+    "$facet": {
+     "byG": [
+      {
+       "$internalFacetTeeConsumer": {},
+       "executionTimeMillisEstimate": 0,
+       "nReturned": 1000
+      },
+      {
+       "$group": {
+        "_id": "$g",
+        "n": {
+         "$sum": {
+          "$const": 1
+         }
+        }
+       },
+       "executionTimeMillisEstimate": 0,
+       "maxAccumulatorMemoryUsageBytes": {
+        "n": 1360
+       },
+       "nReturned": 10,
+       "numBytesSpilledEstimate": 0,
+       "spilledDataStorageSize": 0,
+       "spilledRecords": 0,
+       "spills": 0,
+       "totalOutputDataSizeBytes": 2450,
+       "usedDisk": false
+      }
+     ],
+     "top": [
+      {
+       "$internalFacetTeeConsumer": {},
+       "executionTimeMillisEstimate": 1,
+       "nReturned": 1000
+      },
+      {
+       "$sort": {
+        "limit": 3,
+        "sortKey": {
+         "k": 1
+        }
+       },
+       "executionTimeMillisEstimate": 1,
+       "nReturned": 3,
+       "spilledDataStorageSize": 0,
+       "spills": 0,
+       "totalDataSizeSortedBytesEstimate": 1074,
+       "usedDisk": false
+      }
+     ]
+    },
+    "executionTimeMillisEstimate": 1,
+    "nReturned": 1
+   }
+  ]
+ },
+ "forceClassicEngine_agg_group_sort_mem": {
+  "explainVersion": "1",
+  "ok": 1,
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  },
+  "stages": [
+   {
+    "$cursor": {
+     "executionStats": {
+      "executionStages": {
+       "advanced": 5000,
+       "executionTimeMillisEstimate": 0,
+       "inputStage": {
+        "advanced": 5000,
+        "direction": "forward",
+        "docsExamined": 5000,
+        "executionTimeMillisEstimate": 0,
+        "isEOF": 1,
+        "nReturned": 5000,
+        "needTime": 0,
+        "needYield": 0,
+        "restoreState": 8,
+        "saveState": 8,
+        "stage": "COLLSCAN",
+        "works": 5001
+       },
+       "isCached": false,
+       "isEOF": 1,
+       "nReturned": 5000,
+       "needTime": 0,
+       "needYield": 0,
+       "restoreState": 8,
+       "saveState": 8,
+       "stage": "PROJECTION_SIMPLE",
+       "transformBy": {
+        "_id": 0,
+        "k": 1,
+        "pad": 1
+       },
+       "works": 5001
+      },
+      "executionSuccess": true,
+      "executionTimeMillis": 7,
+      "nReturned": 5000,
+      "totalDocsExamined": 5000,
+      "totalKeysExamined": 0
+     },
+     "queryPlanner": {
+      "indexFilterSet": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxIndexedOrSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "namespace": "plgm_fixture_sortspill.c",
+      "optimizationTimeMillis": 0,
+      "prunedSimilarIndexes": false,
+      "rejectedPlans": [],
+      "winningPlan": {
+       "inputStage": {
+        "direction": "forward",
+        "stage": "COLLSCAN"
+       },
+       "isCached": false,
+       "stage": "PROJECTION_SIMPLE",
+       "transformBy": {
+        "_id": 0,
+        "k": 1,
+        "pad": 1
+       }
+      }
+     }
+    },
+    "executionTimeMillisEstimate": 2,
+    "nReturned": 5000
+   },
+   {
+    "$group": {
+     "_id": "$k",
+     "n": {
+      "$sum": {
+       "$const": 1
+      }
+     },
+     "p": {
+      "$first": "$pad"
+     }
+    },
+    "executionTimeMillisEstimate": 4,
+    "maxAccumulatorMemoryUsageBytes": {
+     "n": 680000,
+     "p": 1480000
+    },
+    "nReturned": 5000,
+    "numBytesSpilledEstimate": 0,
+    "spilledDataStorageSize": 0,
+    "spilledRecords": 0,
+    "spills": 0,
+    "totalOutputDataSizeBytes": 2505000,
+    "usedDisk": false
+   },
+   {
+    "$sort": {
+     "sortKey": {
+      "_id": 1,
+      "n": -1
+     }
+    },
+    "executionTimeMillisEstimate": 4,
+    "nReturned": 5000,
+    "spilledDataStorageSize": 0,
+    "spills": 0,
+    "totalDataSizeSortedBytesEstimate": 2905000,
+    "usedDisk": false
+   }
+  ]
+ },
+ "forceClassicEngine_agg_group_sort_spill": {
+  "explainVersion": "1",
+  "ok": 1,
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  },
+  "stages": [
+   {
+    "$cursor": {
+     "executionStats": {
+      "executionStages": {
+       "advanced": 5000,
+       "executionTimeMillisEstimate": 0,
+       "inputStage": {
+        "advanced": 5000,
+        "direction": "forward",
+        "docsExamined": 5000,
+        "executionTimeMillisEstimate": 0,
+        "isEOF": 1,
+        "nReturned": 5000,
+        "needTime": 0,
+        "needYield": 0,
+        "restoreState": 8,
+        "saveState": 8,
+        "stage": "COLLSCAN",
+        "works": 5001
+       },
+       "isCached": false,
+       "isEOF": 1,
+       "nReturned": 5000,
+       "needTime": 0,
+       "needYield": 0,
+       "restoreState": 8,
+       "saveState": 8,
+       "stage": "PROJECTION_SIMPLE",
+       "transformBy": {
+        "_id": 0,
+        "k": 1,
+        "pad": 1
+       },
+       "works": 5001
+      },
+      "executionSuccess": true,
+      "executionTimeMillis": 35,
+      "nReturned": 5000,
+      "totalDocsExamined": 5000,
+      "totalKeysExamined": 0
+     },
+     "queryPlanner": {
+      "indexFilterSet": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxIndexedOrSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "namespace": "plgm_fixture_sortspill.c",
+      "optimizationTimeMillis": 0,
+      "prunedSimilarIndexes": false,
+      "rejectedPlans": [],
+      "winningPlan": {
+       "inputStage": {
+        "direction": "forward",
+        "stage": "COLLSCAN"
+       },
+       "isCached": false,
+       "stage": "PROJECTION_SIMPLE",
+       "transformBy": {
+        "_id": 0,
+        "k": 1,
+        "pad": 1
+       }
+      }
+     }
+    },
+    "executionTimeMillisEstimate": 5,
+    "nReturned": 5000
+   },
+   {
+    "$group": {
+     "_id": "$k",
+     "n": {
+      "$sum": {
+       "$const": 1
+      }
+     },
+     "p": {
+      "$first": "$pad"
+     }
+    },
+    "executionTimeMillisEstimate": 8,
+    "maxAccumulatorMemoryUsageBytes": {
+     "n": 19992,
+     "p": 43512
+    },
+    "nReturned": 5000,
+    "numBytesSpilledEstimate": 2240000,
+    "spilledDataStorageSize": 72223,
+    "spilledRecords": 5000,
+    "spills": 35,
+    "totalOutputDataSizeBytes": 2505000,
+    "usedDisk": true
+   },
+   {
+    "$sort": {
+     "sortKey": {
+      "_id": 1,
+      "n": -1
+     }
+    },
+    "executionTimeMillisEstimate": 33,
+    "nReturned": 5000,
+    "spilledDataStorageSize": 575370,
+    "spills": 100,
+    "totalDataSizeSortedBytesEstimate": 2905000,
+    "usedDisk": true
+   }
+  ]
+ },
+ "forceClassicEngine_find_sort_mem": {
+  "executionStats": {
+   "executionStages": {
+    "advanced": 2500,
+    "executionTimeMillisEstimate": 0,
+    "inputStage": {
+     "advanced": 2500,
+     "direction": "forward",
+     "docsExamined": 5000,
+     "executionTimeMillisEstimate": 0,
+     "filter": {
+      "g": {
+       "$lt": 25
+      }
+     },
+     "isEOF": 1,
+     "nReturned": 2500,
+     "needTime": 2500,
+     "needYield": 0,
+     "restoreState": 0,
+     "saveState": 0,
+     "stage": "COLLSCAN",
+     "works": 5001
+    },
+    "isCached": false,
+    "isEOF": 1,
+    "memLimit": 104857600,
+    "nReturned": 2500,
+    "needTime": 5001,
+    "needYield": 0,
+    "restoreState": 0,
+    "saveState": 0,
+    "sortPattern": {
+     "k": 1
+    },
+    "spilledDataStorageSize": 0,
+    "spills": 0,
+    "stage": "SORT",
+    "totalDataSizeSorted": 675000,
+    "type": "simple",
+    "usedDisk": false,
+    "works": 7502
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 1,
+   "nReturned": 2500,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "1",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "inputStage": {
+     "direction": "forward",
+     "filter": {
+      "g": {
+       "$lt": 25
+      }
+     },
+     "stage": "COLLSCAN"
+    },
+    "isCached": false,
+    "memLimit": 104857600,
+    "sortPattern": {
+     "k": 1
+    },
+    "stage": "SORT",
+    "type": "simple"
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ },
+ "forceClassicEngine_find_sort_spill": {
+  "executionStats": {
+   "executionStages": {
+    "advanced": 2500,
+    "executionTimeMillisEstimate": 6,
+    "inputStage": {
+     "advanced": 2500,
+     "direction": "forward",
+     "docsExamined": 5000,
+     "executionTimeMillisEstimate": 0,
+     "filter": {
+      "g": {
+       "$lt": 25
+      }
+     },
+     "isEOF": 1,
+     "nReturned": 2500,
+     "needTime": 2500,
+     "needYield": 0,
+     "restoreState": 0,
+     "saveState": 0,
+     "stage": "COLLSCAN",
+     "works": 5001
+    },
+    "isCached": false,
+    "isEOF": 1,
+    "memLimit": 65536,
+    "nReturned": 2500,
+    "needTime": 5001,
+    "needYield": 0,
+    "restoreState": 0,
+    "saveState": 0,
+    "sortPattern": {
+     "k": 1
+    },
+    "spilledDataStorageSize": 241585,
+    "spills": 23,
+    "stage": "SORT",
+    "totalDataSizeSorted": 675000,
+    "type": "simple",
+    "usedDisk": true,
+    "works": 7502
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 8,
+   "nReturned": 2500,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "1",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "inputStage": {
+     "direction": "forward",
+     "filter": {
+      "g": {
+       "$lt": 25
+      }
+     },
+     "stage": "COLLSCAN"
+    },
+    "isCached": false,
+    "memLimit": 65536,
+    "sortPattern": {
+     "k": 1
+    },
+    "stage": "SORT",
+    "type": "simple"
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ },
+ "trySbeEngine_agg_facet_sort_mem": {
+  "explainVersion": "2",
+  "ok": 1,
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  },
+  "stages": [
+   {
+    "$cursor": {
+     "executionStats": {
+      "executionStages": {
+       "closes": 1,
+       "executionTimeMillisEstimate": 0,
+       "filter": "traverseF(s1, lambda(l2.0) { ((move(l2.0) < s4) ?: false) }, false) ",
+       "inputStage": {
+        "closes": 1,
+        "executionTimeMillisEstimate": 0,
+        "isEOF": 1,
+        "nReturned": 5000,
+        "numReads": 5000,
+        "opens": 1,
+        "planNodeId": 1,
+        "recordIdSlot": 3,
+        "recordSlot": 2,
+        "restoreState": 6,
+        "saveState": 6,
+        "scanFieldNames": [
+         "g"
+        ],
+        "scanFieldSlots": [
+         1
+        ],
+        "stage": "scan"
+       },
+       "isEOF": 1,
+       "nReturned": 1000,
+       "numTested": 5000,
+       "opens": 1,
+       "planNodeId": 1,
+       "restoreState": 6,
+       "saveState": 6,
+       "stage": "filter"
+      },
+      "executionSuccess": true,
+      "executionTimeMillis": 0,
+      "nReturned": 1000,
+      "totalDocsExamined": 5000,
+      "totalKeysExamined": 0
+     },
+     "queryPlanner": {
+      "indexFilterSet": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxIndexedOrSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "namespace": "plgm_fixture_sortspill.c",
+      "optimizationTimeMillis": 0,
+      "prunedSimilarIndexes": false,
+      "rejectedPlans": [],
+      "winningPlan": {
+       "isCached": false,
+       "queryPlan": {
+        "direction": "forward",
+        "filter": {
+         "g": {
+          "$lt": 10
+         }
+        },
+        "planNodeId": 1,
+        "stage": "COLLSCAN"
+       }
+      }
+     }
+    },
+    "executionTimeMillisEstimate": 1,
+    "nReturned": 1000
+   },
+   {
+    "$facet": {
+     "byG": [
+      {
+       "$internalFacetTeeConsumer": {},
+       "executionTimeMillisEstimate": 0,
+       "nReturned": 1000
+      },
+      {
+       "$group": {
+        "_id": "$g",
+        "n": {
+         "$sum": {
+          "$const": 1
+         }
+        }
+       },
+       "executionTimeMillisEstimate": 0,
+       "maxAccumulatorMemoryUsageBytes": {
+        "n": 1360
+       },
+       "nReturned": 10,
+       "numBytesSpilledEstimate": 0,
+       "spilledDataStorageSize": 0,
+       "spilledRecords": 0,
+       "spills": 0,
+       "totalOutputDataSizeBytes": 2450,
+       "usedDisk": false
+      }
+     ],
+     "top": [
+      {
+       "$internalFacetTeeConsumer": {},
+       "executionTimeMillisEstimate": 1,
+       "nReturned": 1000
+      },
+      {
+       "$sort": {
+        "limit": 3,
+        "sortKey": {
+         "k": 1
+        }
+       },
+       "executionTimeMillisEstimate": 1,
+       "nReturned": 3,
+       "spilledDataStorageSize": 0,
+       "spills": 0,
+       "totalDataSizeSortedBytesEstimate": 1074,
+       "usedDisk": false
+      }
+     ]
+    },
+    "executionTimeMillisEstimate": 1,
+    "nReturned": 1
+   }
+  ]
+ },
+ "trySbeEngine_agg_group_sort_mem": {
+  "executionStats": {
+   "executionStages": {
+    "closes": 1,
+    "executionTimeMillisEstimate": 2,
+    "inputStage": {
+     "closes": 1,
+     "executionTimeMillisEstimate": 2,
+     "inputStage": {
+      "closes": 1,
+      "executionTimeMillisEstimate": 0,
+      "inputStage": {
+       "closes": 1,
+       "executionTimeMillisEstimate": 0,
+       "inputStage": {
+        "closes": 1,
+        "executionTimeMillisEstimate": 0,
+        "expressions": {
+         "8": "count() ",
+         "9": "first((s2 ?: null)) ",
+         "initExprs": {
+          "8": null,
+          "9": null
+         }
+        },
+        "groupBySlots": [
+         7
+        ],
+        "inputStage": {
+         "closes": 1,
+         "executionTimeMillisEstimate": 0,
+         "inputStage": {
+          "closes": 1,
+          "executionTimeMillisEstimate": 0,
+          "isEOF": 1,
+          "nReturned": 5000,
+          "numReads": 5000,
+          "opens": 1,
+          "planNodeId": 1,
+          "recordIdSlot": 4,
+          "recordSlot": 3,
+          "restoreState": 0,
+          "saveState": 0,
+          "scanFieldNames": [
+           "k",
+           "pad"
+          ],
+          "scanFieldSlots": [
+           1,
+           2
+          ],
+          "stage": "scan"
+         },
+         "isEOF": 1,
+         "nReturned": 5000,
+         "opens": 1,
+         "planNodeId": 3,
+         "projections": {
+          "7": "(s1 ?: null) "
+         },
+         "restoreState": 0,
+         "saveState": 0,
+         "stage": "project"
+        },
+        "isEOF": 1,
+        "mergingExprs": {
+         "5": "sum(s5) ",
+         "6": "first((s6 ?: null)) "
+        },
+        "nReturned": 5000,
+        "opens": 1,
+        "planNodeId": 3,
+        "restoreState": 0,
+        "saveState": 0,
+        "spilledBytes": 0,
+        "spilledDataStorageSize": 0,
+        "spilledRecords": 0,
+        "spills": 0,
+        "stage": "group",
+        "usedDisk": false
+       },
+       "isEOF": 1,
+       "nReturned": 5000,
+       "opens": 1,
+       "planNodeId": 3,
+       "projections": {
+        "10": "(convert ( s8, int32) ?: s8) "
+       },
+       "restoreState": 0,
+       "saveState": 0,
+       "stage": "project"
+      },
+      "isEOF": 1,
+      "nReturned": 5000,
+      "opens": 1,
+      "planNodeId": 3,
+      "projections": {
+       "11": "newObj(\"_id\", s7, \"n\", s10, \"p\", s9) "
+      },
+      "restoreState": 0,
+      "saveState": 0,
+      "stage": "project"
+     },
+     "isEOF": 1,
+     "nReturned": 5000,
+     "opens": 1,
+     "planNodeId": 4,
+     "projections": {
+      "12": "((!((isArray(s10) ?: false)) || !((isArray(s7) ?: false))) || fail(2, \"cannot sort with keys that are parallel arrays\")) ",
+      "13": "getSortKeyDesc(s10) ",
+      "14": "getSortKeyAsc(s7) "
+     },
+     "restoreState": 0,
+     "saveState": 0,
+     "stage": "project"
+    },
+    "isEOF": 1,
+    "memLimit": 104857600,
+    "nReturned": 5000,
+    "opens": 1,
+    "orderBySlots": {
+     "13": "desc",
+     "14": "asc"
+    },
+    "outputSlots": [
+     11
+    ],
+    "planNodeId": 4,
+    "restoreState": 0,
+    "saveState": 0,
+    "spilledDataStorageSize": 0,
+    "spills": 0,
+    "stage": "sort",
+    "totalDataSizeSorted": 0,
+    "usedDisk": false
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 6,
+   "nReturned": 5000,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "2",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "optimizedPipeline": true,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "isCached": false,
+    "queryPlan": {
+     "inputStage": {
+      "inputStage": {
+       "direction": "forward",
+       "filter": {},
+       "planNodeId": 1,
+       "stage": "COLLSCAN"
+      },
+      "planNodeId": 3,
+      "stage": "GROUP"
+     },
+     "memLimit": 104857600,
+     "planNodeId": 4,
+     "sortPattern": {
+      "_id": 1,
+      "n": -1
+     },
+     "stage": "SORT",
+     "type": "default"
+    }
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ },
+ "trySbeEngine_agg_group_sort_spill": {
+  "executionStats": {
+   "executionStages": {
+    "closes": 1,
+    "executionTimeMillisEstimate": 22,
+    "inputStage": {
+     "closes": 1,
+     "executionTimeMillisEstimate": 0,
+     "inputStage": {
+      "closes": 1,
+      "executionTimeMillisEstimate": 0,
+      "inputStage": {
+       "closes": 1,
+       "executionTimeMillisEstimate": 0,
+       "inputStage": {
+        "closes": 1,
+        "executionTimeMillisEstimate": 0,
+        "expressions": {
+         "8": "count() ",
+         "9": "first((s2 ?: null)) ",
+         "initExprs": {
+          "8": null,
+          "9": null
+         }
+        },
+        "groupBySlots": [
+         7
+        ],
+        "inputStage": {
+         "closes": 1,
+         "executionTimeMillisEstimate": 0,
+         "inputStage": {
+          "closes": 1,
+          "executionTimeMillisEstimate": 0,
+          "isEOF": 1,
+          "nReturned": 5000,
+          "numReads": 5000,
+          "opens": 1,
+          "planNodeId": 1,
+          "recordIdSlot": 4,
+          "recordSlot": 3,
+          "restoreState": 1,
+          "saveState": 1,
+          "scanFieldNames": [
+           "k",
+           "pad"
+          ],
+          "scanFieldSlots": [
+           1,
+           2
+          ],
+          "stage": "scan"
+         },
+         "isEOF": 1,
+         "nReturned": 5000,
+         "opens": 1,
+         "planNodeId": 3,
+         "projections": {
+          "7": "(s1 ?: null) "
+         },
+         "restoreState": 1,
+         "saveState": 1,
+         "stage": "project"
+        },
+        "isEOF": 1,
+        "mergingExprs": {
+         "5": "sum(s5) ",
+         "6": "first((s6 ?: null)) "
+        },
+        "nReturned": 5000,
+        "opens": 1,
+        "planNodeId": 3,
+        "restoreState": 1,
+        "saveState": 1,
+        "spilledBytes": 0,
+        "spilledDataStorageSize": 0,
+        "spilledRecords": 0,
+        "spills": 0,
+        "stage": "group",
+        "usedDisk": false
+       },
+       "isEOF": 1,
+       "nReturned": 5000,
+       "opens": 1,
+       "planNodeId": 3,
+       "projections": {
+        "10": "(convert ( s8, int32) ?: s8) "
+       },
+       "restoreState": 1,
+       "saveState": 1,
+       "stage": "project"
+      },
+      "isEOF": 1,
+      "nReturned": 5000,
+      "opens": 1,
+      "planNodeId": 3,
+      "projections": {
+       "11": "newObj(\"_id\", s7, \"n\", s10, \"p\", s9) "
+      },
+      "restoreState": 1,
+      "saveState": 1,
+      "stage": "project"
+     },
+     "isEOF": 1,
+     "nReturned": 5000,
+     "opens": 1,
+     "planNodeId": 4,
+     "projections": {
+      "12": "((!((isArray(s10) ?: false)) || !((isArray(s7) ?: false))) || fail(2, \"cannot sort with keys that are parallel arrays\")) ",
+      "13": "getSortKeyDesc(s10) ",
+      "14": "getSortKeyAsc(s7) "
+     },
+     "restoreState": 1,
+     "saveState": 1,
+     "stage": "project"
+    },
+    "isEOF": 1,
+    "memLimit": 65536,
+    "nReturned": 5000,
+    "opens": 1,
+    "orderBySlots": {
+     "13": "desc",
+     "14": "asc"
+    },
+    "outputSlots": [
+     11
+    ],
+    "planNodeId": 4,
+    "restoreState": 1,
+    "saveState": 1,
+    "spilledDataStorageSize": 485098,
+    "spills": 62,
+    "stage": "sort",
+    "totalDataSizeSorted": 1836688,
+    "usedDisk": true
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 24,
+   "nReturned": 5000,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "2",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "optimizedPipeline": true,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "isCached": false,
+    "queryPlan": {
+     "inputStage": {
+      "inputStage": {
+       "direction": "forward",
+       "filter": {},
+       "planNodeId": 1,
+       "stage": "COLLSCAN"
+      },
+      "planNodeId": 3,
+      "stage": "GROUP"
+     },
+     "memLimit": 65536,
+     "planNodeId": 4,
+     "sortPattern": {
+      "_id": 1,
+      "n": -1
+     },
+     "stage": "SORT",
+     "type": "default"
+    }
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ },
+ "trySbeEngine_find_sort_mem": {
+  "executionStats": {
+   "executionStages": {
+    "closes": 1,
+    "executionTimeMillisEstimate": 0,
+    "inputStage": {
+     "closes": 1,
+     "executionTimeMillisEstimate": 0,
+     "inputStage": {
+      "closes": 1,
+      "executionTimeMillisEstimate": 0,
+      "filter": "traverseF(s2, lambda(l2.0) { ((move(l2.0) < s5) ?: false) }, false) ",
+      "inputStage": {
+       "closes": 1,
+       "executionTimeMillisEstimate": 0,
+       "isEOF": 1,
+       "nReturned": 5000,
+       "numReads": 5000,
+       "opens": 1,
+       "planNodeId": 1,
+       "recordIdSlot": 4,
+       "recordSlot": 3,
+       "restoreState": 0,
+       "saveState": 0,
+       "scanFieldNames": [
+        "k",
+        "g"
+       ],
+       "scanFieldSlots": [
+        1,
+        2
+       ],
+       "stage": "scan"
+      },
+      "isEOF": 1,
+      "nReturned": 2500,
+      "numTested": 5000,
+      "opens": 1,
+      "planNodeId": 1,
+      "restoreState": 0,
+      "saveState": 0,
+      "stage": "filter"
+     },
+     "isEOF": 1,
+     "nReturned": 2500,
+     "opens": 1,
+     "planNodeId": 2,
+     "projections": {
+      "6": "getSortKeyAsc(s1) "
+     },
+     "restoreState": 0,
+     "saveState": 0,
+     "stage": "project"
+    },
+    "isEOF": 1,
+    "memLimit": 104857600,
+    "nReturned": 2500,
+    "opens": 1,
+    "orderBySlots": {
+     "6": "asc"
+    },
+    "outputSlots": [
+     3
+    ],
+    "planNodeId": 2,
+    "restoreState": 0,
+    "saveState": 0,
+    "spilledDataStorageSize": 0,
+    "spills": 0,
+    "stage": "sort",
+    "totalDataSizeSorted": 0,
+    "usedDisk": false
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 1,
+   "nReturned": 2500,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "2",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "isCached": false,
+    "queryPlan": {
+     "inputStage": {
+      "direction": "forward",
+      "filter": {
+       "g": {
+        "$lt": 25
+       }
+      },
+      "planNodeId": 1,
+      "stage": "COLLSCAN"
+     },
+     "memLimit": 104857600,
+     "planNodeId": 2,
+     "sortPattern": {
+      "k": 1
+     },
+     "stage": "SORT",
+     "type": "simple"
+    }
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ },
+ "trySbeEngine_find_sort_spill": {
+  "executionStats": {
+   "executionStages": {
+    "closes": 1,
+    "executionTimeMillisEstimate": 7,
+    "inputStage": {
+     "closes": 1,
+     "executionTimeMillisEstimate": 0,
+     "inputStage": {
+      "closes": 1,
+      "executionTimeMillisEstimate": 0,
+      "filter": "traverseF(s2, lambda(l2.0) { ((move(l2.0) < s5) ?: false) }, false) ",
+      "inputStage": {
+       "closes": 1,
+       "executionTimeMillisEstimate": 0,
+       "isEOF": 1,
+       "nReturned": 5000,
+       "numReads": 5000,
+       "opens": 1,
+       "planNodeId": 1,
+       "recordIdSlot": 4,
+       "recordSlot": 3,
+       "restoreState": 0,
+       "saveState": 0,
+       "scanFieldNames": [
+        "k",
+        "g"
+       ],
+       "scanFieldSlots": [
+        1,
+        2
+       ],
+       "stage": "scan"
+      },
+      "isEOF": 1,
+      "nReturned": 2500,
+      "numTested": 5000,
+      "opens": 1,
+      "planNodeId": 1,
+      "restoreState": 0,
+      "saveState": 0,
+      "stage": "filter"
+     },
+     "isEOF": 1,
+     "nReturned": 2500,
+     "opens": 1,
+     "planNodeId": 2,
+     "projections": {
+      "6": "getSortKeyAsc(s1) "
+     },
+     "restoreState": 0,
+     "saveState": 0,
+     "stage": "project"
+    },
+    "isEOF": 1,
+    "memLimit": 65536,
+    "nReturned": 2500,
+    "opens": 1,
+    "orderBySlots": {
+     "6": "asc"
+    },
+    "outputSlots": [
+     3
+    ],
+    "planNodeId": 2,
+    "restoreState": 0,
+    "saveState": 0,
+    "spilledDataStorageSize": 244204,
+    "spills": 26,
+    "stage": "sort",
+    "totalDataSizeSorted": 708480,
+    "usedDisk": true
+   },
+   "executionSuccess": true,
+   "executionTimeMillis": 8,
+   "nReturned": 2500,
+   "totalDocsExamined": 5000,
+   "totalKeysExamined": 0
+  },
+  "explainVersion": "2",
+  "ok": 1,
+  "queryPlanner": {
+   "indexFilterSet": false,
+   "maxIndexedAndSolutionsReached": false,
+   "maxIndexedOrSolutionsReached": false,
+   "maxScansToExplodeReached": false,
+   "namespace": "plgm_fixture_sortspill.c",
+   "optimizationTimeMillis": 0,
+   "prunedSimilarIndexes": false,
+   "rejectedPlans": [],
+   "winningPlan": {
+    "isCached": false,
+    "queryPlan": {
+     "inputStage": {
+      "direction": "forward",
+      "filter": {
+       "g": {
+        "$lt": 25
+       }
+      },
+      "planNodeId": 1,
+      "stage": "COLLSCAN"
+     },
+     "memLimit": 65536,
+     "planNodeId": 2,
+     "sortPattern": {
+      "k": 1
+     },
+     "stage": "SORT",
+     "type": "simple"
+    }
+   }
+  },
+  "serverInfo": {
+   "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9",
+   "host": "daniels-mbp.lan",
+   "port": 30777,
+   "version": "8.0.4"
+  }
+ }
+}

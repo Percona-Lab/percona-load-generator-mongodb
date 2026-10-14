@@ -89,11 +89,13 @@ For unit and integration test instructions (including Docker-based MongoDB setup
 
 ### 5. Post-Run Insights
 
-PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Advanced tab).
+PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Metrics & Insights and Query Analysis (Explain) settings tabs).
+
+> **Post-Run Explain Sampling is required for the full query analysis.** Scan efficiency, execution overhead (sorts and disk spills), plan-based index recommendations, and efficiency trends are built from explain output collected after the workload finishes. The setting (`insights_explain_enabled`, Web UI settings tab: `Query Analysis (Explain)`) is on by default. With it off, the analysis reports only latency and workload impact, and the dashboard and HTML report state that explain was turned off. Explain does not run during the measured workload, so benchmark results are unaffected.
 
 Quick access:
 * Full guide: [`INSIGHTS.md`](./INSIGHTS.md)
-* Web UI path: `Advanced -> Insights Analysis`
+* Web UI paths: `Metrics & Insights -> Insights Capture` and `Query Analysis (Explain)`
 * Output: Dashboard insights panel + `Download Summary` JSON (`insights` section)
 * Includes explain support matrix, status/reason glossary, confidence model, troubleshooting, and limitations
 * Includes `executionStats` vs `queryPlanner` guidance, severity-based explain eligibility, filtering counters, and expected outcomes
@@ -251,7 +253,7 @@ Click **Reset Zoom** to return to the normal chart window. Click **Back to Live*
 ![PLGM Time Machine Feature](./images/time_machine.png)
 
 ### 6. Post-Run Slow Query & Index Analysis
-Once PLGM is configured and the Insights and Analysis feature is enabled, you will receive a detailed analysis of your slow queries upon completion of the workload. Configuration and enabling this feature can be done via the `Metrics & Insights` section of the UI (or via the config file), see [`INSIGHTS.md`](./INSIGHTS.md) for further details:
+Once PLGM is configured and the Insights and Analysis feature is enabled, you will receive a detailed analysis of your slow queries upon completion of the workload. Configuration and enabling this feature can be done via the `Metrics & Insights` section of the UI (or via the config file), see [`INSIGHTS.md`](./INSIGHTS.md) for further details. Keep **Enable Post-Run Explain Sampling** (`Query Analysis (Explain)` tab) turned on (the default); without it, scan efficiency, execution overhead, plan-based index recommendations, and efficiency trends are not available:
 
 ![Metrics and Insights](./images/metrics_insights.png)
 ![Insights Configuration](./images/insights_config.png)
@@ -279,6 +281,22 @@ In the `Workload` tab, the **Data & Query Definitions** section drives the workl
 
 Uploaded and edited definitions are validated before they are saved. PLGM rejects empty files, malformed JSON, invalid workload schemas, duplicate namespaces in collection definitions, duplicate query names in a query definition, duplicate saved definition names, and duplicate saved content.
 
+**Sort key order:** sort specifications keep the key order you write, from loading through execution, the library, capture, and explain. This applies to `$sort` stages (including inside `$facet`, `$lookup`, and `$unionWith` pipelines), the `sortBy` argument of `$setWindowFields`, `$fill`, `$top`, `$bottom`, `$topN`, `$bottomN`, and `$sortArray`, and the `$sort` modifier of `$push` in update documents. `{"$sort": {"b": -1, "a": 1}}` sorts by `b` first. Values must be `1`, `-1`, or `{"$meta": "textScore"}`/`{"$meta": "searchScore"}`; the `$push` modifier and `$sortArray` also accept a bare `1` or `-1`. A sort with a repeated key, no keys, a `$`-prefixed key, or another value is rejected.
+
+**Upgrading from earlier versions:** earlier releases ran multi-key sorts in an undefined key order and saved library definitions with their keys sorted alphabetically. PLGM cannot recover the original precedence, so a saved query definition from an earlier release that contains a multi-key sort needs review before it can run:
+
+1. Select it in the library. Its dropdown entry says *sort order review needed*, and a warning lists each multi-key sort by path (for example `queries[0].pipeline[2].$facet.top[0].$sort`) with its current field order.
+2. Open the editor and put each listed sort's fields in the intended order. The current order may be alphabetical rather than what you originally wrote.
+3. Tick the confirmation for every listed sort, then click **Save Reviewed Definition** (or **Save to Library**).
+
+Until then, **Launch Workload** is blocked, and `/api/start` refuses the definition with HTTP 409 and `code: "sort_order_review_required"`. Saving without confirming every sort is also refused with a 409, and nothing is stored. Re-saving alone never counts as confirmation. A confirmation covers one exact order: if you confirm a sort and then change its fields or directions, the save is refused with a fresh, unticked checklist showing the new order, so confirm again. The reviewed definition is saved in declared order (`contentVersion` 2) and runs normally.
+
+**Save As New** from a definition that needs review needs the same confirmations, and the backend enforces them. The copy records which definition and version it came from; if that definition was changed or deleted in the meantime, the save is refused with a 409 and you reload and copy again. Copying does not resolve the original.
+
+API clients confirm by sending `reviewedSorts`, a list of `{"path", "sortSpec"}` taken from the `sortOrderReview.issues` returned for the content being saved (`sortSpec` is the ordered sort as compact JSON, for example `{"b":-1,"a":1}`), in the `PUT` body. A `POST` that copies a library definition also sends `sourceDefinitionId`, `sourceUpdatedAt`, and `sourceContentVersion` (the `id`, `updatedAt`, and `contentVersion` of the definition it was copied from). The older path-only `reviewedSortPaths` field is rejected with a 400.
+
+PLGM can only enforce review where it knows the content came from an earlier release: a saved definition, or a copy that names its source. It cannot tell where pasted JSON, a `POST` without a source, an uploaded file, or a one-off query file came from. That content is treated as new and runs in the order written. If you copy an old definition's JSON by hand, check its multi-key sorts yourself. Definitions with only single-key sorts and definitions saved by this version need no changes.
+
 Definition storage is durable application storage, separate from browser caching. By default PLGM stores definitions in a local JSON file under the user config directory:
 
 ```bash
@@ -296,6 +314,15 @@ You can override the location with:
 ```bash
 export PLGM_DEFINITIONS_STORE=/path/to/plgm-definitions.json
 ```
+
+Post-run trend baselines (the **Trends** view under Query & Index Analysis) are stored the same way, in `trend_baselines.json` next to `definitions.json`. The file holds bounded, redacted per-shape summaries only (scores, counts, latencies, plan stage names, index names, server version, and sampling/workload settings), never query text, literals, or the connection URI. Override or disable it with:
+
+```bash
+export PLGM_TREND_BASELINE_STORE=/path/to/plgm-trend-baselines.json
+export PLGM_TREND_BASELINE_STORE=off   # no baselines and no trend comparison
+```
+
+Use **Reset baselines** in the Trends view (or `DELETE /api/trend-baselines`) to clear them. An unreadable or unsupported file is moved aside (renamed with a `.corrupt-` or `.unsupported-` suffix), never deleted.
 
 The last selected query and collection definitions are cached in browser `localStorage` so the Web UI can restore your previous selections after refresh. This cache only stores selected IDs; the actual definition content is stored server-side in the JSON store.
 
@@ -1027,14 +1054,16 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `insights_slow_threshold_ms` | `PLGM_INSIGHTS_SLOW_THRESHOLD_MS` | Latency threshold used to classify operations as slow | `200` |
 | `insights_max_events` | `PLGM_INSIGHTS_MAX_EVENTS` | Max retained sampled events in memory | `5000` |
 | `insights_max_groups` | `PLGM_INSIGHTS_MAX_GROUPS` | Max aggregated slow-shape groups | `300` |
-| `insights_explain_enabled` | `PLGM_INSIGHTS_EXPLAIN_ENABLED` | Enable optional post-run explain sampling | `false` |
+| `insights_explain_enabled` | `PLGM_INSIGHTS_EXPLAIN_ENABLED` | Enable post-run explain sampling (needed for scan efficiency and sort/spill measurements; runs after the workload) | `true` |
 | `insights_explain_top_n` | `PLGM_INSIGHTS_EXPLAIN_TOP_N` | Number of top slow shapes to attempt explain on | `5` |
 | `insights_explain_max_time_ms` | `PLGM_INSIGHTS_EXPLAIN_MAX_TIME_MS` | Max server time per explain command | `1000` |
 | `insights_explain_verbosity` | `PLGM_INSIGHTS_EXPLAIN_VERBOSITY` | Explain verbosity (`executionStats` recommended, `queryPlanner` lighter) | `executionStats` |
 | `insights_explain_severity_mode` | `PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE` | Explain eligibility mode (`high_only`, `medium_only`, `critical_only`, `high_and_low`) | `high_only` |
+| `insights_explain_efficiency_mode` | `PLGM_INSIGHTS_EXPLAIN_EFFICIENCY_MODE` | Extra Top N explain slots chosen by workload impact and latency tier, independent of slow threshold and severity (`impact_and_latency_tiers`, `off`) | `impact_and_latency_tiers` |
 | `insights_explain_workers` | `PLGM_INSIGHTS_EXPLAIN_WORKERS` | Post-run explain worker count | `1` |
 | `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retry count for explain timeout/failure | `1` |
 | `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Backoff between explain retries (ms) | `150` |
+| `insights_latency_target_avg_ms`, `_p95_ms`, `_p99_ms` | `PLGM_INSIGHTS_LATENCY_TARGET_AVG_MS`, `_P95_MS`, `_P99_MS` | Per-shape client latency targets used only for the Query latency rating; 0 means no target (latency is shown but not rated) | `0` |
 | **Sharding Strategy** | | | |
 | `sharding_mode` | `PLGM_SHARDING_MODE` | Per-collection sharding behavior: `auto`, `force_on`, `force_off` | `auto` |
 | `sharding_skip_generic_without_config` | `PLGM_SHARDING_SKIP_GENERIC_WITHOUT_CONFIG` | Skip generic sharding setup for collections without `shardConfig` (recommended for mixed workloads) | `true` |
@@ -1238,6 +1267,27 @@ Each field may declare optional constraints so generated data stays realistic an
   "flight_code":      { "type": "string", "template": "??###" }
 }
 ```
+
+### Indexes and Shard Keys
+Collection definitions may declare `indexes` and a `shardConfig`. Keys are applied in the order you write them, with the direction you write them; compound keys are never reordered or alphabetized.
+
+```json
+"indexes": [
+  { "keys": { "origin": 1, "destination": 1, "flight_date": -1 } },
+  { "keys": [ { "status": 1 }, { "created_at": -1 } ], "name": "by_status", "unique": true },
+  { "keys": { "created_at": 1 }, "expireAfterSeconds": 86400 },
+  { "keys": { "sku": 1 }, "partialFilterExpression": { "qty": { "$gt": 5 } } }
+],
+"shardConfig": { "key": { "region": 1, "order_id": 1 } }
+```
+
+* `keys` is either an object (fields in written order) or an array of single-field objects. Use the array form if a tool that edits your JSON may reorder object keys.
+* Key values: `1`, `-1`, `"hashed"`, `"text"`, `"2dsphere"`, `"2d"`. Shard key values: `1` or `"hashed"` (at most one hashed field).
+* Supported options: `name`, `unique`, `sparse`, `hidden`, `expireAfterSeconds`, `partialFilterExpression` (Extended JSON allowed). Any other option (for example `collation`) is rejected at load time with an explicit error instead of being silently ignored.
+* Loading fails for a field declared twice in one key, two indexes in one collection with the same key pattern, or two indexes that resolve to the same name. The same fields in a different order are distinct indexes and are allowed.
+* Without `name`, the index name is generated from the keys in order (`origin_1_destination_1_flight_date_-1`), so repeated runs send identical definitions and MongoDB leaves existing indexes alone. If an existing index has the same name or keys with different options, setup fails with the server's conflict error; it is not suppressed or replaced.
+
+**Upgrading from earlier versions:** earlier releases decoded keys into an unordered map, so compound indexes could be created with a different field order on each run (for example both `origin_1_destination_1_flight_date_-1` and `destination_1_flight_date_-1_origin_1`), and shard keys were alphabetized. plgm never drops indexes. During setup it logs a warning for each deployed index that has the same fields and directions as a configured index in a different order. To review them yourself, run `db.<collection>.getIndexes()` and compare against your definition; check `$indexStats` usage before dropping any with `db.<collection>.dropIndex("<name>")`. Existing configuration files need no changes unless they used options or key values listed above as unsupported.
 
 ### Query Accuracy (targeting existing records)
 Find/update/delete query filters use placeholders such as `<int>` and `<string>`. At runtime plgm

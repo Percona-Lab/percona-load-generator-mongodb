@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -331,6 +332,58 @@ func TestApplyEnvOverridesInsightsExplainRuntimeSettings(t *testing.T) {
 	}
 }
 
+func TestExplainEnabledByDefault(t *testing.T) {
+	dir := t.TempDir()
+	load := func(t *testing.T, yaml string, webUI bool) bool {
+		t.Helper()
+		path := filepath.Join(dir, "missing.yaml")
+		if yaml != "" {
+			path = filepath.Join(dir, "cfg.yaml")
+			if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		cfg, err := LoadAppConfig(path, webUI)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.InsightsExplainEnabled
+	}
+	if !load(t, "", false) || !load(t, "", true) {
+		t.Fatal("explain must be on without a config file, with or without web UI defaults")
+	}
+	if !load(t, "insights_enabled: true\n", false) {
+		t.Fatal("a config file that omits insights_explain_enabled must keep the default (on)")
+	}
+	if load(t, "insights_explain_enabled: false\n", false) {
+		t.Fatal("an explicit false in the config file must turn explain off")
+	}
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_ENABLED", "false")
+	if load(t, "insights_explain_enabled: true\n", true) {
+		t.Fatal("the environment override must turn explain off")
+	}
+}
+
+func TestExplainEfficiencyModeDefaultsOverrideAndNormalization(t *testing.T) {
+	cfg := &AppConfig{}
+	applyBaseDefaults(cfg)
+	if cfg.InsightsExplainEfficiencyMode != ExplainEfficiencyModeDefault {
+		t.Fatalf("expected default efficiency mode, got %q", cfg.InsightsExplainEfficiencyMode)
+	}
+	t.Setenv("PLGM_INSIGHTS_EXPLAIN_EFFICIENCY_MODE", "OFF")
+	cfg = &AppConfig{}
+	_ = applyEnvOverrides(cfg)
+	applyBaseDefaults(cfg)
+	if cfg.InsightsExplainEfficiencyMode != ExplainEfficiencyModeOff {
+		t.Fatalf("expected env override off, got %q", cfg.InsightsExplainEfficiencyMode)
+	}
+	cfg = &AppConfig{InsightsExplainEfficiencyMode: "bogus"}
+	applyBaseDefaults(cfg)
+	if cfg.InsightsExplainEfficiencyMode != ExplainEfficiencyModeDefault {
+		t.Fatalf("expected unknown mode to normalize to default, got %q", cfg.InsightsExplainEfficiencyMode)
+	}
+}
+
 func TestApplyBaseDefaultsNormalizesUnknownExplainSeverityMode(t *testing.T) {
 	cfg := &AppConfig{InsightsExplainSeverityMode: "unexpected_mode"}
 	applyBaseDefaults(cfg)
@@ -390,5 +443,22 @@ func TestApplyEnvOverridesShardingSettings(t *testing.T) {
 	}
 	if !cfg.ShardingSkipGenericWithoutConfig {
 		t.Fatalf("expected sharding skip-without-config true from env")
+	}
+}
+
+func TestLatencyTargetsFromEnvAndDefaults(t *testing.T) {
+	t.Setenv("PLGM_INSIGHTS_LATENCY_TARGET_AVG_MS", "12.5")
+	t.Setenv("PLGM_INSIGHTS_LATENCY_TARGET_P95_MS", "-1")
+	t.Setenv("PLGM_INSIGHTS_LATENCY_TARGET_P99_MS", "x")
+	cfg := &AppConfig{InsightsLatencyTargetP95Ms: 40, InsightsLatencyTargetP99Ms: 80}
+	_ = applyEnvOverrides(cfg)
+	applyBaseDefaults(cfg)
+	if cfg.InsightsLatencyTargetAvgMs != 12.5 || cfg.InsightsLatencyTargetP95Ms != 40 || cfg.InsightsLatencyTargetP99Ms != 80 {
+		t.Fatalf("valid env targets apply and invalid ones are ignored: %+v", cfg)
+	}
+	cfg = &AppConfig{InsightsLatencyTargetAvgMs: -5, InsightsLatencyTargetP95Ms: math.NaN(), InsightsLatencyTargetP99Ms: math.Inf(1)}
+	applyBaseDefaults(cfg)
+	if cfg.InsightsLatencyTargetAvgMs != 0 || cfg.InsightsLatencyTargetP95Ms != 0 || cfg.InsightsLatencyTargetP99Ms != 0 {
+		t.Fatalf("invalid YAML targets must mean no target: %+v", cfg)
 	}
 }

@@ -1,0 +1,2881 @@
+{
+  "find_ixscan_fetch": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "$and": [
+          {
+            "a": {
+              "$eq": 7
+            }
+          },
+          {
+            "s": {
+              "$eq": "x7"
+            }
+          }
+        ]
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "A0518F55",
+      "planCacheKey": "AD8B80C1",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "FETCH",
+        "filter": {
+          "s": {
+            "$eq": "x7"
+          }
+        },
+        "inputStage": {
+          "stage": "IXSCAN",
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[7, 7]"
+            ]
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 1,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 100,
+      "totalDocsExamined": 100,
+      "executionStages": {
+        "isCached": false,
+        "stage": "FETCH",
+        "filter": {
+          "s": {
+            "$eq": "x7"
+          }
+        },
+        "nReturned": 1,
+        "executionTimeMillisEstimate": 0,
+        "works": 101,
+        "advanced": 1,
+        "needTime": 99,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "docsExamined": 100,
+        "alreadyHasObj": 0,
+        "inputStage": {
+          "stage": "IXSCAN",
+          "nReturned": 100,
+          "executionTimeMillisEstimate": 0,
+          "works": 101,
+          "advanced": 100,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[7, 7]"
+            ]
+          },
+          "keysExamined": 100,
+          "seeks": 1,
+          "dupsTested": 0,
+          "dupsDropped": 0
+        }
+      }
+    },
+    "queryShapeHash": "53312AA9073C48948D8C3B4A7C36F08D2C15AF65E839C411D7414AAD425E9C3B",
+    "command": {
+      "find": "c",
+      "filter": {
+        "a": 7,
+        "s": "x7"
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_covered": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "$and": [
+          {
+            "b": {
+              "$lt": 20
+            }
+          },
+          {
+            "b": {
+              "$gte": 10
+            }
+          }
+        ]
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "AA5891F5",
+      "planCacheKey": "109C6310",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "PROJECTION_COVERED",
+        "transformBy": {
+          "_id": 0,
+          "b": 1,
+          "g": 1
+        },
+        "inputStage": {
+          "stage": "IXSCAN",
+          "keyPattern": {
+            "b": 1,
+            "g": 1
+          },
+          "indexName": "b_1_g_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "b": [],
+            "g": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "b": [
+              "[10, 20)"
+            ],
+            "g": [
+              "[MinKey, MaxKey]"
+            ]
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 10,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 10,
+      "totalDocsExamined": 0,
+      "executionStages": {
+        "isCached": false,
+        "stage": "PROJECTION_COVERED",
+        "nReturned": 10,
+        "executionTimeMillisEstimate": 0,
+        "works": 11,
+        "advanced": 10,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "transformBy": {
+          "_id": 0,
+          "b": 1,
+          "g": 1
+        },
+        "inputStage": {
+          "stage": "IXSCAN",
+          "nReturned": 10,
+          "executionTimeMillisEstimate": 0,
+          "works": 11,
+          "advanced": 10,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "keyPattern": {
+            "b": 1,
+            "g": 1
+          },
+          "indexName": "b_1_g_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "b": [],
+            "g": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "b": [
+              "[10, 20)"
+            ],
+            "g": [
+              "[MinKey, MaxKey]"
+            ]
+          },
+          "keysExamined": 10,
+          "seeks": 1,
+          "dupsTested": 0,
+          "dupsDropped": 0
+        }
+      }
+    },
+    "queryShapeHash": "26CFEA1F1170519C195AE3ECBF43C5AF569E6A6637496AC7EAE644C46EFA1A75",
+    "command": {
+      "find": "c",
+      "filter": {
+        "b": {
+          "$gte": 10,
+          "$lt": 20
+        }
+      },
+      "projection": {
+        "_id": 0,
+        "b": 1,
+        "g": 1
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_collscan": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "s": {
+          "$eq": "x42"
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "C854290B",
+      "planCacheKey": "9F203077",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "COLLSCAN",
+        "filter": {
+          "s": {
+            "$eq": "x42"
+          }
+        },
+        "direction": "forward"
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 1,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 0,
+      "totalDocsExamined": 5000,
+      "executionStages": {
+        "isCached": false,
+        "stage": "COLLSCAN",
+        "filter": {
+          "s": {
+            "$eq": "x42"
+          }
+        },
+        "nReturned": 1,
+        "executionTimeMillisEstimate": 0,
+        "works": 5001,
+        "advanced": 1,
+        "needTime": 4999,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "direction": "forward",
+        "docsExamined": 5000
+      }
+    },
+    "queryShapeHash": "5A6E4CDD96CD6115463360C0A04BE44AF58C6BC0AD870270B129C7F7AE5ECF7E",
+    "command": {
+      "find": "c",
+      "filter": {
+        "s": "x42"
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_zero": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 999
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "FETCH",
+        "inputStage": {
+          "stage": "IXSCAN",
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[999, 999]"
+            ]
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 0,
+      "totalDocsExamined": 0,
+      "executionStages": {
+        "isCached": false,
+        "stage": "FETCH",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 1,
+        "advanced": 0,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "docsExamined": 0,
+        "alreadyHasObj": 0,
+        "inputStage": {
+          "stage": "IXSCAN",
+          "nReturned": 0,
+          "executionTimeMillisEstimate": 0,
+          "works": 1,
+          "advanced": 0,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[999, 999]"
+            ]
+          },
+          "keysExamined": 0,
+          "seeks": 1,
+          "dupsTested": 0,
+          "dupsDropped": 0
+        }
+      }
+    },
+    "queryShapeHash": "94B3DA1FA656EA55A3D37771848E8916997AB8EC98D6BD09A7AE4C336152076E",
+    "command": {
+      "find": "c",
+      "filter": {
+        "a": 999
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_limit": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 3
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "LIMIT",
+        "limitAmount": 5,
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "IXSCAN",
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[3, 3]"
+              ]
+            }
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 5,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 5,
+      "totalDocsExamined": 5,
+      "executionStages": {
+        "isCached": false,
+        "stage": "LIMIT",
+        "nReturned": 5,
+        "executionTimeMillisEstimate": 0,
+        "works": 6,
+        "advanced": 5,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "limitAmount": 5,
+        "inputStage": {
+          "stage": "FETCH",
+          "nReturned": 5,
+          "executionTimeMillisEstimate": 0,
+          "works": 5,
+          "advanced": 5,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 0,
+          "docsExamined": 5,
+          "alreadyHasObj": 0,
+          "inputStage": {
+            "stage": "IXSCAN",
+            "nReturned": 5,
+            "executionTimeMillisEstimate": 0,
+            "works": 5,
+            "advanced": 5,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 0,
+            "restoreState": 0,
+            "isEOF": 0,
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[3, 3]"
+              ]
+            },
+            "keysExamined": 5,
+            "seeks": 1,
+            "dupsTested": 0,
+            "dupsDropped": 0
+          }
+        }
+      }
+    },
+    "queryShapeHash": "83E7225D825AADF7D90097524A7925CFDF885CC22F9EF202DE959395D58D620E",
+    "command": {
+      "find": "c",
+      "filter": {
+        "a": 3
+      },
+      "limit": 5,
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_id": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "_id": {
+          "$eq": 5
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "9B5DE45B",
+      "planCacheKey": "B4738D99",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "EXPRESS_IXSCAN",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_"
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 1,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1,
+      "totalDocsExamined": 1,
+      "executionStages": {
+        "isCached": false,
+        "stage": "EXPRESS_IXSCAN",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_",
+        "keysExamined": 1,
+        "docsExamined": 1,
+        "nReturned": 1
+      }
+    },
+    "command": {
+      "find": "c",
+      "filter": {
+        "_id": 5
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "agg_group_pushdown": {
+    "explainVersion": "2",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$lt": 10
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "0F847427",
+      "planCacheKey": "8E81E630",
+      "optimizationTimeMillis": 0,
+      "optimizedPipeline": true,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "queryPlan": {
+          "stage": "GROUP",
+          "planNodeId": 4,
+          "inputStage": {
+            "stage": "FETCH",
+            "planNodeId": 2,
+            "inputStage": {
+              "stage": "IXSCAN",
+              "planNodeId": 1,
+              "keyPattern": {
+                "a": 1
+              },
+              "indexName": "a_1",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "a": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": false,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "a": [
+                  "[-inf.0, 10)"
+                ]
+              }
+            }
+          }
+        },
+        "slotBasedPlan": {
+          "slots": "$$RESULT=s15 env: { s1 = KS(1F00000000000000000104), s2 = KS(2B140104), s7 = {\"a\" : 1} }",
+          "stages": "[4] project [s15 = newBsonObj(\"_id\", s12, \"n\", s14)] \n[4] project [s14 = (convert ( s13, int32) ?: s13)] \n[4] group [s12] [s13 = count()] spillSlots[s11] mergingExprs[sum(s11)] \n[4] project [s12 = (s10 ?: null)] \n[2] nlj inner [] [s3, s4, s5, s6, s7] \n    left \n        [1] cfilter {(exists(s1) && exists(s2))} \n        [1] ixseek s1 s2 s6 s3 s4 s5 [] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" @\"a_1\" true \n    right \n        [2] limit 1ll \n        [2] seek s3 s8 s9 s4 s5 s6 s7 none none [s10 = g] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" true false \n"
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 12,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1000,
+      "totalDocsExamined": 1000,
+      "executionStages": {
+        "stage": "project",
+        "planNodeId": 4,
+        "nReturned": 12,
+        "executionTimeMillisEstimate": 0,
+        "opens": 1,
+        "closes": 1,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "projections": {
+          "15": "newBsonObj(\"_id\", s12, \"n\", s14) "
+        },
+        "inputStage": {
+          "stage": "project",
+          "planNodeId": 4,
+          "nReturned": 12,
+          "executionTimeMillisEstimate": 0,
+          "opens": 1,
+          "closes": 1,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "projections": {
+            "14": "(convert ( s13, int32) ?: s13) "
+          },
+          "inputStage": {
+            "stage": "group",
+            "planNodeId": 4,
+            "nReturned": 12,
+            "executionTimeMillisEstimate": 0,
+            "opens": 1,
+            "closes": 1,
+            "saveState": 0,
+            "restoreState": 0,
+            "isEOF": 1,
+            "groupBySlots": [
+              12
+            ],
+            "expressions": {
+              "13": "count() ",
+              "initExprs": {
+                "13": null
+              }
+            },
+            "mergingExprs": {
+              "11": "sum(s11) "
+            },
+            "usedDisk": false,
+            "spills": 0,
+            "spilledBytes": 0,
+            "spilledRecords": 0,
+            "spilledDataStorageSize": 0,
+            "inputStage": {
+              "stage": "project",
+              "planNodeId": 4,
+              "nReturned": 1000,
+              "executionTimeMillisEstimate": 0,
+              "opens": 1,
+              "closes": 1,
+              "saveState": 0,
+              "restoreState": 0,
+              "isEOF": 1,
+              "projections": {
+                "12": "(s10 ?: null) "
+              },
+              "inputStage": {
+                "stage": "nlj",
+                "planNodeId": 2,
+                "nReturned": 1000,
+                "executionTimeMillisEstimate": 0,
+                "opens": 1,
+                "closes": 1,
+                "saveState": 0,
+                "restoreState": 0,
+                "isEOF": 1,
+                "totalDocsExamined": 1000,
+                "totalKeysExamined": 1000,
+                "collectionScans": 0,
+                "collectionSeeks": 1000,
+                "indexScans": 0,
+                "indexSeeks": 1,
+                "indexesUsed": [
+                  "a_1"
+                ],
+                "innerOpens": 1000,
+                "innerCloses": 1,
+                "outerProjects": [],
+                "outerCorrelated": [
+                  3,
+                  4,
+                  5,
+                  6,
+                  7
+                ],
+                "outerStage": {
+                  "stage": "cfilter",
+                  "planNodeId": 1,
+                  "nReturned": 1000,
+                  "executionTimeMillisEstimate": 0,
+                  "opens": 1,
+                  "closes": 1,
+                  "saveState": 0,
+                  "restoreState": 0,
+                  "isEOF": 1,
+                  "numTested": 1,
+                  "filter": "(exists(s1) && exists(s2)) ",
+                  "inputStage": {
+                    "stage": "ixseek",
+                    "planNodeId": 1,
+                    "nReturned": 1000,
+                    "executionTimeMillisEstimate": 0,
+                    "opens": 1,
+                    "closes": 1,
+                    "saveState": 0,
+                    "restoreState": 0,
+                    "isEOF": 1,
+                    "indexName": "a_1",
+                    "keysExamined": 1000,
+                    "seeks": 1,
+                    "numReads": 1001,
+                    "indexKeySlot": 6,
+                    "recordIdSlot": 3,
+                    "snapshotIdSlot": 4,
+                    "indexIdentSlot": 5,
+                    "outputSlots": [],
+                    "indexKeysToInclude": "00000000000000000000000000000000",
+                    "seekKeyLow": "s1 ",
+                    "seekKeyHigh": "s2 "
+                  }
+                },
+                "innerStage": {
+                  "stage": "limit",
+                  "planNodeId": 2,
+                  "nReturned": 1000,
+                  "executionTimeMillisEstimate": 0,
+                  "opens": 1000,
+                  "closes": 1,
+                  "saveState": 0,
+                  "restoreState": 0,
+                  "isEOF": 1,
+                  "limit": 1,
+                  "inputStage": {
+                    "stage": "seek",
+                    "planNodeId": 2,
+                    "nReturned": 1000,
+                    "executionTimeMillisEstimate": 0,
+                    "opens": 1000,
+                    "closes": 1,
+                    "saveState": 0,
+                    "restoreState": 0,
+                    "isEOF": 0,
+                    "numReads": 1000,
+                    "recordSlot": 8,
+                    "recordIdSlot": 9,
+                    "seekRecordIdSlot": 3,
+                    "snapshotIdSlot": 4,
+                    "indexIdentSlot": 5,
+                    "indexKeySlot": 6,
+                    "indexKeyPatternSlot": 7,
+                    "scanFieldNames": [
+                      "g"
+                    ],
+                    "scanFieldSlots": [
+                      10
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "queryShapeHash": "4413F38F09436D7AF4993398A7673FF254EE7785CCB25F402DF2870E63B780D6",
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": {
+              "$lt": 10
+            }
+          }
+        },
+        {
+          "$group": {
+            "_id": "$g",
+            "n": {
+              "$sum": 1
+            }
+          }
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "agg_count": {
+    "explainVersion": "2",
+    "stages": [
+      {
+        "$cursor": {
+          "queryPlanner": {
+            "namespace": "s4.c",
+            "parsedQuery": {
+              "a": {
+                "$lt": 10
+              }
+            },
+            "indexFilterSet": false,
+            "planCacheShapeHash": "CD163838",
+            "planCacheKey": "CD570E23",
+            "optimizationTimeMillis": 0,
+            "maxIndexedOrSolutionsReached": false,
+            "maxIndexedAndSolutionsReached": false,
+            "maxScansToExplodeReached": false,
+            "prunedSimilarIndexes": false,
+            "winningPlan": {
+              "isCached": false,
+              "queryPlan": {
+                "stage": "GROUP",
+                "planNodeId": 2,
+                "inputStage": {
+                  "stage": "COUNT_SCAN",
+                  "planNodeId": 1,
+                  "keyPattern": {
+                    "a": 1
+                  },
+                  "indexName": "a_1",
+                  "isMultiKey": false,
+                  "multiKeyPaths": {
+                    "a": []
+                  },
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "indexBounds": {
+                    "startKey": {
+                      "a": {
+                        "$numberDouble": "-Infinity"
+                      }
+                    },
+                    "startKeyInclusive": true,
+                    "endKey": {
+                      "a": 10
+                    },
+                    "endKeyInclusive": false
+                  }
+                }
+              },
+              "slotBasedPlan": {
+                "slots": "$$RESULT=s8 env: { s1 = KS(1F00000000000000000104), s2 = KS(2B140104) }",
+                "stages": "[2] project [s8 = newObj(\"_id\", s6, \"n\", s7)] \n[2] project [s6 = null, s7 = (convert ( s5, int32) ?: s5)] \n[2] group [] [s5 = count()] spillSlots[s4] mergingExprs[sum(s4)] \n[1] cfilter {(exists(s1) && exists(s2))} \n[1] ixseek s1 s2 none s3 none none [] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" @\"a_1\" true "
+              }
+            },
+            "rejectedPlans": []
+          },
+          "executionStats": {
+            "executionSuccess": true,
+            "nReturned": 1,
+            "executionTimeMillis": 0,
+            "totalKeysExamined": 1000,
+            "totalDocsExamined": 0,
+            "executionStages": {
+              "stage": "project",
+              "planNodeId": 2,
+              "nReturned": 1,
+              "executionTimeMillisEstimate": 0,
+              "opens": 1,
+              "closes": 1,
+              "saveState": 1,
+              "restoreState": 1,
+              "isEOF": 1,
+              "projections": {
+                "8": "newObj(\"_id\", s6, \"n\", s7) "
+              },
+              "inputStage": {
+                "stage": "project",
+                "planNodeId": 2,
+                "nReturned": 1,
+                "executionTimeMillisEstimate": 0,
+                "opens": 1,
+                "closes": 1,
+                "saveState": 1,
+                "restoreState": 1,
+                "isEOF": 1,
+                "projections": {
+                  "6": "null ",
+                  "7": "(convert ( s5, int32) ?: s5) "
+                },
+                "inputStage": {
+                  "stage": "group",
+                  "planNodeId": 2,
+                  "nReturned": 1,
+                  "executionTimeMillisEstimate": 0,
+                  "opens": 1,
+                  "closes": 1,
+                  "saveState": 1,
+                  "restoreState": 1,
+                  "isEOF": 1,
+                  "groupBySlots": [],
+                  "expressions": {
+                    "5": "count() ",
+                    "initExprs": {
+                      "5": null
+                    }
+                  },
+                  "mergingExprs": {
+                    "4": "sum(s4) "
+                  },
+                  "usedDisk": false,
+                  "spills": 0,
+                  "spilledBytes": 0,
+                  "spilledRecords": 0,
+                  "spilledDataStorageSize": 0,
+                  "inputStage": {
+                    "stage": "cfilter",
+                    "planNodeId": 1,
+                    "nReturned": 1000,
+                    "executionTimeMillisEstimate": 0,
+                    "opens": 1,
+                    "closes": 1,
+                    "saveState": 1,
+                    "restoreState": 1,
+                    "isEOF": 1,
+                    "numTested": 1,
+                    "filter": "(exists(s1) && exists(s2)) ",
+                    "inputStage": {
+                      "stage": "ixseek",
+                      "planNodeId": 1,
+                      "nReturned": 1000,
+                      "executionTimeMillisEstimate": 0,
+                      "opens": 1,
+                      "closes": 1,
+                      "saveState": 1,
+                      "restoreState": 1,
+                      "isEOF": 1,
+                      "indexName": "a_1",
+                      "keysExamined": 1000,
+                      "seeks": 1,
+                      "numReads": 1001,
+                      "recordIdSlot": 3,
+                      "outputSlots": [],
+                      "indexKeysToInclude": "00000000000000000000000000000000",
+                      "seekKeyLow": "s1 ",
+                      "seekKeyHigh": "s2 "
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "nReturned": 1,
+        "executionTimeMillisEstimate": 0
+      },
+      {
+        "$project": {
+          "n": true,
+          "_id": false
+        },
+        "nReturned": 1,
+        "executionTimeMillisEstimate": 0
+      }
+    ],
+    "queryShapeHash": "73E884100C46F6F3EF9C5C6CCCAAE81CAD4A91ED373D531B384C78A1BA91D366",
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": {
+              "$lt": 10
+            }
+          }
+        },
+        {
+          "$count": "n"
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "ok": 1
+  },
+  "agg_facet": {
+    "explainVersion": "1",
+    "stages": [
+      {
+        "$cursor": {
+          "queryPlanner": {
+            "namespace": "s4.c",
+            "parsedQuery": {
+              "a": {
+                "$lt": 10
+              }
+            },
+            "indexFilterSet": false,
+            "planCacheShapeHash": "39133DF2",
+            "planCacheKey": "83F71031",
+            "optimizationTimeMillis": 0,
+            "maxIndexedOrSolutionsReached": false,
+            "maxIndexedAndSolutionsReached": false,
+            "maxScansToExplodeReached": false,
+            "prunedSimilarIndexes": false,
+            "winningPlan": {
+              "isCached": false,
+              "stage": "PROJECTION_SIMPLE",
+              "transformBy": {
+                "g": 1,
+                "_id": 0
+              },
+              "inputStage": {
+                "stage": "FETCH",
+                "inputStage": {
+                  "stage": "IXSCAN",
+                  "keyPattern": {
+                    "a": 1
+                  },
+                  "indexName": "a_1",
+                  "isMultiKey": false,
+                  "multiKeyPaths": {
+                    "a": []
+                  },
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "direction": "forward",
+                  "indexBounds": {
+                    "a": [
+                      "[-inf.0, 10)"
+                    ]
+                  }
+                }
+              }
+            },
+            "rejectedPlans": []
+          },
+          "executionStats": {
+            "executionSuccess": true,
+            "nReturned": 1000,
+            "executionTimeMillis": 0,
+            "totalKeysExamined": 1000,
+            "totalDocsExamined": 1000,
+            "executionStages": {
+              "isCached": false,
+              "stage": "PROJECTION_SIMPLE",
+              "nReturned": 1000,
+              "executionTimeMillisEstimate": 0,
+              "works": 1001,
+              "advanced": 1000,
+              "needTime": 0,
+              "needYield": 0,
+              "saveState": 6,
+              "restoreState": 6,
+              "isEOF": 1,
+              "transformBy": {
+                "g": 1,
+                "_id": 0
+              },
+              "inputStage": {
+                "stage": "FETCH",
+                "nReturned": 1000,
+                "executionTimeMillisEstimate": 0,
+                "works": 1001,
+                "advanced": 1000,
+                "needTime": 0,
+                "needYield": 0,
+                "saveState": 6,
+                "restoreState": 6,
+                "isEOF": 1,
+                "docsExamined": 1000,
+                "alreadyHasObj": 0,
+                "inputStage": {
+                  "stage": "IXSCAN",
+                  "nReturned": 1000,
+                  "executionTimeMillisEstimate": 0,
+                  "works": 1001,
+                  "advanced": 1000,
+                  "needTime": 0,
+                  "needYield": 0,
+                  "saveState": 6,
+                  "restoreState": 6,
+                  "isEOF": 1,
+                  "keyPattern": {
+                    "a": 1
+                  },
+                  "indexName": "a_1",
+                  "isMultiKey": false,
+                  "multiKeyPaths": {
+                    "a": []
+                  },
+                  "isUnique": false,
+                  "isSparse": false,
+                  "isPartial": false,
+                  "indexVersion": 2,
+                  "direction": "forward",
+                  "indexBounds": {
+                    "a": [
+                      "[-inf.0, 10)"
+                    ]
+                  },
+                  "keysExamined": 1000,
+                  "seeks": 1,
+                  "dupsTested": 0,
+                  "dupsDropped": 0
+                }
+              }
+            }
+          }
+        },
+        "nReturned": 1000,
+        "executionTimeMillisEstimate": 1
+      },
+      {
+        "$facet": {
+          "x": [
+            {
+              "$internalFacetTeeConsumer": {},
+              "nReturned": 1000,
+              "executionTimeMillisEstimate": 1
+            },
+            {
+              "$group": {
+                "_id": "$g"
+              },
+              "maxAccumulatorMemoryUsageBytes": {},
+              "totalOutputDataSizeBytes": 2556,
+              "usedDisk": false,
+              "spills": 0,
+              "spilledDataStorageSize": 0,
+              "numBytesSpilledEstimate": 0,
+              "spilledRecords": 0,
+              "nReturned": 12,
+              "executionTimeMillisEstimate": 1
+            }
+          ]
+        },
+        "nReturned": 1,
+        "executionTimeMillisEstimate": 1
+      }
+    ],
+    "queryShapeHash": "D7527F90EA2E53CBDEB8A5F79A58098297985C1682EE02C73A8A4B52884A166F",
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": {
+              "$lt": 10
+            }
+          }
+        },
+        {
+          "$facet": {
+            "x": [
+              {
+                "$group": {
+                  "_id": "$g"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "ok": 1
+  },
+  "agg_match_only": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 3
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "optimizedPipeline": true,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "FETCH",
+        "inputStage": {
+          "stage": "IXSCAN",
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[3, 3]"
+            ]
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 100,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 100,
+      "totalDocsExamined": 100,
+      "executionStages": {
+        "isCached": false,
+        "stage": "FETCH",
+        "nReturned": 100,
+        "executionTimeMillisEstimate": 0,
+        "works": 101,
+        "advanced": 100,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "docsExamined": 100,
+        "alreadyHasObj": 0,
+        "inputStage": {
+          "stage": "IXSCAN",
+          "nReturned": 100,
+          "executionTimeMillisEstimate": 0,
+          "works": 101,
+          "advanced": 100,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "keyPattern": {
+            "a": 1
+          },
+          "indexName": "a_1",
+          "isMultiKey": false,
+          "multiKeyPaths": {
+            "a": []
+          },
+          "isUnique": false,
+          "isSparse": false,
+          "isPartial": false,
+          "indexVersion": 2,
+          "direction": "forward",
+          "indexBounds": {
+            "a": [
+              "[3, 3]"
+            ]
+          },
+          "keysExamined": 100,
+          "seeks": 1,
+          "dupsTested": 0,
+          "dupsDropped": 0
+        }
+      }
+    },
+    "queryShapeHash": "6A5872594C46D385979631457DC3D3BCC428C4BC009C5F12B211692A45B5C620",
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": 3
+          }
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "agg_sort_group": {
+    "explainVersion": "2",
+    "stages": [
+      {
+        "$cursor": {
+          "queryPlanner": {
+            "namespace": "s4.c",
+            "parsedQuery": {
+              "a": {
+                "$lt": 10
+              }
+            },
+            "indexFilterSet": false,
+            "planCacheShapeHash": "0F847427",
+            "planCacheKey": "8E81E630",
+            "optimizationTimeMillis": 0,
+            "maxIndexedOrSolutionsReached": false,
+            "maxIndexedAndSolutionsReached": false,
+            "maxScansToExplodeReached": false,
+            "prunedSimilarIndexes": false,
+            "winningPlan": {
+              "isCached": false,
+              "queryPlan": {
+                "stage": "GROUP",
+                "planNodeId": 4,
+                "inputStage": {
+                  "stage": "FETCH",
+                  "planNodeId": 2,
+                  "inputStage": {
+                    "stage": "IXSCAN",
+                    "planNodeId": 1,
+                    "keyPattern": {
+                      "a": 1
+                    },
+                    "indexName": "a_1",
+                    "isMultiKey": false,
+                    "multiKeyPaths": {
+                      "a": []
+                    },
+                    "isUnique": false,
+                    "isSparse": false,
+                    "isPartial": false,
+                    "indexVersion": 2,
+                    "direction": "forward",
+                    "indexBounds": {
+                      "a": [
+                        "[-inf.0, 10)"
+                      ]
+                    }
+                  }
+                }
+              },
+              "slotBasedPlan": {
+                "slots": "$$RESULT=s15 env: { s1 = KS(1F00000000000000000104), s2 = KS(2B140104), s7 = {\"a\" : 1} }",
+                "stages": "[4] project [s15 = newObj(\"_id\", s12, \"n\", s14)] \n[4] project [s14 = (convert ( s13, int32) ?: s13)] \n[4] group [s12] [s13 = count()] spillSlots[s11] mergingExprs[sum(s11)] \n[4] project [s12 = (s10 ?: null)] \n[2] nlj inner [] [s3, s4, s5, s6, s7] \n    left \n        [1] cfilter {(exists(s1) && exists(s2))} \n        [1] ixseek s1 s2 s6 s3 s4 s5 [] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" @\"a_1\" true \n    right \n        [2] limit 1ll \n        [2] seek s3 s8 s9 s4 s5 s6 s7 none none [s10 = g] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" true false \n"
+              }
+            },
+            "rejectedPlans": []
+          },
+          "executionStats": {
+            "executionSuccess": true,
+            "nReturned": 12,
+            "executionTimeMillis": 0,
+            "totalKeysExamined": 1000,
+            "totalDocsExamined": 1000,
+            "executionStages": {
+              "stage": "project",
+              "planNodeId": 4,
+              "nReturned": 12,
+              "executionTimeMillisEstimate": 0,
+              "opens": 1,
+              "closes": 1,
+              "saveState": 1,
+              "restoreState": 1,
+              "isEOF": 1,
+              "projections": {
+                "15": "newObj(\"_id\", s12, \"n\", s14) "
+              },
+              "inputStage": {
+                "stage": "project",
+                "planNodeId": 4,
+                "nReturned": 12,
+                "executionTimeMillisEstimate": 0,
+                "opens": 1,
+                "closes": 1,
+                "saveState": 1,
+                "restoreState": 1,
+                "isEOF": 1,
+                "projections": {
+                  "14": "(convert ( s13, int32) ?: s13) "
+                },
+                "inputStage": {
+                  "stage": "group",
+                  "planNodeId": 4,
+                  "nReturned": 12,
+                  "executionTimeMillisEstimate": 0,
+                  "opens": 1,
+                  "closes": 1,
+                  "saveState": 1,
+                  "restoreState": 1,
+                  "isEOF": 1,
+                  "groupBySlots": [
+                    12
+                  ],
+                  "expressions": {
+                    "13": "count() ",
+                    "initExprs": {
+                      "13": null
+                    }
+                  },
+                  "mergingExprs": {
+                    "11": "sum(s11) "
+                  },
+                  "usedDisk": false,
+                  "spills": 0,
+                  "spilledBytes": 0,
+                  "spilledRecords": 0,
+                  "spilledDataStorageSize": 0,
+                  "inputStage": {
+                    "stage": "project",
+                    "planNodeId": 4,
+                    "nReturned": 1000,
+                    "executionTimeMillisEstimate": 0,
+                    "opens": 1,
+                    "closes": 1,
+                    "saveState": 1,
+                    "restoreState": 1,
+                    "isEOF": 1,
+                    "projections": {
+                      "12": "(s10 ?: null) "
+                    },
+                    "inputStage": {
+                      "stage": "nlj",
+                      "planNodeId": 2,
+                      "nReturned": 1000,
+                      "executionTimeMillisEstimate": 0,
+                      "opens": 1,
+                      "closes": 1,
+                      "saveState": 1,
+                      "restoreState": 1,
+                      "isEOF": 1,
+                      "totalDocsExamined": 1000,
+                      "totalKeysExamined": 1000,
+                      "collectionScans": 0,
+                      "collectionSeeks": 1000,
+                      "indexScans": 0,
+                      "indexSeeks": 1,
+                      "indexesUsed": [
+                        "a_1"
+                      ],
+                      "innerOpens": 1000,
+                      "innerCloses": 1,
+                      "outerProjects": [],
+                      "outerCorrelated": [
+                        3,
+                        4,
+                        5,
+                        6,
+                        7
+                      ],
+                      "outerStage": {
+                        "stage": "cfilter",
+                        "planNodeId": 1,
+                        "nReturned": 1000,
+                        "executionTimeMillisEstimate": 0,
+                        "opens": 1,
+                        "closes": 1,
+                        "saveState": 1,
+                        "restoreState": 1,
+                        "isEOF": 1,
+                        "numTested": 1,
+                        "filter": "(exists(s1) && exists(s2)) ",
+                        "inputStage": {
+                          "stage": "ixseek",
+                          "planNodeId": 1,
+                          "nReturned": 1000,
+                          "executionTimeMillisEstimate": 0,
+                          "opens": 1,
+                          "closes": 1,
+                          "saveState": 1,
+                          "restoreState": 1,
+                          "isEOF": 1,
+                          "indexName": "a_1",
+                          "keysExamined": 1000,
+                          "seeks": 1,
+                          "numReads": 1001,
+                          "indexKeySlot": 6,
+                          "recordIdSlot": 3,
+                          "snapshotIdSlot": 4,
+                          "indexIdentSlot": 5,
+                          "outputSlots": [],
+                          "indexKeysToInclude": "00000000000000000000000000000000",
+                          "seekKeyLow": "s1 ",
+                          "seekKeyHigh": "s2 "
+                        }
+                      },
+                      "innerStage": {
+                        "stage": "limit",
+                        "planNodeId": 2,
+                        "nReturned": 1000,
+                        "executionTimeMillisEstimate": 0,
+                        "opens": 1000,
+                        "closes": 1,
+                        "saveState": 1,
+                        "restoreState": 1,
+                        "isEOF": 1,
+                        "limit": 1,
+                        "inputStage": {
+                          "stage": "seek",
+                          "planNodeId": 2,
+                          "nReturned": 1000,
+                          "executionTimeMillisEstimate": 0,
+                          "opens": 1000,
+                          "closes": 1,
+                          "saveState": 1,
+                          "restoreState": 1,
+                          "isEOF": 0,
+                          "numReads": 1000,
+                          "recordSlot": 8,
+                          "recordIdSlot": 9,
+                          "seekRecordIdSlot": 3,
+                          "snapshotIdSlot": 4,
+                          "indexIdentSlot": 5,
+                          "indexKeySlot": 6,
+                          "indexKeyPatternSlot": 7,
+                          "scanFieldNames": [
+                            "g"
+                          ],
+                          "scanFieldSlots": [
+                            10
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "nReturned": 12,
+        "executionTimeMillisEstimate": 0
+      },
+      {
+        "$sort": {
+          "sortKey": {
+            "n": -1
+          }
+        },
+        "totalDataSizeSortedBytesEstimate": 3036,
+        "usedDisk": false,
+        "spills": 0,
+        "spilledDataStorageSize": 0,
+        "nReturned": 12,
+        "executionTimeMillisEstimate": 0
+      }
+    ],
+    "queryShapeHash": "84135E043C3CB9F96A270AF83CF07F0E64F1E635B0689456BAF6314BAA8814D8",
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": {
+              "$lt": 10
+            }
+          }
+        },
+        {
+          "$group": {
+            "_id": "$g",
+            "n": {
+              "$sum": 1
+            }
+          }
+        },
+        {
+          "$sort": {
+            "n": -1
+          }
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "ok": 1
+  },
+  "upd_one": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 7
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "IXSCAN",
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            }
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1,
+      "totalDocsExamined": 1,
+      "executionStages": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 1,
+        "advanced": 0,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "nMatched": 1,
+        "nWouldModify": 1,
+        "nWouldUpsert": 0,
+        "inputStage": {
+          "stage": "FETCH",
+          "nReturned": 1,
+          "executionTimeMillisEstimate": 0,
+          "works": 1,
+          "advanced": 1,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 1,
+          "restoreState": 1,
+          "isEOF": 0,
+          "docsExamined": 1,
+          "alreadyHasObj": 0,
+          "inputStage": {
+            "stage": "IXSCAN",
+            "nReturned": 1,
+            "executionTimeMillisEstimate": 0,
+            "works": 1,
+            "advanced": 1,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 0,
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            },
+            "keysExamined": 1,
+            "seeks": 1,
+            "dupsTested": 0,
+            "dupsDropped": 0
+          }
+        }
+      }
+    },
+    "command": {
+      "update": "c",
+      "updates": [
+        {
+          "q": {
+            "a": 7
+          },
+          "u": {
+            "$set": {
+              "z": 1
+            }
+          },
+          "multi": false
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "upd_many": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "s": {
+          "$regex": "^x1"
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "C6FAABAA",
+      "planCacheKey": "7F7D9A02",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "inputStage": {
+          "stage": "COLLSCAN",
+          "filter": {
+            "s": {
+              "$regex": "^x1"
+            }
+          },
+          "direction": "forward"
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 3,
+      "totalKeysExamined": 0,
+      "totalDocsExamined": 5000,
+      "executionStages": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 5001,
+        "advanced": 0,
+        "needTime": 5000,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "nMatched": 1111,
+        "nWouldModify": 1111,
+        "nWouldUpsert": 0,
+        "inputStage": {
+          "stage": "COLLSCAN",
+          "filter": {
+            "s": {
+              "$regex": "^x1"
+            }
+          },
+          "nReturned": 1111,
+          "executionTimeMillisEstimate": 0,
+          "works": 5001,
+          "advanced": 1111,
+          "needTime": 3889,
+          "needYield": 0,
+          "saveState": 1111,
+          "restoreState": 1111,
+          "isEOF": 1,
+          "direction": "forward",
+          "docsExamined": 5000
+        }
+      }
+    },
+    "command": {
+      "update": "c",
+      "updates": [
+        {
+          "q": {
+            "s": {
+              "$regex": "^x1"
+            }
+          },
+          "u": {
+            "$set": {
+              "z": 1
+            }
+          },
+          "multi": true
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "upd_id": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "EXPRESS_UPDATE",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_"
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1,
+      "totalDocsExamined": 1,
+      "executionStages": {
+        "isCached": false,
+        "stage": "EXPRESS_UPDATE",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_",
+        "keysExamined": 1,
+        "docsExamined": 1,
+        "nReturned": 0,
+        "nWouldModify": 1,
+        "nWouldUpsert": 0,
+        "nWouldDelete": 0
+      }
+    },
+    "command": {
+      "update": "c",
+      "updates": [
+        {
+          "q": {
+            "_id": 7
+          },
+          "u": {
+            "$set": {
+              "z": 1
+            }
+          },
+          "multi": false
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "del_one": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 7
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "DELETE",
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "IXSCAN",
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            }
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1,
+      "totalDocsExamined": 1,
+      "executionStages": {
+        "isCached": false,
+        "stage": "DELETE",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 1,
+        "advanced": 0,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "nWouldDelete": 1,
+        "inputStage": {
+          "stage": "FETCH",
+          "nReturned": 1,
+          "executionTimeMillisEstimate": 0,
+          "works": 1,
+          "advanced": 1,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 1,
+          "restoreState": 1,
+          "isEOF": 0,
+          "docsExamined": 1,
+          "alreadyHasObj": 0,
+          "inputStage": {
+            "stage": "IXSCAN",
+            "nReturned": 1,
+            "executionTimeMillisEstimate": 0,
+            "works": 1,
+            "advanced": 1,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 0,
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            },
+            "keysExamined": 1,
+            "seeks": 1,
+            "dupsTested": 0,
+            "dupsDropped": 0
+          }
+        }
+      }
+    },
+    "command": {
+      "delete": "c",
+      "deletes": [
+        {
+          "q": {
+            "a": 7
+          },
+          "limit": 1
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "del_many": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 7
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "BATCHED_DELETE",
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "IXSCAN",
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            }
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 100,
+      "totalDocsExamined": 100,
+      "executionStages": {
+        "isCached": false,
+        "stage": "BATCHED_DELETE",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 101,
+        "advanced": 0,
+        "needTime": 100,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "nWouldDelete": 100,
+        "inputStage": {
+          "stage": "FETCH",
+          "nReturned": 100,
+          "executionTimeMillisEstimate": 0,
+          "works": 101,
+          "advanced": 100,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "docsExamined": 100,
+          "alreadyHasObj": 0,
+          "inputStage": {
+            "stage": "IXSCAN",
+            "nReturned": 100,
+            "executionTimeMillisEstimate": 0,
+            "works": 101,
+            "advanced": 100,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 0,
+            "restoreState": 0,
+            "isEOF": 1,
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[7, 7]"
+              ]
+            },
+            "keysExamined": 100,
+            "seeks": 1,
+            "dupsTested": 0,
+            "dupsDropped": 0
+          }
+        }
+      }
+    },
+    "command": {
+      "delete": "c",
+      "deletes": [
+        {
+          "q": {
+            "a": 7
+          },
+          "limit": 0
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "del_id": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "EXPRESS_DELETE",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_"
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 1,
+      "totalDocsExamined": 1,
+      "executionStages": {
+        "isCached": false,
+        "stage": "EXPRESS_DELETE",
+        "keyPattern": "{ _id: 1 }",
+        "indexName": "_id_",
+        "keysExamined": 1,
+        "docsExamined": 1,
+        "nReturned": 0,
+        "nWouldModify": 0,
+        "nWouldUpsert": 0,
+        "nWouldDelete": 1
+      }
+    },
+    "command": {
+      "delete": "c",
+      "deletes": [
+        {
+          "q": {
+            "_id": 7
+          },
+          "limit": 1
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "upd_zero": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 999
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "115115E5",
+      "planCacheKey": "0AEE9786",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "inputStage": {
+          "stage": "FETCH",
+          "inputStage": {
+            "stage": "IXSCAN",
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[999, 999]"
+              ]
+            }
+          }
+        }
+      },
+      "rejectedPlans": []
+    },
+    "executionStats": {
+      "executionSuccess": true,
+      "nReturned": 0,
+      "executionTimeMillis": 0,
+      "totalKeysExamined": 0,
+      "totalDocsExamined": 0,
+      "executionStages": {
+        "isCached": false,
+        "stage": "UPDATE",
+        "nReturned": 0,
+        "executionTimeMillisEstimate": 0,
+        "works": 1,
+        "advanced": 0,
+        "needTime": 0,
+        "needYield": 0,
+        "saveState": 0,
+        "restoreState": 0,
+        "isEOF": 1,
+        "nMatched": 0,
+        "nWouldModify": 0,
+        "nWouldUpsert": 0,
+        "inputStage": {
+          "stage": "FETCH",
+          "nReturned": 0,
+          "executionTimeMillisEstimate": 0,
+          "works": 1,
+          "advanced": 0,
+          "needTime": 0,
+          "needYield": 0,
+          "saveState": 0,
+          "restoreState": 0,
+          "isEOF": 1,
+          "docsExamined": 0,
+          "alreadyHasObj": 0,
+          "inputStage": {
+            "stage": "IXSCAN",
+            "nReturned": 0,
+            "executionTimeMillisEstimate": 0,
+            "works": 1,
+            "advanced": 0,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 0,
+            "restoreState": 0,
+            "isEOF": 1,
+            "keyPattern": {
+              "a": 1
+            },
+            "indexName": "a_1",
+            "isMultiKey": false,
+            "multiKeyPaths": {
+              "a": []
+            },
+            "isUnique": false,
+            "isSparse": false,
+            "isPartial": false,
+            "indexVersion": 2,
+            "direction": "forward",
+            "indexBounds": {
+              "a": [
+                "[999, 999]"
+              ]
+            },
+            "keysExamined": 0,
+            "seeks": 1,
+            "dupsTested": 0,
+            "dupsDropped": 0
+          }
+        }
+      }
+    },
+    "command": {
+      "update": "c",
+      "updates": [
+        {
+          "q": {
+            "a": 999
+          },
+          "u": {
+            "$set": {
+              "z": 1
+            }
+          },
+          "multi": true
+        }
+      ],
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "find_planner": {
+    "explainVersion": "1",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "s": {
+          "$eq": "x1"
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "C854290B",
+      "planCacheKey": "9F203077",
+      "optimizationTimeMillis": 0,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "stage": "COLLSCAN",
+        "filter": {
+          "s": {
+            "$eq": "x1"
+          }
+        },
+        "direction": "forward"
+      },
+      "rejectedPlans": []
+    },
+    "queryShapeHash": "5A6E4CDD96CD6115463360C0A04BE44AF58C6BC0AD870270B129C7F7AE5ECF7E",
+    "command": {
+      "find": "c",
+      "filter": {
+        "s": "x1"
+      },
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  },
+  "agg_planner": {
+    "explainVersion": "2",
+    "queryPlanner": {
+      "namespace": "s4.c",
+      "parsedQuery": {
+        "a": {
+          "$eq": 1
+        }
+      },
+      "indexFilterSet": false,
+      "planCacheShapeHash": "F5B99869",
+      "planCacheKey": "DB3F6A77",
+      "optimizationTimeMillis": 0,
+      "optimizedPipeline": true,
+      "maxIndexedOrSolutionsReached": false,
+      "maxIndexedAndSolutionsReached": false,
+      "maxScansToExplodeReached": false,
+      "prunedSimilarIndexes": false,
+      "winningPlan": {
+        "isCached": false,
+        "queryPlan": {
+          "stage": "GROUP",
+          "planNodeId": 4,
+          "inputStage": {
+            "stage": "FETCH",
+            "planNodeId": 2,
+            "inputStage": {
+              "stage": "IXSCAN",
+              "planNodeId": 1,
+              "keyPattern": {
+                "a": 1
+              },
+              "indexName": "a_1",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "a": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": false,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "a": [
+                  "[1, 1]"
+                ]
+              }
+            }
+          }
+        },
+        "slotBasedPlan": {
+          "slots": "$$RESULT=s12 env: { s1 = KS(2B020104), s2 = KS(2B02FE04), s7 = {\"a\" : 1} }",
+          "stages": "[4] project [s12 = newBsonObj(\"_id\", s11)] \n[4] group [s11] [] \n[4] project [s11 = (s10 ?: null)] \n[2] nlj inner [] [s3, s4, s5, s6, s7] \n    left \n        [1] ixseek s1 s2 s6 s3 s4 s5 [] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" @\"a_1\" true \n    right \n        [2] limit 1ll \n        [2] seek s3 s8 s9 s4 s5 s6 s7 none none [s10 = g] @\"25d3f8f3-0bff-47f6-a2eb-410c722f4ae4\" true false \n"
+        }
+      },
+      "rejectedPlans": []
+    },
+    "queryShapeHash": "5207C0DC3C34168A50FE6C04CEB7D148FE9E2C7B11F273B54602D0376B7C23E1",
+    "command": {
+      "aggregate": "c",
+      "pipeline": [
+        {
+          "$match": {
+            "a": 1
+          }
+        },
+        {
+          "$group": {
+            "_id": "$g"
+          }
+        }
+      ],
+      "cursor": {},
+      "$db": "s4"
+    },
+    "serverInfo": {
+      "host": "daniels-mbp.lan",
+      "port": 27901,
+      "version": "8.0.4",
+      "gitVersion": "bc35ab4305d9920d9d0491c1c9ef9b72383d31f9"
+    },
+    "serverParameters": {
+      "internalQueryFacetBufferSizeBytes": 104857600,
+      "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+      "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+      "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+      "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+      "internalQueryProhibitBlockingMergeOnMongoS": 0,
+      "internalQueryMaxAddToSetBytes": 104857600,
+      "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+      "internalQueryFrameworkControl": "trySbeRestricted",
+      "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+    },
+    "ok": 1
+  }
+}

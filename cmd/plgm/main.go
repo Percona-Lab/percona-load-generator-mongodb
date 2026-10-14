@@ -189,6 +189,10 @@ func main() {
 		return // Exit main so we don't accidentally run the CLI workload
 	}
 
+	// Post-run explain exists only in the Web UI; capturing explain samples
+	// in a CLI run would cost per-operation work for nothing.
+	appCfg.InsightsExplainEnabled = false
+
 	if !strings.Contains(appCfg.URI, "compressors=") {
 		if strings.Contains(appCfg.URI, "?") {
 			appCfg.URI += "&compressors=none"

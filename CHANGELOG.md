@@ -5,6 +5,52 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v4.7.0 - Add post-run query and index analysis, explain settings tab, and trends
+
+This release adds post-run query analysis. Beyond telling you that a query is slow, PLGM now shows what the server did for each query shape: how much it scanned, whether it sorted in memory or spilled to disk, and which index would help.
+
+**Highlights**
+
+**Query analysis**
+- Run explain after the workload on representative samples of every
+  tracked query shape, including fast ones, within a fixed budget
+  (2 x Top N shapes, at most 2 samples each). Updates, deletes and
+  $out/$merge pipelines are explained without being applied.
+- Add the Query & Index Analysis tab with separate columns: scan
+  efficiency (se-1, 0-100), query latency (avg/max/p95/p99, optional
+  targets), workload impact, execution overhead (in-memory sort, spill,
+  per-sample sort/spill measurements), and $lookup work. Rows open a
+  detail panel when clicked.
+- Add index recommendations with ordered candidate keys (equality, sort,
+  range), checked against listIndexes, with tradeoffs and validation steps.
+- Add explain coverage reporting; unexplained shapes are "unassessed",
+  never "efficient".
+- Add run-to-run trends (tc-1) with persisted redacted baselines,
+  /api/trend-baselines, and a Trends tab.
+- Include the efficiency view, coverage, and trends in /api/insights,
+  Download Summary, and the HTML report.
+
+**Settings and UI**
+- Turn post-run explain on by default (insights_explain_enabled: true)
+  and move its settings to a new Query Analysis (Explain) tab.
+- Add latency targets (insights_latency_target_{avg,p95,p99}_ms) and
+  explain efficiency slots (insights_explain_efficiency_mode).
+- Compact settings and dashboard layout; live operation-mix total.
+
+**Ordering and identity**
+- Keep declared key order for compound indexes, shard keys, and sort
+  specifications from loading through execution and explain.
+- Shape identity si-3: projection, limit, upsert, and ordered sorts are
+  part of the shape.
+- Require review of saved definitions with multi-key sorts created by
+  earlier versions (contentVersion 2, reviewedSorts confirmations).
+
+**Other**
+- Add the query_analysis_demo workload.
+- Add CI workflow (make check, test-race, test-ui, integration on
+  MongoDB 7.0/8.0) and jsdom UI tests.
+- Remove slow_queries[].trend from the insights API.
+
 ## v4.6.0 - TLS Client Configuration & Metrics Accuracy
 
 **Highlights**

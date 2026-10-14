@@ -43,6 +43,141 @@ type HeatmapPoint struct {
 	Max        float64
 }
 
+// ImpactRow is one query shape ranked by summed concurrent operation time.
+type ImpactRow struct {
+	Rank           int
+	Namespace      string
+	Operation      string
+	Shape          string
+	OperationCount uint64
+	TotalMs        float64
+	SharePct       float64
+	AvgMs          float64
+	SampleCount    int
+	SampleP95      string
+	Explanation    string
+}
+
+// ImpactSection is the workload-impact view: full-run totals per shape plus
+// the coverage notes needed to read them correctly.
+type ImpactSection struct {
+	Status             string
+	TimeBasisNote      string
+	InterpretationNote string
+	ObservedOps        uint64
+	ObservedMs         float64
+	Rows               []ImpactRow
+	Limitations        []string
+}
+
+// RecommendationRow is one post-run recommendation, in insights rank order.
+type RecommendationRow struct {
+	Rank       int
+	Priority   string
+	Title      string
+	Details    string
+	Confidence string
+	Source     string
+}
+
+// EfficiencyRecommendation is a recommendation linked to an efficiency row.
+type EfficiencyRecommendation struct {
+	Rank           int
+	Title          string
+	CandidateKeys  []string
+	Rationale      string
+	Tradeoffs      string
+	ValidationStep string
+	Limitations    []string
+}
+
+// EfficiencyRow is one shape of the efficiency view, in the view's order.
+type EfficiencyRow struct {
+	Order            int
+	ShapeID          string
+	Namespace        string
+	Operation        string
+	Shape            string
+	Query            string
+	ScoreLabel       string
+	Band             string
+	Confidence       string
+	Coverage         string
+	CoverageReason   string
+	Latency          string
+	LatencyRating    string
+	LatencyTier      string
+	Severity         string
+	Impact           string
+	Overhead         string
+	OverheadEvidence []string
+	// OverheadSummary, OverheadMeasurements, and OverheadNotes are the
+	// measured sort/spill values as shown in the dashboard.
+	OverheadSummary           string
+	OverheadMeasurementStatus string
+	OverheadMeasurements      []string
+	OverheadNotes             []string
+	Lookup                    string
+	Locks                     string
+	Network                   string
+	OtherDetails              []string
+	RatingExplanation         string
+	Components                []string
+	Observations              []string
+	Limitations               []string
+	DataSource                []string
+	Samples                   []string
+	PlanSummary               string
+	Recommendations           []EfficiencyRecommendation
+}
+
+// EfficiencySection is the query assessment view: scan efficiency, latency,
+// workload impact, execution overhead, and other measurements, each with its
+// column explanation.
+type EfficiencySection struct {
+	Status         string
+	Reason         string
+	Notice         string
+	RatingVersions string
+	LatencyTargets string
+	Columns        []KV
+	SortNote       string
+	Coverage       []KV
+	Unrecorded     []string
+	Limitations    []string
+	Rows           []EfficiencyRow
+}
+
+// TrendRow is one shape's comparison with its persisted baseline.
+type TrendRow struct {
+	ShapeID       string
+	Namespace     string
+	Operation     string
+	Shape         string
+	Comparability string
+	BaselineAge   string
+	Efficiency    string
+	Latency       string
+	Impact        string
+	Details       []string
+}
+
+// TrendSection is the baseline comparison with its criteria and disclosures.
+type TrendSection struct {
+	Version         string
+	Status          string
+	Reason          string
+	MethodNote      string
+	CausationNote   string
+	EvidenceNote    string
+	CriteriaSummary string
+	CriteriaNote    string
+	Store           []KV
+	Counts          []KV
+	Limitations     []string
+	Rows            []TrendRow
+}
+
 // ReportData is the complete, render-ready model for a run report.
 type ReportData struct {
 	Title           string
@@ -58,6 +193,11 @@ type ReportData struct {
 
 	Latency []LatencyRow
 	Heatmap []HeatmapPoint
+
+	Impact          *ImpactSection
+	Efficiency      *EfficiencySection
+	Trends          *TrendSection
+	Recommendations []RecommendationRow
 
 	Insights []string
 	Warnings []string

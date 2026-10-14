@@ -164,13 +164,7 @@ type PreBuiltBatch struct {
 // identifyPatchKey determines which field is the primary integer key for sharding/patching.
 func identifyPatchKey(col config.CollectionDefinition) string {
 	if col.ShardConfig != nil && len(col.ShardConfig.Key) > 0 {
-		for k := range col.ShardConfig.Key {
-			if f, ok := col.Fields[k]; ok && (f.Type == "int" || f.Type == "long") {
-				return k
-			}
-			// Use the first key found if no int type match (Go map order is random, but this is a heuristic)
-			return k
-		}
+		return col.ShardConfig.Key[0].Field
 	}
 	if f, ok := col.Fields["_id"]; ok && (f.Type == "int" || f.Type == "long") {
 		return "_id"
@@ -478,7 +472,7 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 	if err == nil {
 		dur := time.Since(start)
 		wCfg.collector.Track("transaction", dur)
-		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil, "transaction batch", "runtime_transaction", "transaction_workload", "runtime", "transaction_batch", "", "", -1)
+		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, "transaction batch", "runtime_transaction", "transaction_workload", "runtime", "transaction_batch", "", "", -1)
 	}
 }
 
@@ -580,12 +574,12 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				}
 				dur := time.Since(start)
 				wCfg.collector.Add("insert", 1, dur)
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
 			} else {
 				registerFastBatchIDs(wCfg.recordPool, wCfg.database, currentCol, patchKey, batch.CmdRaw, batch.Offsets)
 				dur := time.Since(start)
 				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), dur/time.Duration(wCfg.appConfig.InsertBatchSize))
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
+				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
 			}
 			continue
 		}
@@ -646,17 +640,26 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				wCfg.collector.RecordFindResult(int64(len(fastFindRes.Cursor.FirstBatch)))
 			}
 
+			fastShapeKey := fmt.Sprintf("find|fast_in_patch_key|limit:%d", batchSize)
+			var fastQuery *stats.ExecutableQuery
+			if wCfg.collector.CapturesExecutableQueries() {
+				fastQuery = &stats.ExecutableQuery{
+					Database: wCfg.database.Name(),
+					Filter:   map[string]interface{}{patchKey: map[string]interface{}{"$in": append([]int64(nil), ids...)}},
+					Limit:    int64(batchSize),
+				}
+			}
 			if err != nil {
 				if wCfg.debug {
 					log.Printf("[Worker %d] FastFind error: %v", id, err)
 				}
 				dur := time.Since(start)
 				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, fastShapeKey, fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, fastQuery, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
 			} else {
 				dur := time.Since(start)
 				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, "find|fast_in_patch_key", fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, map[string]interface{}{patchKey: map[string]interface{}{"$in": "<batch>"}}, nil, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
+				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, fastShapeKey, fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, fastQuery, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
 			}
 			continue
 		}
@@ -706,12 +709,13 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 		}
 
 		success := true
+		findLimit := q.Limit
+		if findLimit <= 0 {
+			findLimit = wCfg.findLimit
+		}
 		switch opType {
 		case "find":
-			limit := q.Limit
-			if limit <= 0 {
-				limit = wCfg.findLimit
-			}
+			limit := findLimit
 			batch := wCfg.findBatchSize
 			if batch <= 0 {
 				batch = 10
@@ -783,9 +787,30 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 		}
 		dur := time.Since(start)
 		wCfg.collector.Track(opType, dur)
-		shapeKey, shapeSummary, fields := buildOperationShape(opType, filter, pipeline)
+		shapeKey, shapeSummary, fields := buildOperationShape(opType, filter, pipeline, shapeOptions{projection: q.Projection, limit: findLimit, upsert: q.Upsert})
 		queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex := buildQueryReferenceFromDefinition(q, opType, filter, pipeline)
-		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, filter, pipeline, queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex)
+		var execQuery *stats.ExecutableQuery
+		if wCfg.collector.CapturesExecutableQueries() {
+			execQuery = buildExecutableQuery(opType, currentCol.DatabaseName, q, filter, pipeline, findLimit)
+		}
+		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, execQuery, queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex)
+	}
+}
+
+// buildExecutableQuery returns the query exactly as the worker sent it, for
+// post-run explain. It returns nil for operations explain does not cover.
+func buildExecutableQuery(opType, database string, q config.QueryDefinition, filter map[string]interface{}, pipeline []interface{}, findLimit int64) *stats.ExecutableQuery {
+	switch opType {
+	case "find":
+		return &stats.ExecutableQuery{Database: database, Filter: filter, Projection: q.Projection, Limit: findLimit}
+	case "updateOne", "updateMany":
+		return &stats.ExecutableQuery{Database: database, Filter: filter, Update: q.Update, Upsert: q.Upsert}
+	case "deleteOne", "deleteMany":
+		return &stats.ExecutableQuery{Database: database, Filter: filter}
+	case "aggregate":
+		return &stats.ExecutableQuery{Database: database, Pipeline: pipeline}
+	default:
+		return nil
 	}
 }
 
@@ -803,6 +828,12 @@ func deepClone(v interface{}) interface{} {
 			s[i] = deepClone(val)
 		}
 		return s
+	case bson.D:
+		d := make(bson.D, len(t))
+		for i, e := range t {
+			d[i] = bson.E{Key: e.Key, Value: deepClone(e.Value)}
+		}
+		return d
 	default:
 		return t
 	}
@@ -848,6 +879,12 @@ func renderShape(v interface{}) string {
 			parts = append(parts, fmt.Sprintf("%s:%s", k, renderShape(t[k])))
 		}
 		return "{" + strings.Join(parts, ",") + "}"
+	case bson.D:
+		parts := make([]string, 0, len(t))
+		for _, e := range t {
+			parts = append(parts, fmt.Sprintf("%s:%s", e.Key, renderShape(e.Value)))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
 	case []interface{}:
 		parts := make([]string, 0, len(t))
 		for _, item := range t {
@@ -870,6 +907,171 @@ func renderShape(v interface{}) string {
 	default:
 		return "<val>"
 	}
+}
+
+// renderPipelineShape renders a pipeline for shape identity. $match literals are
+// redacted like filters; $sort/$limit/$skip/$sample/$project values and
+// "$field" paths in other stages are structural and kept, so pipelines that
+// differ in those semantics get different shapes.
+func renderPipelineShape(pipeline []interface{}) string {
+	parts := make([]string, 0, len(pipeline))
+	for _, raw := range pipeline {
+		stage, ok := raw.(map[string]interface{})
+		if !ok {
+			parts = append(parts, renderShape(raw))
+			continue
+		}
+		keys := make([]string, 0, len(stage))
+		for k := range stage {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fields := make([]string, 0, len(keys))
+		for _, k := range keys {
+			fields = append(fields, k+":"+renderStageShape(k, stage[k]))
+		}
+		parts = append(parts, "{"+strings.Join(fields, ",")+"}")
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func renderStageShape(name string, v interface{}) string {
+	switch name {
+	case "$match":
+		return renderShape(v)
+	case "$sort", "$limit", "$skip", "$sample", "$project":
+		return renderSpecShape(v)
+	case "$facet":
+		if m, ok := v.(map[string]interface{}); ok {
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			parts := make([]string, 0, len(keys))
+			for _, k := range keys {
+				if sub, ok := m[k].([]interface{}); ok {
+					parts = append(parts, k+":"+renderPipelineShape(sub))
+				} else {
+					parts = append(parts, k+":"+renderExprShape(m[k]))
+				}
+			}
+			return "{" + strings.Join(parts, ",") + "}"
+		}
+	}
+	return renderOwnedExprShape(v, name)
+}
+
+// renderSpecShape keeps direct numeric/boolean spec values (sort direction,
+// projection inclusion, limit/skip/sample size); nested expressions go through
+// renderExprShape so their literals stay redacted.
+func renderSpecShape(v interface{}) string {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, k+":"+renderSpecValue(t[k]))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	case bson.D:
+		parts := make([]string, 0, len(t))
+		for _, e := range t {
+			parts = append(parts, e.Key+":"+renderSpecValue(e.Value))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	case []interface{}:
+		return renderExprShape(t)
+	default:
+		return renderSpecScalar(t)
+	}
+}
+
+func renderSpecValue(v interface{}) string {
+	switch v.(type) {
+	case map[string]interface{}, []interface{}, bson.D:
+		return renderExprShape(v)
+	}
+	return renderSpecScalar(v)
+}
+
+func renderSpecScalar(v interface{}) string {
+	switch t := v.(type) {
+	case bool:
+		return strconv.FormatBool(t)
+	case int:
+		return strconv.Itoa(t)
+	case int32:
+		return strconv.FormatInt(int64(t), 10)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
+	case string:
+		if strings.HasPrefix(t, "$") {
+			return t
+		}
+	}
+	return renderShape(v)
+}
+
+func renderExprShape(v interface{}) string {
+	return renderOwnedExprShape(v, "")
+}
+
+// renderOwnedExprShape renders an expression whose enclosing key is owner, so
+// a $sortArray sortBy direction is kept like other sort specifications.
+func renderOwnedExprShape(v interface{}, owner string) string {
+	switch t := v.(type) {
+	case map[string]interface{}:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, k+":"+renderExprField(owner, k, t[k]))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	case bson.D:
+		parts := make([]string, 0, len(t))
+		for _, e := range t {
+			parts = append(parts, e.Key+":"+renderExprField(owner, e.Key, e.Value))
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	case []interface{}:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			parts = append(parts, renderExprShape(item))
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	case string:
+		if strings.HasPrefix(t, "$") {
+			return t
+		}
+	}
+	return renderShape(v)
+}
+
+func renderExprField(owner, k string, v interface{}) string {
+	switch k {
+	case "$literal":
+		return renderShape(v)
+	case "pipeline":
+		if sub, ok := v.([]interface{}); ok {
+			return renderPipelineShape(sub)
+		}
+	case "sortBy":
+		if _, ok := v.(bson.D); ok || owner == "$sortArray" {
+			return renderSpecShape(v)
+		}
+	}
+	return renderOwnedExprShape(v, k)
 }
 
 func collectFilterFields(v interface{}, prefix string, out *[]string) {
@@ -913,7 +1115,35 @@ func collectPipelineFields(pipeline []interface{}) []string {
 	return sortUniqueStrings(fields)
 }
 
-func buildOperationShape(opType string, filter map[string]interface{}, pipeline []interface{}) (string, string, []string) {
+// shapeOptions carries the executed options that change query semantics and
+// therefore belong in the shape identity (stats.ShapeIdentityVersion).
+type shapeOptions struct {
+	projection map[string]interface{}
+	limit      int64
+	upsert     bool
+}
+
+// identitySuffix appends the options that were actually sent for opType.
+func (o shapeOptions) identitySuffix(opType string) string {
+	var b strings.Builder
+	switch opType {
+	case "find":
+		if len(o.projection) > 0 {
+			b.WriteString("|projection:")
+			b.WriteString(renderSpecShape(o.projection))
+		}
+		if o.limit > 0 {
+			fmt.Fprintf(&b, "|limit:%d", o.limit)
+		}
+	case "updateOne", "updateMany":
+		if o.upsert {
+			b.WriteString("|upsert")
+		}
+	}
+	return b.String()
+}
+
+func buildOperationShape(opType string, filter map[string]interface{}, pipeline []interface{}, opts shapeOptions) (string, string, []string) {
 	const maxShapeLen = 512
 	trim := func(v string) string {
 		if len(v) <= maxShapeLen {
@@ -924,20 +1154,22 @@ func buildOperationShape(opType string, filter map[string]interface{}, pipeline 
 
 	switch opType {
 	case "find", "updateOne", "updateMany", "deleteOne", "deleteMany":
+		// The suffix stays outside truncation so long filters keep their options.
+		suffix := trim(opts.identitySuffix(opType))
 		if len(filter) == 0 {
-			return opType + "|{}", opType + " empty filter", nil
+			return opType + "|{}" + suffix, opType + " empty filter", nil
 		}
 		fields := make([]string, 0, 8)
 		collectFilterFields(filter, "", &fields)
 		fields = sortUniqueStrings(fields)
 		shape := trim(renderShape(filter))
-		return trim(opType + "|" + shape), trim(fmt.Sprintf("%s on fields: %s", opType, strings.Join(fields, ", "))), fields
+		return trim(opType+"|"+shape) + suffix, trim(fmt.Sprintf("%s on fields: %s", opType, strings.Join(fields, ", "))), fields
 	case "aggregate":
 		if len(pipeline) == 0 {
 			return "aggregate|[]", "aggregate empty pipeline", nil
 		}
 		fields := collectPipelineFields(pipeline)
-		shape := trim(renderShape(pipeline))
+		shape := trim(renderPipelineShape(pipeline))
 		return trim("aggregate|" + shape), trim(fmt.Sprintf("aggregate match fields: %s", strings.Join(fields, ", "))), fields
 	case "insert":
 		return "insert|generated_doc", "insert generated document", nil
@@ -1256,6 +1488,9 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 
 	<-workloadCtx.Done()
 	wg.Wait()
+	if wCfg.collector != nil {
+		wCfg.collector.MarkWorkloadEnd()
+	}
 	close(monitorDone)
 
 	panicMu.Lock()
@@ -1316,23 +1551,19 @@ func executeQueryOnce(ctx context.Context, database *mongo.Database, q config.Qu
 	}
 }
 
-func buildOrderedShardKey(col config.CollectionDefinition, shardKeyMap map[string]interface{}, isHashed bool) bson.D {
-	keys := make([]string, 0, len(shardKeyMap))
-	for k := range shardKeyMap {
-		keys = append(keys, k)
-	}
+// buildOrderedShardKey returns the shard key in declared order with declared
+// values; compound shard key order is significant and must not be sorted.
+func buildOrderedShardKey(key config.IndexKeys) bson.D {
+	return key.BSON()
+}
 
-	sort.Strings(keys)
-
-	var cmd bson.D
-	for _, k := range keys {
-		if isHashed {
-			cmd = append(cmd, bson.E{Key: k, Value: "hashed"})
-		} else {
-			cmd = append(cmd, bson.E{Key: k, Value: 1})
+func shardKeyIsHashed(key config.IndexKeys) bool {
+	for _, e := range key {
+		if e.Value == "hashed" {
+			return true
 		}
 	}
-	return cmd
+	return false
 }
 
 // Check if a collection is already sharded and return its chunk count.
@@ -1510,14 +1741,7 @@ func resolveShardKeyDoc(col config.CollectionDefinition, patchKey string) (bson.
 	if col.ShardConfig == nil || len(col.ShardConfig.Key) == 0 {
 		return bson.D{{Key: patchKey, Value: 1}}, false, nil
 	}
-	isHashed := false
-	for _, v := range col.ShardConfig.Key {
-		if vStr, ok := v.(string); ok && strings.EqualFold(vStr, "hashed") {
-			isHashed = true
-		}
-		break
-	}
-	return buildOrderedShardKey(col, col.ShardConfig.Key, isHashed), isHashed, nil
+	return buildOrderedShardKey(col.ShardConfig.Key), shardKeyIsHashed(col.ShardConfig.Key), nil
 }
 
 func shouldApplyGenericSharding(mode string, skipWithoutConfig bool, isMongos bool, col config.CollectionDefinition) (bool, error) {

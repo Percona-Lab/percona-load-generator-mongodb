@@ -130,7 +130,7 @@ func TestIdentifyPatchKey(t *testing.T) {
 				Fields: map[string]config.CollectionField{
 					"user_id": {Type: "int"},
 				},
-				ShardConfig: &config.ShardConfig{Key: map[string]interface{}{"user_id": 1}},
+				ShardConfig: &config.ShardConfig{Key: config.IndexKeys{{Field: "user_id", Value: 1}}},
 			},
 			want: "user_id",
 		},
@@ -152,7 +152,7 @@ func TestIdentifyPatchKey(t *testing.T) {
 			name: "shard_key_fallback_without_int_type",
 			col: config.CollectionDefinition{
 				Fields:      map[string]config.CollectionField{"name": {Type: "string"}},
-				ShardConfig: &config.ShardConfig{Key: map[string]interface{}{"name": 1}},
+				ShardConfig: &config.ShardConfig{Key: config.IndexKeys{{Field: "name", Value: 1}}},
 			},
 			want: "name",
 		},
@@ -340,19 +340,24 @@ func TestGenerateInsertQueryAndInsertManyQueryFromCache(t *testing.T) {
 	}
 }
 
-func TestBuildOrderedShardKey(t *testing.T) {
-	m := map[string]interface{}{"z": 1, "a": 1}
-	ordered := buildOrderedShardKey(config.CollectionDefinition{}, m, false)
-	if len(ordered) != 2 || ordered[0].Key != "a" || ordered[1].Key != "z" {
-		t.Fatalf("expected sorted keys, got %+v", ordered)
+func TestBuildOrderedShardKeyKeepsDeclaredOrderAndValues(t *testing.T) {
+	cfg, err := config.ParseCollectionsBytes([]byte(`[{"database":"d","collection":"c","fields":{},"shardConfig":{"key":{"z":1,"a":"hashed","m":1}}}]`))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if ordered[0].Value != 1 || ordered[1].Value != 1 {
-		t.Fatalf("expected range shard values to be 1")
+	key := cfg.Collections[0].ShardConfig.Key
+	for i := 0; i < 50; i++ {
+		got := buildOrderedShardKey(key)
+		want := bson.D{{Key: "z", Value: int32(1)}, {Key: "a", Value: "hashed"}, {Key: "m", Value: int32(1)}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("shard key = %+v, want %+v", got, want)
+		}
 	}
-
-	hashed := buildOrderedShardKey(config.CollectionDefinition{}, m, true)
-	if hashed[0].Value != "hashed" || hashed[1].Value != "hashed" {
-		t.Fatalf("expected hashed values, got %+v", hashed)
+	if !shardKeyIsHashed(key) {
+		t.Fatalf("expected hashed shard key")
+	}
+	if got := identifyPatchKey(cfg.Collections[0]); got != "z" {
+		t.Fatalf("patch key = %q, want first declared field z", got)
 	}
 }
 
@@ -374,7 +379,7 @@ func TestResolveShardKeyDoc(t *testing.T) {
 		col := config.CollectionDefinition{
 			Name: "orders",
 			ShardConfig: &config.ShardConfig{
-				Key: map[string]interface{}{"order_id": "hashed"},
+				Key: config.IndexKeys{{Field: "order_id", Value: "hashed"}},
 			},
 		}
 		doc, isHashed, err := resolveShardKeyDoc(col, "order_id")
@@ -408,7 +413,7 @@ func TestShouldApplyGenericSharding(t *testing.T) {
 	colWithConfig := config.CollectionDefinition{
 		DatabaseName: "bench",
 		Name:         "orders",
-		ShardConfig:  &config.ShardConfig{Key: map[string]interface{}{"order_id": 1}},
+		ShardConfig:  &config.ShardConfig{Key: config.IndexKeys{{Field: "order_id", Value: 1}}},
 	}
 	colWithoutConfig := config.CollectionDefinition{
 		DatabaseName: "bench",
@@ -902,5 +907,89 @@ func TestRunAllQueriesOnceNoQueriesReturnsNil(t *testing.T) {
 	}
 	if called {
 		t.Fatalf("expected no execution calls for empty queries")
+	}
+}
+
+func TestBuildExecutableQueryPreservesExecutedDetails(t *testing.T) {
+	filter := map[string]interface{}{"status": "open"}
+	q := config.QueryDefinition{
+		Projection: map[string]interface{}{"_id": 0},
+		Update:     map[string]interface{}{"$set": map[string]interface{}{"x": 1}},
+		Upsert:     true,
+	}
+	find := buildExecutableQuery("find", "shop", q, filter, nil, 25)
+	if find.Database != "shop" || find.Limit != 25 || find.Filter["status"] != "open" || find.Projection["_id"] != 0 || find.Update != nil {
+		t.Fatalf("unexpected find query: %+v", find)
+	}
+	upd := buildExecutableQuery("updateMany", "shop", q, filter, nil, 25)
+	if upd.Limit != 0 || upd.Update == nil || !upd.Upsert || upd.Projection != nil {
+		t.Fatalf("unexpected update query: %+v", upd)
+	}
+	del := buildExecutableQuery("deleteOne", "shop", q, filter, nil, 25)
+	if del.Update != nil || del.Filter["status"] != "open" {
+		t.Fatalf("unexpected delete query: %+v", del)
+	}
+	pipeline := []interface{}{map[string]interface{}{"$match": filter}}
+	agg := buildExecutableQuery("aggregate", "shop", q, nil, pipeline, 25)
+	if len(agg.Pipeline) != 1 || agg.Filter != nil || agg.Limit != 0 {
+		t.Fatalf("unexpected aggregate query: %+v", agg)
+	}
+	if buildExecutableQuery("insert", "shop", q, filter, nil, 25) != nil {
+		t.Fatalf("insert must not produce an executable explain query")
+	}
+}
+
+func TestBuildOperationShapeSeparatesExecutedSemantics(t *testing.T) {
+	key := func(op string, filter map[string]interface{}, pipeline []interface{}, o shapeOptions) string {
+		k, _, _ := buildOperationShape(op, filter, pipeline, o)
+		return k
+	}
+	f := func(v string) map[string]interface{} { return map[string]interface{}{"status": v} }
+
+	if a, b := key("find", f("open"), nil, shapeOptions{limit: 10}), key("find", f("closed"), nil, shapeOptions{limit: 10}); a != b || a != "find|{status:<str>}|limit:10" {
+		t.Fatalf("filter literals must not split shapes: %q vs %q", a, b)
+	}
+	distinct := [][2]string{
+		{key("find", f("x"), nil, shapeOptions{limit: 10}), key("find", f("x"), nil, shapeOptions{limit: 100})},
+		{key("find", f("x"), nil, shapeOptions{limit: 10}), key("find", f("x"), nil, shapeOptions{limit: 10, projection: map[string]interface{}{"name": 1.0}})},
+		{key("find", f("x"), nil, shapeOptions{limit: 10, projection: map[string]interface{}{"name": 1.0}}), key("find", f("x"), nil, shapeOptions{limit: 10, projection: map[string]interface{}{"name": 0.0}})},
+		{key("updateOne", f("x"), nil, shapeOptions{}), key("updateOne", f("x"), nil, shapeOptions{upsert: true})},
+		{key("find", nil, nil, shapeOptions{limit: 1}), key("find", nil, nil, shapeOptions{limit: 2})},
+	}
+	pipe := func(stages ...map[string]interface{}) []interface{} {
+		out := make([]interface{}, len(stages))
+		for i, s := range stages {
+			out[i] = s
+		}
+		return out
+	}
+	match := map[string]interface{}{"$match": f("x")}
+	distinct = append(distinct,
+		[2]string{key("aggregate", nil, pipe(match, map[string]interface{}{"$sort": map[string]interface{}{"ts": 1.0}}), shapeOptions{}), key("aggregate", nil, pipe(match, map[string]interface{}{"$sort": map[string]interface{}{"ts": -1.0}}), shapeOptions{})},
+		[2]string{key("aggregate", nil, pipe(match, map[string]interface{}{"$limit": 5.0}), shapeOptions{}), key("aggregate", nil, pipe(match, map[string]interface{}{"$limit": 50.0}), shapeOptions{})},
+		[2]string{key("aggregate", nil, pipe(match, map[string]interface{}{"$skip": 0.0}), shapeOptions{}), key("aggregate", nil, pipe(match, map[string]interface{}{"$skip": 10.0}), shapeOptions{})},
+		[2]string{key("aggregate", nil, pipe(match, map[string]interface{}{"$group": map[string]interface{}{"_id": "$a"}}), shapeOptions{}), key("aggregate", nil, pipe(match, map[string]interface{}{"$group": map[string]interface{}{"_id": "$b"}}), shapeOptions{})},
+	)
+	for i, pair := range distinct {
+		if pair[0] == pair[1] {
+			t.Fatalf("case %d: different semantics share shape %q", i, pair[0])
+		}
+	}
+
+	// Aggregate $match and expression literals stay redacted and do not split shapes.
+	a := key("aggregate", nil, pipe(map[string]interface{}{"$match": f("tenant-a")}, map[string]interface{}{"$addFields": map[string]interface{}{"flag": "secret-a"}}), shapeOptions{})
+	b := key("aggregate", nil, pipe(map[string]interface{}{"$match": f("tenant-b")}, map[string]interface{}{"$addFields": map[string]interface{}{"flag": "secret-b"}}), shapeOptions{})
+	if a != b || strings.Contains(a, "tenant") || strings.Contains(a, "secret") {
+		t.Fatalf("pipeline literals must be redacted and merged: %q vs %q", a, b)
+	}
+
+	// The options suffix survives filter truncation.
+	long := map[string]interface{}{}
+	for i := 0; i < 80; i++ {
+		long[strings.Repeat("f", 10)+string(rune('a'+i%26))+string(rune('a'+i/26))] = "v"
+	}
+	k10, k20 := key("find", long, nil, shapeOptions{limit: 10}), key("find", long, nil, shapeOptions{limit: 20})
+	if !strings.HasSuffix(k10, "|limit:10") || !strings.HasSuffix(k20, "|limit:20") {
+		t.Fatalf("limit suffix lost on long filters: %q", k10)
 	}
 }

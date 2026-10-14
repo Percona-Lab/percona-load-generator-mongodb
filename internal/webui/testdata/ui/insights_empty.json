@@ -1,0 +1,322 @@
+{
+  "affected_collections": null,
+  "efficiency_coverage": {
+    "method": "Scan efficiency, 0-100, higher is better: how much the server examined to produce each result. The score is set by the worst of three checks: documents examined per result, index keys examined per result, and a filtered collection scan (which caps the score at 38). The counts come from explain (executionStats) of up to 2 sample commands per shape, run after the workload. It is a PLGM heuristic, not a MongoDB metric and not an estimate of time saved.",
+    "reason": "insights_status_empty",
+    "shapes_not_applicable": 0,
+    "shapes_partial": 0,
+    "shapes_rated": 0,
+    "shapes_total": 0,
+    "shapes_unassessed": 0,
+    "status": "not_run",
+    "untracked_operations": 0,
+    "version": "se-1"
+  },
+  "efficiency_view": {
+    "columns": [
+      {
+        "explanation": "0-100, higher is better. Set by the worst of documents examined per result, index keys examined per result, and a filtered collection scan (caps at 38). Bands: 75+ efficient, 50-74 moderate, below 50 inefficient. From explain of up to 2 sample commands after the run. \"≤ N\" means explain returned only some counts; \"Unassessed\" means the shape was not explained.",
+        "key": "scan_efficiency",
+        "title": "Scan efficiency"
+      },
+      {
+        "explanation": "Client-side time per operation, including network. Avg and max cover every operation; p95 needs 20 sampled operations and p99 needs 100. Rated only against the insights_latency_target_* settings; with no target it is Not assessed.",
+        "key": "latency",
+        "title": "Query latency"
+      },
+      {
+        "explanation": "Operations, operations per second over the workload window, share of all operations, and share of summed operation time. It shows where time went; a high share or rate is not by itself a sign of an inefficient query.",
+        "key": "workload_impact",
+        "title": "Workload impact"
+      },
+      {
+        "explanation": "From the explained plans: a SORT or $sort stage means results were sorted in memory instead of read in index order; a spill means a stage wrote temporary data to disk (usedDisk). Spills are reported only with executionStats, so without them the result is Not assessed. Below the label: the largest sort bytes processed and spill count/file size reported by a single stage, as a range when the samples differ. Details list every stage's reported sort, spill, memory-limit, and stage-time values per sample; these come from the post-run explain, not the original operations.",
+        "key": "execution_overhead",
+        "title": "Execution overhead"
+      },
+      {
+        "explanation": "$lookup: documents and keys examined in the joined collection, when the $lookup stage reports them. Lock waits and network time are not collected by PLGM.",
+        "key": "other",
+        "title": "$lookup / locks / network"
+      }
+    ],
+    "coverage_counts": {},
+    "coverage_labels": {
+      "assessed": "Assessed",
+      "budget_excluded": "Not explained (budget)",
+      "cancelled": "Explain cancelled",
+      "failed": "Explain failed",
+      "not_applicable": "Not applicable",
+      "not_supported": "Not supported",
+      "partial": "Partial evidence",
+      "unavailable": "Unavailable"
+    },
+    "default_sort": "efficiency",
+    "latency_targets": {
+      "avg_ms": 500,
+      "p95_ms": 50,
+      "p99_ms": 100
+    },
+    "method_note": "Scan efficiency, 0-100, higher is better: how much the server examined to produce each result. The score is set by the worst of three checks: documents examined per result, index keys examined per result, and a filtered collection scan (which caps the score at 38). The counts come from explain (executionStats) of up to 2 sample commands per shape, run after the workload. It is a PLGM heuristic, not a MongoDB metric and not an estimate of time saved.",
+    "rating_versions": {
+      "execution_overhead": "eo-1",
+      "latency": "lr-1",
+      "scan_efficiency": "se-1"
+    },
+    "reason": "insights_status_empty",
+    "rows": [],
+    "shapes_total": 0,
+    "sort_note": "Sort by scan efficiency (lowest score first; at equal scores, measured scores before \"≤ N\" bounds, then higher workload impact) or by workload impact (summed operation time). Shapes without a score follow the scored ones and are never hidden.",
+    "sort_options": [
+      "efficiency",
+      "impact"
+    ],
+    "status": "not_run",
+    "unrecorded": {
+      "paths": [
+        "failed_transactions: failed transaction batches do not call the operation recorder and are absent from all counters",
+        "raw_injector: the raw injector path does not call the operation recorder and is absent from all counters"
+      ],
+      "untracked_operations": 0
+    },
+    "version": "se-1"
+  },
+  "explain_coverage": {
+    "budget": {
+      "efficiency_slots": 10,
+      "impact_slots": 5,
+      "latency_tier_slots": 5,
+      "max_planned_samples": 40,
+      "max_time_ms": 1000,
+      "retries": 0,
+      "samples_per_shape": 2,
+      "severity_slots": 10,
+      "workers": 1
+    },
+    "cancelled_shapes": 0,
+    "commands_deduplicated": 0,
+    "commands_run": 0,
+    "completed_shapes": 0,
+    "efficiency_mode": "impact_and_latency_tiers",
+    "eligible_shapes": 0,
+    "excluded_shapes": 0,
+    "failed_shapes": 0,
+    "not_supported_shapes": 0,
+    "partial_shapes": 0,
+    "reason": "insights_status_empty",
+    "samples_planned": 0,
+    "sampling": {
+      "capture_status": "ready",
+      "latency_tiers": [
+        "lt_1ms",
+        "1_10ms",
+        "10_100ms",
+        "100ms_1s",
+        "ge_1s"
+      ],
+      "scope_note": "Each selected shape is explained from its own representative samples: a uniform reservoir over every successful explainable operation of the shape in the run, plus its slowest one, independent of the slow threshold. all_operations means every such operation was retained; full_run_reservoir_with_drops means some admissions were skipped by the sample size or byte limits, so the reservoir may be biased.",
+      "shapes_all_operations": 0,
+      "shapes_reservoir_with_drops": 0,
+      "shapes_uniform_reservoir": 0,
+      "shapes_without_samples": 0,
+      "untracked_operations": 0
+    },
+    "selected_below_slow_threshold": 0,
+    "selected_by_impact": 0,
+    "selected_by_latency_tier": 0,
+    "selected_by_severity": 0,
+    "selected_shapes": 0,
+    "selection_method": "nearest_representative_median_and_p95",
+    "selection_note": "Severity slots (insights_explain_top_n) take shapes from the severity-filtered slow view. Efficiency slots (the same number) are chosen from every tracked shape regardless of the slow threshold or severity filter, alternating between the highest remaining workload impact and a round-robin over full-run average latency tiers from fastest to slowest, so fast, low-impact shapes can be assessed. A shape that was not selected is unassessed, not efficient.",
+    "shapes": [],
+    "status": "not_run",
+    "tracked_shapes": 0,
+    "unavailable_shapes": 0,
+    "unrecorded_paths": [
+      "failed_transactions: failed transaction batches do not call the operation recorder and are absent from all counters",
+      "raw_injector: the raw injector path does not call the operation recorder and is absent from all counters"
+    ]
+  },
+  "impact": {
+    "coverage": {
+      "group_coverage_complete": true,
+      "group_limit": 50,
+      "groups_shown": 0,
+      "interpretation_note": "Impact is measured from every completed operation. It shows where operation time went; it does not establish a cause, and it is not index advice.",
+      "min_percentile_samples": 20,
+      "not_shown_groups": 0,
+      "not_shown_operation_ms": 0,
+      "not_shown_operations": 0,
+      "observed_operation_ms": 0,
+      "observed_operations": 0,
+      "overflow_operation_ms": 0,
+      "overflow_operations": 0,
+      "retained_sample_events": 0,
+      "sample_buffer_wrapped": false,
+      "sampled_in_events": 0,
+      "scope": "full_run_all_completed_operations",
+      "time_basis": "summed_concurrent_operation_time",
+      "time_basis_note": "Summed concurrent operation time: the sum of client-observed latencies of completed operations. Concurrent operations overlap, so this is not wall-clock time and not server CPU consumption.",
+      "tracked_groups": 0
+    },
+    "groups": [],
+    "status": "empty"
+  },
+  "metadata": {
+    "dropped_group_entries": 0,
+    "eligible_events": 0,
+    "evidence_level": "heuristic",
+    "explain_backoff_ms": 0,
+    "explain_commands_run": 0,
+    "explain_efficiency_mode": "impact_and_latency_tiers",
+    "explain_enabled": true,
+    "explain_impact": "post_run_only_does_not_affect_measured_workload_window",
+    "explain_max_samples": 40,
+    "explain_mode": "post_run_only",
+    "explain_retries": 0,
+    "explain_samples_planned": 0,
+    "explain_selection_method": "nearest_representative_median_and_p95",
+    "explain_selection_note": "Each selected shape is explained from its own representative samples: a uniform reservoir over every successful explainable operation of the shape in the run, plus its slowest one, independent of the slow threshold. all_operations means every such operation was retained; full_run_reservoir_with_drops means some admissions were skipped by the sample size or byte limits, so the reservoir may be biased.",
+    "explain_selection_scope": "per_shape_representative_samples",
+    "explain_severity_mode": "high_and_low",
+    "explain_timing_note": "Client latency was measured during the run; explain timings were measured afterwards by the server under different load and cache state. A difference between them does not by itself establish a root cause.",
+    "explain_verbosity": "executionStats",
+    "explain_workers": 1,
+    "filtered_by_severity": 0,
+    "filtered_by_threshold": 0,
+    "generated_at": "normalized",
+    "latency_targets": {
+      "avg_ms": 500,
+      "p95_ms": 50,
+      "p99_ms": 100
+    },
+    "retained_events": 0,
+    "sampled_in_events": 0,
+    "sampling_rate": 1,
+    "shape_identity_version": "si-3",
+    "slow_threshold_ms": 200,
+    "status": "empty"
+  },
+  "potential_index_issues": null,
+  "query_capture": {
+    "coverage": {
+      "descriptors_truncated": 0,
+      "dropped_byte_budget": 0,
+      "dropped_oversized": 0,
+      "eligible_operations": 0,
+      "evicted_samples": 0,
+      "ineligible_failed": 0,
+      "ineligible_no_executable_query": 0,
+      "ineligible_not_explainable": 0,
+      "limits": {
+        "max_descriptor_bytes": 1024,
+        "max_groups": 50,
+        "max_retained_bytes": 8388608,
+        "max_sample_bytes": 16384,
+        "samples_per_shape": 8,
+        "shapes_listed_limit": 100,
+        "slowest_slots_per_shape": 1
+      },
+      "not_shown_shapes": 0,
+      "recorded_operations": 0,
+      "retained_bytes_estimate": 0,
+      "retained_samples": 0,
+      "sampled_operations": 0,
+      "scope": "full_run_counters_with_bounded_samples",
+      "scope_note": "Counters cover every recorded operation in the run. Samples are a uniform random reservoir per shape over successful explainable operations, plus that shape's slowest successful operation, independent of the slow threshold. Samples are diagnostic evidence only and are never extrapolated to full-run totals.",
+      "selection_method": "uniform_reservoir_per_shape_plus_slowest",
+      "shape_identity_version": "si-3",
+      "shapes_shown": 0,
+      "shapes_with_samples": 0,
+      "slow_threshold_ms": 200,
+      "tracked_shapes": 0,
+      "unrecorded_paths": [
+        "failed_transactions: failed transaction batches do not call the operation recorder and are absent from all counters",
+        "raw_injector: the raw injector path does not call the operation recorder and is absent from all counters"
+      ],
+      "untracked_shape_operations": 0
+    },
+    "shapes": [],
+    "status": "empty"
+  },
+  "query_shapes": null,
+  "recommendations": null,
+  "slow_queries": null,
+  "summary": {
+    "slow_sampled_events": 0,
+    "slow_sampled_ratio": 0,
+    "top_severity": "none",
+    "total_sampled_events": 0
+  },
+  "trends": {
+    "causation_note": "Annotations list what changed between the baseline and this run (plans, indexes, server, sampling, workload). They are not evidence of cause: data distribution, cache state, concurrent load, or any annotated change can move these metrics, and PLGM does not attribute a change to any of them.",
+    "counts": {
+      "comparability": {},
+      "efficiency": {},
+      "impact": {},
+      "latency": {}
+    },
+    "criteria": {
+      "efficiency_material_score_delta": 15,
+      "efficiency_min_explained_commands": 2,
+      "efficiency_required_confidence": "high",
+      "impact_material_relative": 0.25,
+      "impact_material_share_abs": 0.05,
+      "latency_material_abs_ms": 1,
+      "latency_material_relative": 0.2,
+      "latency_p95_min_samples": 20,
+      "max_baseline_age_hours": 720,
+      "min_operations": 30,
+      "note": "These thresholds are PLGM heuristics set on synthetic fixtures. They are not statistical significance tests and have not been calibrated against real customer workloads.",
+      "summary": "Efficiency: both runs assessed (not partial) with at least 2 distinct explained commands and high scan efficiency confidence; a change of 15 or more points is labeled. Latency: at least 30 operations in both runs; the full-run average must move by at least 1 ms and 20%, and a p95 from at least 20 retained samples on both sides must not move materially the other way. Impact: at least 30 operations and complete impact group coverage in both runs; the share of observed operation time must move by at least 5 percentage points and 25%. Baselines older than 30 days are outdated.",
+      "workload_count_change_relative": 0.25
+    },
+    "current_run": {
+      "recorded_at": "normalized",
+      "run_id": "normalized",
+      "sampling": {
+        "capture_status": "empty",
+        "explain_efficiency_mode": "impact_and_latency_tiers",
+        "explain_enabled": true,
+        "explain_max_samples": 40,
+        "explain_verbosity": "executionStats",
+        "group_limit": 50,
+        "sampling_rate": 1,
+        "slow_threshold_ms": 200
+      },
+      "score_version": "se-1",
+      "server": {
+        "source": "none",
+        "topology": "unknown"
+      },
+      "shape_identity_version": "si-3",
+      "workload": {
+        "concurrency": 4,
+        "duration": "1s",
+        "observed_operations": 0,
+        "operation_mix": "find 0, update 0, delete 0, insert 0, aggregate 0, transaction 0, bulk_insert 0"
+      }
+    },
+    "evidence_note": "Operation counts and average latency cover every completed operation of the run. p95 uses retained latency samples only. Efficiency uses the distinct explained representative commands (at most 2 per shape); a large operation count does not add explain evidence.",
+    "limitations": [
+      "These thresholds are PLGM heuristics set on synthetic fixtures. They are not statistical significance tests and have not been calibrated against real customer workloads.",
+      "Efficiency evidence is at most 2 explained representative commands per shape per run, chosen from retained samples; it is not a statistical sample of the shape's operations.",
+      "Only full-run sums are kept for latency, so there is no variance estimate; latency labels are a magnitude rule, not a statistical test.",
+      "Data distribution, collection size, cache state, and load from other clients are not recorded; any of them can change these metrics without an annotation.",
+      "Baselines roll forward: each run replaces the latency and impact baseline of every shape it saw, and the efficiency baseline only when the new run has assessed evidence (or the old baseline had none).",
+      "Topology comes from the explain layout: mongod means a mongod answered directly (standalone or replica-set member, not distinguished); sharded_cluster means a mongos layout."
+    ],
+    "method_note": "Each tracked shape is compared with its persisted baseline from earlier runs, matched by shape id and namespace. Scan efficiency score, latency (full-run average), and workload impact (share of observed operation time) are compared separately and are never combined. A label is given only when the baseline is compatible (same shape identity and score version, not outdated) and both runs meet the evidence minimums; otherwise the state says why there is no label.",
+    "reason": "insights_status_empty",
+    "rows": [],
+    "status": "not_run",
+    "store": {
+      "baselines": 0,
+      "max_baselines": 500,
+      "persistent": true,
+      "runs": 0,
+      "status": "empty"
+    },
+    "version": "tc-1"
+  }
+}

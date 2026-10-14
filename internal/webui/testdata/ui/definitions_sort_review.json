@@ -1,0 +1,212 @@
+{
+  "collection_list": {
+    "definitions": [
+      {
+        "createdAt": "1970-01-01T00:00:00Z",
+        "description": "PLGM embedded default collection definition.",
+        "format": "json",
+        "id": "__builtin_default_collections",
+        "name": "Built-in Default Collections",
+        "sourceFilename": "resources/collections/default.json",
+        "type": "collection",
+        "updatedAt": "1970-01-01T00:00:00Z"
+      },
+      {
+        "contentVersion": 2,
+        "createdAt": "",
+        "format": "json",
+        "id": "cols",
+        "name": "cols",
+        "type": "collection",
+        "updatedAt": ""
+      }
+    ]
+  },
+  "current": {
+    "content": "{\"queries\":[{\"name\":\"by_b_a\",\"collection\":\"orders\",\"operation\":\"aggregate\",\"pipeline\":[{\"$sort\":{\"b\":-1,\"a\":1}}]}]}",
+    "contentVersion": 2,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "format": "json",
+    "id": "current",
+    "name": "current sorts",
+    "type": "query",
+    "updatedAt": "2025-01-01T00:00:00Z"
+  },
+  "legacy": {
+    "content": "{\"queries\":[{\"name\":\"by_a_b\",\"collection\":\"orders\",\"operation\":\"aggregate\",\"pipeline\":[{\"$sort\":{\"a\":1,\"b\":-1}}]}]}",
+    "createdAt": "2025-01-01T00:00:00Z",
+    "format": "json",
+    "id": "legacy",
+    "name": "legacy sorts",
+    "sortOrderReview": {
+      "issues": [
+        {
+          "path": "queries[0].pipeline[0].$sort",
+          "queryIndex": 0,
+          "queryName": "by_a_b",
+          "sortSpec": "{\"a\":1,\"b\":-1}",
+          "storedKeys": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+      "status": "review_required"
+    },
+    "type": "query",
+    "updatedAt": "2025-01-02T00:00:00Z"
+  },
+  "post_copy_reviewed": {
+    "content": "{\n  \"queries\": [\n    {\n      \"database\": \"\",\n      \"collection\": \"orders\",\n      \"operation\": \"aggregate\",\n      \"name\": \"copy_b_a\",\n      \"label\": \"copy_b_a\",\n      \"filter\": null,\n      \"pipeline\": [\n        {\n          \"$sort\": {\n            \"b\": -1,\n            \"a\": 1\n          }\n        }\n      ]\n    }\n  ]\n}",
+    "contentVersion": 2,
+    "createdAt": "normalized",
+    "format": "json",
+    "id": "normalized",
+    "name": "legacy copy",
+    "type": "query",
+    "updatedAt": "normalized"
+  },
+  "post_copy_stale": {
+    "code": "sort_order_review_required",
+    "message": "query definition \"legacy sorts\" needs its sort order reviewed before a copy of it can be saved; saving does not confirm the order by itself. Confirm or correct each multi-key sort: query 1 (copy_b_a) at queries[0].pipeline[0].$sort, stored as [b, a]. These confirmations are stale because the sort changed after it was confirmed: queries[0].pipeline[0].$sort was confirmed as {\"a\":1,\"b\":-1} but is {\"b\":-1,\"a\":1}",
+    "sortOrderReview": {
+      "issues": [
+        {
+          "path": "queries[0].pipeline[0].$sort",
+          "queryIndex": 0,
+          "queryName": "copy_b_a",
+          "sortSpec": "{\"b\":-1,\"a\":1}",
+          "storedKeys": [
+            "b",
+            "a"
+          ]
+        }
+      ],
+      "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (copy_b_a) at queries[0].pipeline[0].$sort, stored as [b, a]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+      "status": "review_required"
+    },
+    "status": "error"
+  },
+  "put_reviewed": {
+    "content": "{\n  \"queries\": [\n    {\n      \"database\": \"\",\n      \"collection\": \"orders\",\n      \"operation\": \"aggregate\",\n      \"name\": \"by_a_b\",\n      \"label\": \"by_a_b\",\n      \"filter\": null,\n      \"pipeline\": [\n        {\n          \"$sort\": {\n            \"b\": -1,\n            \"a\": 1\n          }\n        }\n      ]\n    }\n  ]\n}",
+    "contentVersion": 2,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "format": "json",
+    "id": "legacy",
+    "name": "legacy sorts",
+    "type": "query",
+    "updatedAt": "normalized"
+  },
+  "put_stale": {
+    "code": "sort_order_review_required",
+    "message": "query definition \"legacy sorts\" needs its sort order reviewed before it can be saved; saving does not confirm the order by itself. Confirm or correct each multi-key sort: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [b, a]. These confirmations are stale because the sort changed after it was confirmed: queries[0].pipeline[0].$sort was confirmed as {\"a\":1,\"b\":-1} but is {\"b\":-1,\"a\":1}",
+    "sortOrderReview": {
+      "issues": [
+        {
+          "path": "queries[0].pipeline[0].$sort",
+          "queryIndex": 0,
+          "queryName": "by_a_b",
+          "sortSpec": "{\"b\":-1,\"a\":1}",
+          "storedKeys": [
+            "b",
+            "a"
+          ]
+        }
+      ],
+      "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [b, a]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+      "status": "review_required"
+    },
+    "status": "error"
+  },
+  "put_unreviewed": {
+    "code": "sort_order_review_required",
+    "message": "query definition \"legacy sorts\" needs its sort order reviewed before it can be saved; saving does not confirm the order by itself. Confirm or correct each multi-key sort: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]",
+    "sortOrderReview": {
+      "issues": [
+        {
+          "path": "queries[0].pipeline[0].$sort",
+          "queryIndex": 0,
+          "queryName": "by_a_b",
+          "sortSpec": "{\"a\":1,\"b\":-1}",
+          "storedKeys": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+      "status": "review_required"
+    },
+    "status": "error"
+  },
+  "query_list": {
+    "definitions": [
+      {
+        "contentVersion": 2,
+        "createdAt": "1970-01-01T00:00:00Z",
+        "description": "PLGM embedded default query definition.",
+        "format": "json",
+        "id": "__builtin_default_queries",
+        "name": "Built-in Default Queries",
+        "sourceFilename": "resources/queries/default.json",
+        "type": "query",
+        "updatedAt": "1970-01-01T00:00:00Z"
+      },
+      {
+        "createdAt": "2025-01-01T00:00:00Z",
+        "format": "json",
+        "id": "legacy",
+        "name": "legacy sorts",
+        "sortOrderReview": {
+          "issues": [
+            {
+              "path": "queries[0].pipeline[0].$sort",
+              "queryIndex": 0,
+              "queryName": "by_a_b",
+              "sortSpec": "{\"a\":1,\"b\":-1}",
+              "storedKeys": [
+                "a",
+                "b"
+              ]
+            }
+          ],
+          "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+          "status": "review_required"
+        },
+        "type": "query",
+        "updatedAt": "2025-01-02T00:00:00Z"
+      },
+      {
+        "contentVersion": 2,
+        "createdAt": "2025-01-01T00:00:00Z",
+        "format": "json",
+        "id": "current",
+        "name": "current sorts",
+        "type": "query",
+        "updatedAt": "2025-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "start_blocked": {
+    "code": "sort_order_review_required",
+    "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+    "sortOrderReview": {
+      "issues": [
+        {
+          "path": "queries[0].pipeline[0].$sort",
+          "queryIndex": 0,
+          "queryName": "by_a_b",
+          "sortSpec": "{\"a\":1,\"b\":-1}",
+          "storedKeys": [
+            "a",
+            "b"
+          ]
+        }
+      ],
+      "message": "query definition \"legacy sorts\" was saved by an earlier version that may have stored multi-key sort keys alphabetically, so the intended sort precedence is unknown: query 1 (by_a_b) at queries[0].pipeline[0].$sort, stored as [a, b]. Review each sort in the editor, confirm or correct the key order, and save the definition again",
+      "status": "review_required"
+    },
+    "status": "error"
+  }
+}

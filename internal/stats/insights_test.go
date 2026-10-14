@@ -9,7 +9,7 @@ import (
 
 func recordShapeEvents(c *Collector, op, coll, shapeKey, shapeSummary string, filterFields []string, durs []time.Duration) {
 	for _, d := range durs {
-		c.RecordOperationEvent(op, "testdb", coll, shapeKey, shapeSummary, filterFields, d, true, 1, map[string]interface{}{"k": 1}, nil, "test query", "unit_test", "test_workload", "insights_test.json", "q1", "{k:<num>}", "", 0)
+		c.RecordOperationEvent(op, "testdb", coll, shapeKey, shapeSummary, filterFields, d, true, 1, &ExecutableQuery{Database: "testdb", Filter: map[string]interface{}{"k": 1}}, "test query", "unit_test", "test_workload", "insights_test.json", "q1", "{k:<num>}", "", 0)
 	}
 }
 
@@ -195,8 +195,8 @@ func TestInsightsReportIncludesQueryReferenceMetadata(t *testing.T) {
 		InsightsExplainSeverityMode: "high_and_low",
 	})
 
-	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 600*time.Millisecond, true, 1, nil, []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
-	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 620*time.Millisecond, true, 1, nil, []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
+	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 600*time.Millisecond, true, 1, &ExecutableQuery{Database: "testdb", Pipeline: []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
+	c.RecordOperationEvent("aggregate", "testdb", "orders_unoptimized", "shape_orders_agg", "aggregate match fields: items.price", []string{"items.price"}, 620*time.Millisecond, true, 1, &ExecutableQuery{Database: "testdb", Pipeline: []interface{}{map[string]interface{}{"$match": map[string]interface{}{"items.price": map[string]interface{}{"$gt": 100}}}}}, "Orders Revenue Aggregate", "uploaded_file", "custom_workload", "suboptimal_queries.json", "orders_agg_top5", "", "[{$match:{items.price:{$gt:<num>}}}]", 0)
 
 	rep := c.GetFinalInsights()
 	if len(rep.SlowQueries) != 1 {

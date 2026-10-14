@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -383,6 +384,7 @@ func TestHandleStartUploadsTLSClientFilesToTempPaths(t *testing.T) {
 	})
 
 	s := NewServer(&config.AppConfig{URI: "mongodb://localhost:27017", Duration: "1s", Concurrency: 1})
+	waitForRunsOnCleanup(t, s)
 	req, rec := newMultipartRequest(t,
 		map[string]string{"default_workload": "false"},
 		map[string]string{
@@ -617,6 +619,7 @@ func TestHandleStartSuccessWithDuplicateCollectionNamesAcrossDatabasesAndExplici
 	})
 
 	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	waitForRunsOnCleanup(t, s)
 	req, rec := newMultipartRequest(t,
 		map[string]string{"default_workload": "false"},
 		map[string]string{
@@ -847,7 +850,22 @@ func newServerWithTempDefinitions(t *testing.T) *WebServer {
 	}
 	s := NewServer(&config.AppConfig{})
 	s.DefinitionStore = store
+	waitForRunsOnCleanup(t, s)
 	return s
+}
+
+// waitForRunsOnCleanup blocks test cleanup until run goroutines started by s
+// exit. Register it after withWebUISeams so (LIFO) it runs before the shared
+// seam hooks are restored, which the goroutines may still be calling.
+func waitForRunsOnCleanup(t *testing.T, s *WebServer) {
+	t.Helper()
+	t.Cleanup(s.runWG.Wait)
+}
+
+func isRunning(s *WebServer) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.IsRunning
 }
 
 func decodeJSONMap(t *testing.T, b []byte) map[string]interface{} {
@@ -1004,6 +1022,7 @@ func TestHandleStartSuccessWithLoadedConfigFlow(t *testing.T) {
 		CollectionsPath: "ignored",
 		QueriesPath:     "ignored",
 	})
+	waitForRunsOnCleanup(t, s)
 
 	req, rec := newMultipartRequest(t, map[string]string{
 		"default_workload": "on",
@@ -1041,8 +1060,8 @@ func TestHandleStartSuccessWithLoadedConfigFlow(t *testing.T) {
 		t.Fatalf("expected createCollections and createIndexes calls")
 	}
 
-	waitUntil(t, 2*time.Second, func() bool { return !s.IsRunning }, "expected IsRunning to reset to false after goroutine completion")
-	if s.IsRunning {
+	waitUntil(t, 2*time.Second, func() bool { return !isRunning(s) }, "expected IsRunning to reset to false after goroutine completion")
+	if isRunning(s) {
 		t.Fatalf("expected IsRunning to reset to false after goroutine completion")
 	}
 	if !disconnectCalled {
@@ -1082,6 +1101,7 @@ func TestHandleStartSuccessWithUploadedCustomFilesSkipsLoaders(t *testing.T) {
 	})
 
 	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	waitForRunsOnCleanup(t, s)
 
 	req, rec := newMultipartRequest(t,
 		map[string]string{"default_workload": "false"},
@@ -1270,6 +1290,7 @@ func TestHandleStartRejectsUnknownQueryCollectionReference(t *testing.T) {
 	})
 
 	s := NewServer(&config.AppConfig{CollectionsPath: "ignored", QueriesPath: "ignored"})
+	waitForRunsOnCleanup(t, s)
 	req, rec := newMultipartRequest(t, map[string]string{"default_workload": "on"}, nil)
 	s.handleStart(rec, req)
 
@@ -1306,6 +1327,7 @@ func TestHandleStartSupportsWrappedQueriesFileUpload(t *testing.T) {
 	})
 
 	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	waitForRunsOnCleanup(t, s)
 	req, rec := newMultipartRequest(t,
 		map[string]string{"default_workload": "false"},
 		map[string]string{
@@ -1343,6 +1365,7 @@ func TestHandleStartLoadCollectionsErrorReturnsErrorResponse(t *testing.T) {
 	})
 
 	s := NewServer(&config.AppConfig{CollectionsPath: "ignored", QueriesPath: "ignored"})
+	waitForRunsOnCleanup(t, s)
 	req, rec := newMultipartRequest(t, map[string]string{"default_workload": "on"}, nil)
 	s.handleStart(rec, req)
 
@@ -1353,7 +1376,19 @@ func TestHandleStartLoadCollectionsErrorReturnsErrorResponse(t *testing.T) {
 	if payload["status"] != "error" {
 		t.Fatalf("expected status=error, got %+v", payload)
 	}
-	if s.IsRunning {
+	if isRunning(s) {
 		t.Fatalf("expected IsRunning reset after load error")
+	}
+}
+
+func TestApplyLatencyTargetFormSetsAndClearsTargets(t *testing.T) {
+	cfg := &config.AppConfig{InsightsLatencyTargetAvgMs: 7, InsightsLatencyTargetP95Ms: 9, InsightsLatencyTargetP99Ms: 11}
+	applyLatencyTargetForm(cfg, url.Values{"insights_latency_target_p95_ms": {"25.5"}, "insights_latency_target_p99_ms": {""}})
+	if cfg.InsightsLatencyTargetAvgMs != 7 || cfg.InsightsLatencyTargetP95Ms != 25.5 || cfg.InsightsLatencyTargetP99Ms != 0 {
+		t.Fatalf("unsubmitted targets stay, submitted ones are set, empty ones clear: %+v", cfg)
+	}
+	applyLatencyTargetForm(cfg, url.Values{"insights_latency_target_avg_ms": {"-3"}, "insights_latency_target_p95_ms": {"abc"}})
+	if cfg.InsightsLatencyTargetAvgMs != 0 || cfg.InsightsLatencyTargetP95Ms != 0 {
+		t.Fatalf("invalid targets must clear rather than rate against garbage: %+v", cfg)
 	}
 }

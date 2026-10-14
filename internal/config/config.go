@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -94,9 +95,17 @@ type AppConfig struct {
 	InsightsExplainMaxTimeMS    int     `yaml:"insights_explain_max_time_ms"`
 	InsightsExplainVerbosity    string  `yaml:"insights_explain_verbosity"`
 	InsightsExplainSeverityMode string  `yaml:"insights_explain_severity_mode"`
-	InsightsExplainWorkers      int     `yaml:"insights_explain_workers"`
-	InsightsExplainRetries      int     `yaml:"insights_explain_retries"`
-	InsightsExplainBackoffMS    int     `yaml:"insights_explain_backoff_ms"`
+	// InsightsExplainEfficiencyMode adds explain slots chosen independently of
+	// the slow threshold and severity filter. See NormalizeExplainEfficiencyMode.
+	InsightsExplainEfficiencyMode string `yaml:"insights_explain_efficiency_mode"`
+	InsightsExplainWorkers        int    `yaml:"insights_explain_workers"`
+	InsightsExplainRetries        int    `yaml:"insights_explain_retries"`
+	InsightsExplainBackoffMS      int    `yaml:"insights_explain_backoff_ms"`
+	// Latency targets per query shape for the latency rating, in ms. 0 means
+	// no target; with no target set, latency is shown but not rated.
+	InsightsLatencyTargetAvgMs float64 `yaml:"insights_latency_target_avg_ms"`
+	InsightsLatencyTargetP95Ms float64 `yaml:"insights_latency_target_p95_ms"`
+	InsightsLatencyTargetP99Ms float64 `yaml:"insights_latency_target_p99_ms"`
 
 	ShardingMode                     string `yaml:"sharding_mode"`
 	ShardingSkipGenericWithoutConfig bool   `yaml:"sharding_skip_generic_without_config"`
@@ -150,6 +159,7 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 		ExistingRecordHitRate:     90,
 		RecordPoolMaxSize:         10000,
 		RecordPoolBootstrapSample: 500,
+		InsightsExplainEnabled:    true,
 	}
 	configLoaded := false
 
@@ -233,11 +243,12 @@ func applyUIDefaults(cfg *AppConfig) {
 	cfg.InsightsSlowThresholdMs = 200
 	cfg.InsightsMaxEvents = 5000
 	cfg.InsightsMaxGroups = 300
-	cfg.InsightsExplainEnabled = false
+	cfg.InsightsExplainEnabled = true
 	cfg.InsightsExplainTopN = 5
 	cfg.InsightsExplainMaxTimeMS = 1000
 	cfg.InsightsExplainVerbosity = "executionStats"
 	cfg.InsightsExplainSeverityMode = "high_only"
+	cfg.InsightsExplainEfficiencyMode = ExplainEfficiencyModeDefault
 	cfg.InsightsExplainWorkers = 1
 	cfg.InsightsExplainRetries = 1
 	cfg.InsightsExplainBackoffMS = 150
@@ -288,6 +299,7 @@ func applyBaseDefaults(cfg *AppConfig) {
 	default:
 		cfg.InsightsExplainSeverityMode = "high_only"
 	}
+	cfg.InsightsExplainEfficiencyMode = NormalizeExplainEfficiencyMode(cfg.InsightsExplainEfficiencyMode)
 	if cfg.InsightsExplainWorkers <= 0 {
 		cfg.InsightsExplainWorkers = 1
 	}
@@ -296,6 +308,11 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	if cfg.InsightsExplainBackoffMS < 0 {
 		cfg.InsightsExplainBackoffMS = 0
+	}
+	for _, t := range []*float64{&cfg.InsightsLatencyTargetAvgMs, &cfg.InsightsLatencyTargetP95Ms, &cfg.InsightsLatencyTargetP99Ms} {
+		if *t < 0 || math.IsNaN(*t) || math.IsInf(*t, 0) {
+			*t = 0
+		}
 	}
 	cfg.ShardingMode = NormalizeShardingMode(cfg.ShardingMode)
 
@@ -761,6 +778,9 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_SEVERITY_MODE"); v != "" {
 		cfg.InsightsExplainSeverityMode = v
 	}
+	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_EFFICIENCY_MODE"); v != "" {
+		cfg.InsightsExplainEfficiencyMode = v
+	}
 	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_WORKERS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.InsightsExplainWorkers = n
@@ -774,6 +794,17 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			cfg.InsightsExplainBackoffMS = n
+		}
+	}
+	for env, dst := range map[string]*float64{
+		"PLGM_INSIGHTS_LATENCY_TARGET_AVG_MS": &cfg.InsightsLatencyTargetAvgMs,
+		"PLGM_INSIGHTS_LATENCY_TARGET_P95_MS": &cfg.InsightsLatencyTargetP95Ms,
+		"PLGM_INSIGHTS_LATENCY_TARGET_P99_MS": &cfg.InsightsLatencyTargetP99Ms,
+	} {
+		if v := os.Getenv(env); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+				*dst = f
+			}
 		}
 	}
 	if v := os.Getenv("PLGM_SHARDING_MODE"); v != "" {
@@ -838,6 +869,21 @@ func ValidateConnectionParams(cfg *AppConfig) error {
 		return fmt.Errorf("invalid TLS connection configuration: tls_ca_file and tlsCertificateKeyFile must be set together")
 	}
 	return nil
+}
+
+const (
+	// ExplainEfficiencyModeDefault adds insights_explain_top_n explain slots
+	// filled alternately by workload impact and by round-robin over latency tiers.
+	ExplainEfficiencyModeDefault = "impact_and_latency_tiers"
+	// ExplainEfficiencyModeOff keeps only the severity-filtered explain slots.
+	ExplainEfficiencyModeOff = "off"
+)
+
+func NormalizeExplainEfficiencyMode(mode string) string {
+	if strings.ToLower(strings.TrimSpace(mode)) == ExplainEfficiencyModeOff {
+		return ExplainEfficiencyModeOff
+	}
+	return ExplainEfficiencyModeDefault
 }
 
 func NormalizeShardingMode(mode string) string {

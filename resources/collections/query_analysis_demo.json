@@ -1,0 +1,104 @@
+[
+    {
+        "database": "query_analysis_demo",
+        "collection": "orders",
+        "fields": {
+            "order_id": {
+                "type": "int",
+                "min": 1,
+                "max": 2000000000
+            },
+            "customer_id": {
+                "type": "int",
+                "min": 1,
+                "max": 50000
+            },
+            "customer_email": {
+                "type": "string",
+                "provider": "email"
+            },
+            "status": {
+                "type": "string",
+                "enum": ["pending", "paid", "packed", "shipped", "delivered", "returned"]
+            },
+            "region": {
+                "type": "string",
+                "enum": ["us-east", "us-west", "eu-central", "eu-west", "ap-south"]
+            },
+            "category": {
+                "type": "string",
+                "enum": ["books", "electronics", "garden", "grocery", "toys", "apparel", "sports", "beauty"]
+            },
+            "channel": {
+                "type": "string",
+                "enum": ["web", "mobile", "store", "partner"]
+            },
+            "product_sku": {
+                "type": "string",
+                "template": "SKU-??-#####"
+            },
+            "total_cents": {
+                "type": "int",
+                "min": 100,
+                "max": 500000
+            },
+            "item_count": {
+                "type": "int",
+                "min": 1,
+                "max": 20
+            },
+            "is_gift": {
+                "type": "bool"
+            },
+            "created_at": {
+                "type": "date"
+            },
+            "shipping": {
+                "type": "object",
+                "fields": {
+                    "city": {
+                        "type": "string",
+                        "provider": "city"
+                    },
+                    "country": {
+                        "type": "string",
+                        "provider": "country"
+                    }
+                }
+            },
+            "notes": {
+                "type": "string",
+                "provider": "sentence",
+                "maxLength": 200
+            }
+        },
+        "indexes": [
+            {
+                "name": "order_id_1",
+                "keys": {
+                    "order_id": 1
+                }
+            },
+            {
+                "name": "customer_id_1_total_cents_-1",
+                "keys": [
+                    { "customer_id": 1 },
+                    { "total_cents": -1 }
+                ]
+            },
+            {
+                "name": "region_1_category_1",
+                "keys": [
+                    { "region": 1 },
+                    { "category": 1 }
+                ]
+            },
+            {
+                "name": "status_1",
+                "keys": {
+                    "status": 1
+                }
+            }
+        ]
+    }
+]

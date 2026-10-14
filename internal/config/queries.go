@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,6 +31,90 @@ type QueryDefinition struct {
 	WorkloadName    string `json:"-" yaml:"-"`
 	DefinitionIndex int    `json:"-" yaml:"-"`
 }
+
+type queryDefinitionAlias QueryDefinition
+
+// UnmarshalJSON keeps the declared key order of sort specifications in the
+// pipeline and update documents (see sort.go).
+func (q *QueryDefinition) UnmarshalJSON(b []byte) error {
+	var aux struct {
+		queryDefinitionAlias
+		Pipeline json.RawMessage `json:"pipeline,omitempty"`
+		Update   json.RawMessage `json:"update,omitempty"`
+	}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	out := QueryDefinition(aux.queryDefinitionAlias)
+	if isJSONValue(aux.Pipeline) {
+		v, err := decodeOrderedJSON(aux.Pipeline)
+		if err != nil {
+			return &QueryDecodeError{Query: decodeQueryName(out), Field: "pipeline", Err: err}
+		}
+		p, ok := v.([]interface{})
+		if !ok {
+			return &QueryDecodeError{Query: decodeQueryName(out), Field: "pipeline", Err: fmt.Errorf("must be an array of stages")}
+		}
+		out.Pipeline = p
+	}
+	if isJSONValue(aux.Update) {
+		v, err := decodeOrderedJSON(aux.Update)
+		if err != nil {
+			return &QueryDecodeError{Query: decodeQueryName(out), Field: "update", Err: err}
+		}
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			return &QueryDecodeError{Query: decodeQueryName(out), Field: "update", Err: fmt.Errorf("must be an object")}
+		}
+		out.Update = m
+	}
+	*q = out
+	return nil
+}
+
+// MarshalJSON writes sort specifications as JSON objects in their order.
+func (q QueryDefinition) MarshalJSON() ([]byte, error) {
+	aux := struct {
+		queryDefinitionAlias
+		Pipeline interface{} `json:"pipeline,omitempty"`
+		Update   interface{} `json:"update,omitempty"`
+	}{queryDefinitionAlias: queryDefinitionAlias(q)}
+	if len(q.Pipeline) > 0 {
+		aux.Pipeline = orderedForJSON(q.Pipeline)
+	}
+	if len(q.Update) > 0 {
+		aux.Update = orderedForJSON(q.Update)
+	}
+	return marshalJSONNoEscape(aux)
+}
+
+func decodeQueryName(q QueryDefinition) string {
+	for _, s := range []string{q.Name, q.Label, q.ID} {
+		if strings.TrimSpace(s) != "" {
+			return s
+		}
+	}
+	return "(unnamed)"
+}
+
+func isJSONValue(raw json.RawMessage) bool {
+	s := strings.TrimSpace(string(raw))
+	return s != "" && s != "null"
+}
+
+// QueryDecodeError is a query field that could not be decoded, such as a sort
+// specification with duplicate keys.
+type QueryDecodeError struct {
+	Query string
+	Field string
+	Err   error
+}
+
+func (e *QueryDecodeError) Error() string {
+	return fmt.Sprintf("query %q: invalid %s: %v", e.Query, e.Field, e.Err)
+}
+
+func (e *QueryDecodeError) Unwrap() error { return e.Err }
 
 type QueriesFile struct {
 	Queries []QueryDefinition `json:"queries"`
@@ -146,14 +231,23 @@ func loadQueriesFromFile(path string) (*QueriesFile, error) {
 }
 
 func parseQueriesBytes(b []byte) (*QueriesFile, error) {
+	var decodeErr *QueryDecodeError
 	var wrapped QueriesFile
-	if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Queries) > 0 {
+	err := json.Unmarshal(b, &wrapped)
+	if err == nil && len(wrapped.Queries) > 0 {
 		return &wrapped, nil
+	}
+	if errors.As(err, &decodeErr) {
+		return nil, decodeErr
 	}
 
 	var defs []QueryDefinition
-	if err := json.Unmarshal(b, &defs); err == nil && len(defs) > 0 {
+	err = json.Unmarshal(b, &defs)
+	if err == nil && len(defs) > 0 {
 		return &QueriesFile{Queries: defs}, nil
+	}
+	if errors.As(err, &decodeErr) {
+		return nil, decodeErr
 	}
 
 	return nil, fmt.Errorf("expected either [{...}] or {\"queries\":[...]} with at least one query definition")
@@ -199,6 +293,16 @@ func NormalizeAndValidateQueries(defs []QueryDefinition) error {
 		case "aggregate":
 			if len(q.Pipeline) == 0 {
 				return fmt.Errorf("query at index %d (%s) is missing required field 'pipeline'", i, q.Operation)
+			}
+		}
+		if q.Pipeline != nil {
+			if _, err := normalizeSortSpecs(q.Pipeline, "", "pipeline"); err != nil {
+				return fmt.Errorf("query at index %d (%s): %w", i, q.Operation, err)
+			}
+		}
+		if q.Update != nil {
+			if _, err := normalizeSortSpecs(q.Update, "", "update"); err != nil {
+				return fmt.Errorf("query at index %d (%s): %w", i, q.Operation, err)
 			}
 		}
 

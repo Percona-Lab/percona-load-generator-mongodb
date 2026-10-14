@@ -285,12 +285,17 @@ type Collector struct {
 	insightEligible   uint64
 	insightSampledIn  uint64
 	finalInsights     *InsightsReport
+	impact            impactState
+	capture           captureState
+	explainCapture    atomic.Bool
 
 	acc accuracyCounters
 
 	// workloadStartUnix marks the start of the measured workload window (after
 	// initialization/seeding/sharding), in unix nanoseconds. 0 means unset.
 	workloadStartUnix int64
+	// workloadEndUnix marks the end of that window. 0 means unset.
+	workloadEndUnix int64
 
 	// concurrencyTarget/concurrencyActive expose the live load-profile state:
 	// the worker count the schedule currently requests, and the number of
@@ -318,6 +323,22 @@ func (c *Collector) ConcurrencySnapshot() (target, active int) {
 // window and excludes preparation time.
 func (c *Collector) MarkWorkloadStart() {
 	atomic.CompareAndSwapInt64(&c.workloadStartUnix, 0, time.Now().UnixNano())
+}
+
+// MarkWorkloadEnd records the end of the measured workload window, after every
+// worker has finished. Only the first call takes effect.
+func (c *Collector) MarkWorkloadEnd() {
+	atomic.CompareAndSwapInt64(&c.workloadEndUnix, 0, time.Now().UnixNano())
+}
+
+// WorkloadDuration returns the measured workload window and whether both its
+// start and end were recorded.
+func (c *Collector) WorkloadDuration() (time.Duration, bool) {
+	start, end := atomic.LoadInt64(&c.workloadStartUnix), atomic.LoadInt64(&c.workloadEndUnix)
+	if start == 0 || end <= start {
+		return 0, false
+	}
+	return time.Duration(end - start), true
 }
 
 // WorkloadStart returns the recorded workload start time and whether it is set.

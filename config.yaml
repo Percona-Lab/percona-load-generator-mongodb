@@ -81,15 +81,21 @@ insights_sampling_rate: 0.10
 insights_slow_threshold_ms: 200
 insights_max_events: 5000
 insights_max_groups: 300
-insights_explain_enabled: false
+insights_explain_enabled: true
 insights_explain_top_n: 5
 insights_explain_max_time_ms: 1000
 insights_explain_verbosity: "executionStats"
 # Modes: high_only (default), medium_only, critical_only, high_and_low
 insights_explain_severity_mode: "high_only"
+# Extra Top N slots chosen regardless of slow threshold/severity: impact_and_latency_tiers (default), off
+insights_explain_efficiency_mode: "impact_and_latency_tiers"
 insights_explain_workers: 1
 insights_explain_retries: 1
 insights_explain_backoff_ms: 150
+# Query latency targets (ms) for the Query latency rating; 0 = no target.
+# insights_latency_target_avg_ms: 0
+# insights_latency_target_p95_ms: 0
+# insights_latency_target_p99_ms: 0
 
 # ==============================================================================
 # Sharding Strategy

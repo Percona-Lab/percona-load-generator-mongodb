@@ -3,6 +3,8 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -130,14 +132,7 @@ func CreateCollectionsFromConfig(ctx context.Context, db *mongo.Database, cfg *c
 
 			_ = adminDB.RunCommand(ctx, bson.D{{Key: "enableSharding", Value: col.DatabaseName}})
 
-			shardKeyDoc := buildOrderedShardKey(col, col.ShardConfig.Key, false)
-			// Check for 'hashed' type in config to set flag correctly
-			for _, v := range col.ShardConfig.Key {
-				if s, ok := v.(string); ok && s == "hashed" {
-					shardKeyDoc = buildOrderedShardKey(col, col.ShardConfig.Key, true)
-					break
-				}
-			}
+			shardKeyDoc := buildOrderedShardKey(col.ShardConfig.Key)
 
 			cmd := bson.D{
 				{Key: "shardCollection", Value: fmt.Sprintf("%s.%s", col.DatabaseName, col.Name)},
@@ -150,7 +145,7 @@ func CreateCollectionsFromConfig(ctx context.Context, db *mongo.Database, cfg *c
 			if err := adminDB.RunCommand(ctx, cmd).Err(); err != nil {
 				logger.Info("Warning: Failed to shard collection '%s': %v", col.Name, err)
 			} else {
-				logger.Info("Sharding configured for '%s' (Key: %v)", col.Name, col.ShardConfig.Key)
+				logger.Info("Sharding configured for '%s' (Key: %s)", col.Name, col.ShardConfig.Key.Signature())
 			}
 		}
 	}
@@ -171,20 +166,9 @@ func CreateIndexesFromConfig(ctx context.Context, db *mongo.Database, cfg *confi
 
 		targetDB := db.Client().Database(col.DatabaseName)
 		collection := targetDB.Collection(col.Name)
-		models := make([]mongo.IndexModel, 0, len(col.Indexes))
-
-		for _, idx := range col.Indexes {
-			keysDoc := bson.D{}
-			for key, val := range idx.Keys {
-				var indexValue interface{}
-				if f, ok := val.(float64); ok {
-					indexValue = int32(f)
-				} else {
-					indexValue = val
-				}
-				keysDoc = append(keysDoc, bson.E{Key: key, Value: indexValue})
-			}
-			models = append(models, mongo.IndexModel{Keys: keysDoc})
+		models, err := buildIndexModels(col.Indexes)
+		if err != nil {
+			return fmt.Errorf("index definitions for %s.%s: %w", col.DatabaseName, col.Name, err)
 		}
 
 		ctxCreate, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -195,7 +179,127 @@ func CreateIndexesFromConfig(ctx context.Context, db *mongo.Database, cfg *confi
 			return fmt.Errorf("create indexes on %s.%s: %w", col.DatabaseName, col.Name, err)
 		}
 
-		logger.Info("Created %d indexes on '%s.%s'", len(models), col.DatabaseName, col.Name)
+		logger.Info("Ensured %d indexes on '%s.%s'", len(models), col.DatabaseName, col.Name)
+		warnReorderedIndexes(ctxCreate, collection, col)
 	}
 	return nil
+}
+
+// buildIndexModels converts index definitions into createIndexes models with
+// keys in declared order and an explicit name, so repeated runs send identical
+// specs and the server treats them as no-ops.
+func buildIndexModels(indexes []config.IndexDefinition) ([]mongo.IndexModel, error) {
+	models := make([]mongo.IndexModel, 0, len(indexes))
+	for i, idx := range indexes {
+		if len(idx.Keys) == 0 {
+			return nil, fmt.Errorf("index at position %d has no keys", i)
+		}
+		o := options.Index().SetName(idx.EffectiveName())
+		if idx.Unique {
+			o.SetUnique(true)
+		}
+		if idx.Sparse {
+			o.SetSparse(true)
+		}
+		if idx.Hidden {
+			o.SetHidden(true)
+		}
+		if idx.ExpireAfterSeconds != nil {
+			o.SetExpireAfterSeconds(*idx.ExpireAfterSeconds)
+		}
+		pfe, err := idx.PartialFilterDoc()
+		if err != nil {
+			return nil, fmt.Errorf("index %q: %w", idx.EffectiveName(), err)
+		}
+		if pfe != nil {
+			o.SetPartialFilterExpression(pfe)
+		}
+		models = append(models, mongo.IndexModel{Keys: idx.Keys.BSON(), Options: o})
+	}
+	return models, nil
+}
+
+type existingIndex struct {
+	Name string `bson:"name"`
+	Key  bson.D `bson:"key"`
+}
+
+// reorderedIndex is a deployed index with the same fields and directions as a
+// configured index but in a different order.
+type reorderedIndex struct {
+	Existing   string
+	Configured string
+}
+
+func findReorderedIndexes(configured []config.IndexDefinition, existing []existingIndex) []reorderedIndex {
+	exact := make(map[string]bool, len(configured))
+	bySet := make(map[string]string, len(configured))
+	for _, idx := range configured {
+		exact[idx.Keys.Signature()] = true
+		bySet[keySetSignature(idx.Keys.BSON())] = idx.EffectiveName()
+	}
+	var out []reorderedIndex
+	for _, ex := range existing {
+		if len(ex.Key) < 2 {
+			continue
+		}
+		if exact[existingKeys(ex.Key).Signature()] {
+			continue
+		}
+		if name, ok := bySet[keySetSignature(ex.Key)]; ok {
+			out = append(out, reorderedIndex{Existing: ex.Name, Configured: name})
+		}
+	}
+	return out
+}
+
+func existingKeys(d bson.D) config.IndexKeys {
+	k := make(config.IndexKeys, 0, len(d))
+	for _, e := range d {
+		k = append(k, config.IndexKey{Field: e.Key, Value: normalizeKeyValue(e.Value)})
+	}
+	return k
+}
+
+func keySetSignature(d bson.D) string {
+	parts := make([]string, 0, len(d))
+	for _, e := range d {
+		parts = append(parts, fmt.Sprintf("%s:%v", e.Key, normalizeKeyValue(e.Value)))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+// normalizeKeyValue maps numeric directions of any BSON numeric type to int32
+// so listIndexes output compares equal to configured keys.
+func normalizeKeyValue(v interface{}) interface{} {
+	switch n := v.(type) {
+	case int32:
+		return n
+	case int64:
+		return int32(n)
+	case int:
+		return int32(n)
+	case float64:
+		return int32(n)
+	}
+	return v
+}
+
+// warnReorderedIndexes logs deployed indexes that look like leftovers of the
+// old unordered key handling. They are never dropped automatically.
+func warnReorderedIndexes(ctx context.Context, collection *mongo.Collection, col config.CollectionDefinition) {
+	cur, err := collection.Indexes().List(ctx)
+	if err != nil {
+		logger.Debug("Could not list indexes on '%s.%s' to check key order: %v", col.DatabaseName, col.Name, err)
+		return
+	}
+	var existing []existingIndex
+	if err := cur.All(ctx, &existing); err != nil {
+		logger.Debug("Could not read indexes on '%s.%s' to check key order: %v", col.DatabaseName, col.Name, err)
+		return
+	}
+	for _, r := range findReorderedIndexes(col.Indexes, existing) {
+		logger.Info("Warning: index '%s' on '%s.%s' has the same fields as configured index '%s' in a different key order. Earlier plgm versions could create such indexes from unordered keys. It was not dropped; review it and drop it manually if unused.", r.Existing, col.DatabaseName, col.Name, r.Configured)
+	}
 }

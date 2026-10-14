@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	driverMongo "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -34,12 +35,12 @@ func connectIntegrationMongoOrSkip(t *testing.T) *driverMongo.Client {
 		ApplyURI(integrationMongoURI()).
 		SetServerSelectionTimeout(2 * time.Second))
 	if err != nil {
-		t.Skipf("skipping integration test: unable to create mongo client: %v", err)
+		skipIntegration(t, "skipping integration test: unable to create mongo client: %v", err)
 	}
 
 	if err := client.Ping(ctx, nil); err != nil {
 		_ = client.Disconnect(context.Background())
-		t.Skipf("skipping integration test: mongo is not reachable at %s: %v", integrationMongoURI(), err)
+		skipIntegration(t, "skipping integration test: mongo is not reachable at %s: %v", integrationMongoURI(), err)
 	}
 
 	return client
@@ -53,11 +54,6 @@ func isAuthErr(err error) bool {
 	return strings.Contains(msg, "unauthorized") || strings.Contains(msg, "authentication")
 }
 
-func integrationBoolEnv(key string) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	return v == "1" || v == "true" || v == "yes" || v == "on"
-}
-
 func requireMongosOrSkip(t *testing.T, client *driverMongo.Client) {
 	t.Helper()
 
@@ -67,12 +63,12 @@ func requireMongosOrSkip(t *testing.T, client *driverMongo.Client) {
 	var hello bson.M
 	if err := client.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping mongos-only integration test: unable to run hello against admin: %v", err)
+			skipIntegration(t, "skipping mongos-only integration test: unable to run hello against admin: %v", err)
 		}
-		t.Skipf("skipping mongos-only integration test: failed hello command: %v", err)
+		skipIntegration(t, "skipping mongos-only integration test: failed hello command: %v", err)
 	}
 	if hello["msg"] != "isdbgrid" {
-		t.Skipf("skipping mongos-only integration test: target is not mongos (msg=%v)", hello["msg"])
+		skipIntegration(t, "skipping mongos-only integration test: target is not mongos (msg=%v)", hello["msg"])
 	}
 }
 
@@ -83,9 +79,9 @@ func requireShardingPrivilegesOrSkip(t *testing.T, client *driverMongo.Client) {
 	defer cancel()
 	if err := client.Database("admin").RunCommand(ctx, bson.D{{Key: "listShards", Value: 1}}).Err(); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping mongos-only integration test: missing listShards privileges: %v", err)
+			skipIntegration(t, "skipping mongos-only integration test: missing listShards privileges: %v", err)
 		}
-		t.Skipf("skipping mongos-only integration test: unable to list shards: %v", err)
+		skipIntegration(t, "skipping mongos-only integration test: unable to list shards: %v", err)
 	}
 }
 
@@ -107,7 +103,7 @@ func TestRunWorkloadIntegration_OneShotExecutesFindUpdateAndSkipsInsert(t *testi
 		"counter": 0,
 	}); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping integration test: Mongo URI %q lacks required auth for write operations: %v", integrationMongoURI(), err)
+			skipIntegration(t, "skipping integration test: Mongo URI %q lacks required auth for write operations: %v", integrationMongoURI(), err)
 		}
 		t.Fatalf("seed document insert failed: %v", err)
 	}
@@ -153,7 +149,7 @@ func TestRunWorkloadIntegration_OneShotExecutesFindUpdateAndSkipsInsert(t *testi
 	defer cancel()
 	if err := RunWorkload(ctx, db, collections, queries, cfg); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping integration test: insufficient auth for workload operations at %q: %v", integrationMongoURI(), err)
+			skipIntegration(t, "skipping integration test: insufficient auth for workload operations at %q: %v", integrationMongoURI(), err)
 		}
 		t.Fatalf("RunWorkload() failed: %v", err)
 	}
@@ -195,13 +191,13 @@ func TestRunWorkloadIntegration_OneShotMultiDBMixedShardConfig(t *testing.T) {
 
 	if _, err := dbAHandle.Collection(collA).InsertOne(context.Background(), map[string]interface{}{"_id": "a1", "counter": 0}); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping integration test: insufficient auth for writes: %v", err)
+			skipIntegration(t, "skipping integration test: insufficient auth for writes: %v", err)
 		}
 		t.Fatalf("seed dbA failed: %v", err)
 	}
 	if _, err := dbBHandle.Collection(collB).InsertOne(context.Background(), map[string]interface{}{"_id": "b1", "counter": 0}); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping integration test: insufficient auth for writes: %v", err)
+			skipIntegration(t, "skipping integration test: insufficient auth for writes: %v", err)
 		}
 		t.Fatalf("seed dbB failed: %v", err)
 	}
@@ -216,7 +212,7 @@ func TestRunWorkloadIntegration_OneShotMultiDBMixedShardConfig(t *testing.T) {
 			DatabaseName: dbA,
 			Name:         collA,
 			Fields:       map[string]config.CollectionField{"_id": {Type: "string"}},
-			ShardConfig:  &config.ShardConfig{Key: map[string]interface{}{"_id": 1}},
+			ShardConfig:  &config.ShardConfig{Key: config.IndexKeys{{Field: "_id", Value: 1}}},
 		},
 		{
 			DatabaseName: dbB,
@@ -233,7 +229,7 @@ func TestRunWorkloadIntegration_OneShotMultiDBMixedShardConfig(t *testing.T) {
 	defer cancel()
 	if err := RunWorkload(ctx, dbAHandle, collections, queries, cfg); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping integration test: insufficient auth for workload operations: %v", err)
+			skipIntegration(t, "skipping integration test: insufficient auth for workload operations: %v", err)
 		}
 		t.Fatalf("RunWorkload() failed for multi-db mixed shardConfig scenario: %v", err)
 	}
@@ -279,13 +275,13 @@ func TestRunWorkloadIntegration_MongosMixedShardedAndUnshardedCollections(t *tes
 
 	if _, err := dbAHandle.Collection(collSharded).InsertOne(context.Background(), map[string]interface{}{"_id": "sa1", "counter": 0}); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping mongos mixed-sharding integration test: insufficient auth for seed writes: %v", err)
+			skipIntegration(t, "skipping mongos mixed-sharding integration test: insufficient auth for seed writes: %v", err)
 		}
 		t.Fatalf("seed sharded collection failed: %v", err)
 	}
 	if _, err := dbBHandle.Collection(collUnsharded).InsertOne(context.Background(), map[string]interface{}{"_id": "ub1", "counter": 0}); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping mongos mixed-sharding integration test: insufficient auth for seed writes: %v", err)
+			skipIntegration(t, "skipping mongos mixed-sharding integration test: insufficient auth for seed writes: %v", err)
 		}
 		t.Fatalf("seed unsharded collection failed: %v", err)
 	}
@@ -301,7 +297,7 @@ func TestRunWorkloadIntegration_MongosMixedShardedAndUnshardedCollections(t *tes
 			DatabaseName: dbA,
 			Name:         collSharded,
 			Fields:       map[string]config.CollectionField{"_id": {Type: "string"}},
-			ShardConfig:  &config.ShardConfig{Key: map[string]interface{}{"_id": 1}},
+			ShardConfig:  &config.ShardConfig{Key: config.IndexKeys{{Field: "_id", Value: 1}}},
 		},
 		{
 			DatabaseName: dbB,
@@ -330,7 +326,7 @@ func TestRunWorkloadIntegration_MongosMixedShardedAndUnshardedCollections(t *tes
 	defer cancel()
 	if err := RunWorkload(ctx, dbAHandle, collections, queries, cfg); err != nil {
 		if isAuthErr(err) {
-			t.Skipf("skipping mongos mixed-sharding integration test: insufficient auth for sharding/workload operations: %v", err)
+			skipIntegration(t, "skipping mongos mixed-sharding integration test: insufficient auth for sharding/workload operations: %v", err)
 		}
 		t.Fatalf("RunWorkload() failed for mongos mixed sharded/unsharded test: %v", err)
 	}
@@ -365,5 +361,100 @@ func TestRunWorkloadIntegration_MongosMixedShardedAndUnshardedCollections(t *tes
 	}
 	if shardedDoc.Counter != 1 || unshardedDoc.Counter != 1 {
 		t.Fatalf("expected both updates to apply in mixed test, got sharded=%d unsharded=%d", shardedDoc.Counter, unshardedDoc.Counter)
+	}
+}
+
+func TestRunWorkloadIntegration_FastFindCapturesRepresentativeSamplesBelowSlowThreshold(t *testing.T) {
+	client := connectIntegrationMongoOrSkip(t)
+	defer client.Disconnect(context.Background())
+
+	dbName := fmt.Sprintf("plgm_it_capture_%d", time.Now().UnixNano())
+	collName := "fast_find"
+	db := client.Database(dbName)
+	t.Cleanup(func() {
+		_ = db.Drop(context.Background())
+	})
+
+	const batchSize = 5
+	cfg := &config.AppConfig{
+		Duration:                "1500ms",
+		StatusRefreshRateSec:    1,
+		Concurrency:             2,
+		FindPercent:             100,
+		FindBatchSize:           batchSize,
+		InsertBatchSize:         5,
+		InsightsEnabled:         true,
+		InsightsSamplingRate:    0.1,
+		InsightsMaxEvents:       100,
+		InsightsMaxGroups:       50,
+		InsightsSlowThresholdMs: 60000,
+		InsightsExplainEnabled:  true,
+	}
+	collections := []config.CollectionDefinition{{
+		DatabaseName: dbName,
+		Name:         collName,
+		Fields: map[string]config.CollectionField{
+			"_id":  {Type: "int"},
+			"name": {Type: "string"},
+		},
+	}}
+
+	collector := stats.NewCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := RunWorkload(ctx, db, collections, nil, cfg, collector); err != nil {
+		if isAuthErr(err) {
+			skipIntegration(t, "skipping integration test: insufficient auth at %q: %v", integrationMongoURI(), err)
+		}
+		t.Fatalf("RunWorkload() failed: %v", err)
+	}
+
+	wantKey := fmt.Sprintf("find|fast_in_patch_key|limit:%d", batchSize)
+	rep := collector.GetFinalInsights()
+	for _, sq := range rep.SlowQueries {
+		if sq.ShapeKey == wantKey {
+			t.Fatalf("fast find must not appear in the slow view: %+v", sq)
+		}
+	}
+	var row *stats.CapturedShape
+	for i := range rep.QueryCapture.Shapes {
+		if rep.QueryCapture.Shapes[i].ShapeKey == wantKey {
+			row = &rep.QueryCapture.Shapes[i]
+		}
+	}
+	if row == nil {
+		t.Fatalf("fast find shape not captured: %+v", rep.QueryCapture)
+	}
+	if row.Status != "sampled" || row.RetainedSamples == 0 || row.RetainedBelowSlowThreshold != row.RetainedSamples {
+		t.Fatalf("expected below-threshold samples: %+v", *row)
+	}
+	if row.EligibleOperations == 0 || row.EligibleOperations > row.RecordedOperations {
+		t.Fatalf("eligible/recorded counters inconsistent: %+v", *row)
+	}
+	if want := fmt.Sprintf("find filter={_id:{$in:[<int64> x%d]}} limit=%d", batchSize, batchSize); row.Descriptor != want {
+		t.Fatalf("descriptor = %q, want %q", row.Descriptor, want)
+	}
+	if rep.QueryCapture.Coverage.RecordedOperations != rep.Impact.Coverage.ObservedOperations {
+		t.Fatalf("capture must reuse full-run impact counters: %d vs %d", rep.QueryCapture.Coverage.RecordedOperations, rep.Impact.Coverage.ObservedOperations)
+	}
+
+	samples := collector.SnapshotRepresentativeSamples()
+	if len(samples) == 0 {
+		t.Fatalf("no representative samples")
+	}
+	coll := db.Collection(collName)
+	for _, smp := range samples {
+		if smp.ShapeKey != wantKey {
+			continue
+		}
+		in, ok := smp.Query.Filter["_id"].(map[string]interface{})["$in"].([]int64)
+		if !ok || len(in) != batchSize || smp.Query.Limit != batchSize || smp.Query.Database != dbName {
+			t.Fatalf("sample does not match the executed fast find: %+v", smp.Query)
+		}
+		cur, err := coll.Find(ctx, smp.Query.Filter, options.Find().SetLimit(smp.Query.Limit))
+		if err != nil {
+			t.Fatalf("captured sample is not executable: %v", err)
+		}
+		_ = cur.Close(ctx)
 	}
 }

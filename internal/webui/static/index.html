@@ -37,28 +37,29 @@
             font-family: 'Roboto', sans-serif;
             background: var(--bg);
             margin: 0;
-            padding: 16px;
+            padding: 12px;
             color: var(--text);
+            font-size: 13px;
         }
 
         .container {
-            width: 85vw;
-            max-width: 1680px;
+            max-width: 1640px;
             margin: auto;
             background: var(--surface);
             border-radius: 6px;
-            box-shadow: var(--elevation-3);
-            overflow: hidden;
+            box-shadow: var(--elevation-2);
+            /* clip (not hidden) so sticky children still stick to the page scroll */
+            overflow: clip;
         }
 
         /* App Header */
         .header {
             background: var(--p-night);
             color: white;
-            padding: 16px 24px;
+            padding: 10px 20px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 6px;
             border-bottom: 3px solid var(--p-sunset);
         }
 
@@ -102,7 +103,7 @@
             justify-content: space-between;
             gap: 12px;
             width: 100%;
-            padding-top: 8px;
+            padding-top: 6px;
             border-top: 1px solid rgba(255, 255, 255, 0.18);
         }
 
@@ -138,9 +139,10 @@
             white-space: nowrap;
         }
 
-        .refresh-rate-control input {
+        .refresh-rate-control input[type="number"] {
             width: 65px;
-            padding: 4px 6px;
+            min-height: 0;
+            padding: 3px 6px;
             font-size: 13px;
             border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 4px;
@@ -150,7 +152,7 @@
             transition: 0.2s;
         }
 
-        .refresh-rate-control input:focus {
+        .refresh-rate-control input[type="number"]:focus {
             outline: none;
             border-color: var(--p-sky);
             background: rgba(0, 0, 0, 0.4);
@@ -159,16 +161,20 @@
         /* Tabs & Forms */
         .settings-console {
             display: grid;
-            grid-template-columns: 260px 1fr;
-            min-height: 640px;
+            grid-template-columns: 210px minmax(0, 1fr);
             background: var(--surface);
             border-top: 1px solid var(--border);
         }
 
         .settings-sidebar {
             border-right: 1px solid var(--border);
-            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-            padding: 16px 14px;
+            background: #f8fafc;
+            padding: 14px 10px;
+        }
+
+        .settings-sidebar-inner {
+            position: sticky;
+            top: 12px;
         }
 
         .settings-sidebar-title {
@@ -176,116 +182,79 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 10px;
+            margin: 0 10px 8px;
             font-weight: 700;
         }
 
         .tabs {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 2px;
         }
 
         .tab-btn {
             width: 100%;
             text-align: left;
-            padding: 10px 12px;
-            border: 1px solid transparent;
-            border-radius: 8px;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 6px;
             background: transparent;
-            font-weight: 600;
-            font-size: 12px;
+            font-weight: 500;
+            font-size: 13px;
             cursor: pointer;
-            color: var(--p-night);
-            transition: 0.2s ease;
+            color: var(--text);
+            transition: background 0.15s ease, color 0.15s ease;
             position: relative;
             text-transform: none;
-            letter-spacing: 0.2px;
         }
 
         .tab-btn:hover {
-            background: rgba(20, 134, 255, 0.08);
-            border-color: rgba(20, 134, 255, 0.2);
+            background: #eef2f7;
+            color: var(--p-night);
         }
 
         .tab-btn.active {
-            background: #fff;
-            color: var(--p-sky);
-            border-color: rgba(20, 134, 255, 0.35);
-            box-shadow: var(--elevation-1);
+            background: #e8f1ff;
+            color: #0b5cc2;
+            font-weight: 600;
         }
 
         .tab-btn.active::after {
             content: '';
             position: absolute;
-            left: -14px;
-            top: 8px;
-            bottom: 8px;
+            left: -10px;
+            top: 6px;
+            bottom: 6px;
             width: 3px;
-            border-radius: 3px;
+            border-radius: 0 3px 3px 0;
             background: var(--p-sky);
-        }
-
-        .settings-sidebar-note {
-            margin-top: 16px;
-            font-size: 11px;
-            color: var(--text-secondary);
-            line-height: 1.4;
-            border-top: 1px solid var(--border);
-            padding-top: 12px;
         }
 
         .settings-content {
             background: #f8fafc;
-            padding: 18px;
+            padding: 14px 16px 0;
+            min-width: 0;
         }
 
         .settings-topbar {
             display: flex;
             justify-content: space-between;
             gap: 10px;
-            align-items: flex-start;
-            margin-bottom: 14px;
+            align-items: baseline;
+            margin-bottom: 10px;
         }
 
         .settings-topbar h3 {
             margin: 0;
-            font-size: 16px;
-            font-weight: 700;
+            font-size: 15px;
+            font-weight: 600;
             color: var(--p-night);
-            letter-spacing: 0.2px;
         }
 
         .settings-topbar p {
-            margin: 5px 0 0 0;
+            margin: 0;
             font-size: 12px;
             color: var(--text-secondary);
-            line-height: 1.4;
-        }
-
-        .settings-badges {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-
-        .settings-badge {
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 4px 8px;
-            background: #fff;
-            color: var(--text-secondary);
-        }
-
-        .settings-badge.recommended {
-            border-color: rgba(5, 150, 105, 0.35);
-            color: #065f46;
-            background: #ecfdf5;
         }
 
         .settings-inline-error {
@@ -301,24 +270,64 @@
 
         .settings-card {
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 8px;
             background: #fff;
-            padding: 14px;
+            padding: 12px 16px 14px;
             margin-bottom: 12px;
         }
 
         .settings-card h4 {
-            margin: 0 0 4px 0;
+            margin: 0 0 2px 0;
             font-size: 13px;
+            font-weight: 600;
             color: var(--p-night);
-            letter-spacing: 0.2px;
+        }
+
+        .settings-card h4.settings-subhead {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid #eef2f6;
+            font-size: 12px;
         }
 
         .settings-help {
-            font-size: 11px;
+            font-size: 12px;
             color: var(--text-secondary);
             margin-bottom: 10px;
-            line-height: 1.4;
+            line-height: 1.45;
+            max-width: 110ch;
+        }
+
+        .form-group .settings-help,
+        .form-group .settings-note {
+            margin: 4px 0 0;
+            font-size: 11px;
+        }
+
+        .mix-total {
+            margin-left: 8px;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            background: #ecfdf5;
+            color: #065f46;
+            vertical-align: 1px;
+        }
+
+        .mix-total.off {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .settings-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 0 24px;
+        }
+
+        .settings-columns > .settings-help {
+            max-width: none;
         }
 
         .tab-content {
@@ -524,16 +533,54 @@
             gap: 24px;
         }
 
+        /* Settings forms flow into as many columns as the width allows. */
+        .settings-card .grid-2,
+        .settings-card .grid-3 {
+            gap: 12px 16px;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+
+        .settings-card .grid-2 {
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        }
+
+        .settings-card .grid-3 {
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        }
+
+        .settings-card .definition-grid {
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        }
+
+        .settings-card .mix-grid {
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        }
+
+        .settings-card .grid-2:last-child,
+        .settings-card .grid-3:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-card .grid-2 .grid-2 {
+            margin-bottom: 0;
+        }
+
+        .settings-card .grid-2>.form-group,
+        .settings-card .grid-3>.form-group {
+            margin-bottom: 0;
+        }
+
         .form-group {
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
 
         label {
             display: block;
             font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 13px;
-            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: #4a5568;
         }
 
         input[type="text"],
@@ -543,12 +590,26 @@
         input[type="password"],
         textarea {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 6px 10px;
+            min-height: 34px;
+            border: 1px solid #d5dce6;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text);
+            background-color: #fff;
             transition: border 0.2s;
             box-sizing: border-box;
+        }
+
+        input[type="file"] {
+            padding: 4px 6px;
+            font-size: 12px;
+        }
+
+        input[readonly] {
+            background: #f8fafc;
+            color: var(--text-secondary);
         }
 
         input:focus,
@@ -570,25 +631,34 @@
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px;
-            background: #f8fafc;
-            border-radius: 4px;
-            border: 1px solid var(--border);
+            gap: 8px;
+            min-height: 34px;
+            padding: 0;
         }
 
         .checkbox-group label {
             margin: 0;
             cursor: pointer;
             color: var(--text);
+            font-size: 13px;
             font-weight: 400;
         }
 
         .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
+            flex: none;
+            width: 16px;
+            height: 16px;
+            margin: 0;
             accent-color: var(--p-sky);
             cursor: pointer;
+        }
+
+        .checkbox-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 28px;
+            align-items: center;
+            margin-bottom: 8px;
         }
 
         .file-upload-box {
@@ -607,11 +677,15 @@
         }
 
         .definition-editor {
-            margin-top: 12px;
+            margin-top: 10px;
             display: grid;
-            grid-template-columns: 240px 1fr;
-            gap: 14px;
+            grid-template-columns: 1fr;
+            gap: 10px;
             align-items: start;
+        }
+
+        .definition-editor .form-group {
+            margin-bottom: 8px;
         }
 
         .definition-editor textarea {
@@ -676,6 +750,31 @@
             color: var(--p-night);
         }
 
+        .sort-review {
+            font-size: 12px;
+            color: #78350f;
+            background: #fffbeb;
+            border: 1px solid #f59e0b;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .sort-review ul {
+            margin: 6px 0;
+            padding-left: 0;
+            list-style: none;
+        }
+
+        .sort-review li {
+            margin-bottom: 4px;
+        }
+
+        .sort-review code {
+            font-size: 11px;
+        }
+
         .definition-summary .definition-summary-meta {
             color: var(--text-secondary);
         }
@@ -718,8 +817,8 @@
         }
 
         .btn-small {
-            padding: 8px 12px;
-            font-size: 11px;
+            padding: 5px 10px;
+            font-size: 12px;
         }
 
         @media (max-width: 950px) {
@@ -729,17 +828,21 @@
         }
 
         .footer {
-            padding: 14px 18px;
-            background: #fff;
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+            margin: 0 -16px;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.96);
             border-top: 1px solid var(--border);
-            text-align: right;
+            box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
         }
 
-        @media (max-width: 1050px) {
-            .container {
-                width: 92vw;
-            }
-
+        @media (max-width: 900px) {
             .settings-console {
                 grid-template-columns: 1fr;
             }
@@ -747,6 +850,11 @@
             .settings-sidebar {
                 border-right: none;
                 border-bottom: 1px solid var(--border);
+                padding: 8px 10px;
+            }
+
+            .settings-sidebar-title {
+                display: none;
             }
 
             .tabs {
@@ -762,19 +870,23 @@
                 left: 8px;
                 right: 8px;
                 top: auto;
-                bottom: -8px;
+                bottom: -2px;
                 width: auto;
-                height: 3px;
+                height: 2px;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .settings-columns,
+            .grid-2,
+            .grid-3 {
+                grid-template-columns: 1fr;
             }
         }
 
         @media (max-width: 900px) {
             body {
-                padding: 10px;
-            }
-
-            .container {
-                width: 96vw;
+                padding: 6px;
             }
 
             .header {
@@ -797,46 +909,53 @@
 
         /* Buttons */
         .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
+            padding: 8px 16px;
+            border: 1px solid transparent;
+            border-radius: 6px;
             font-weight: 500;
-            font-size: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 13px;
+            font-family: inherit;
+            line-height: 1.2;
             cursor: pointer;
-            transition: 0.2s;
-            box-shadow: var(--elevation-1);
+            transition: background 0.15s, border-color 0.15s;
+            background: #fff;
+            color: var(--p-night);
+            border-color: #cbd5e1;
+        }
+
+        .btn:hover {
+            background: #f1f5f9;
         }
 
         .btn-primary {
             background: var(--p-night);
+            border-color: var(--p-night);
             color: white;
         }
 
         .btn-primary:hover {
-            background: var(--p-sky);
-            box-shadow: var(--elevation-2);
+            background: #1c2d7a;
         }
 
         .btn-secondary {
-            background: var(--p-stone);
-            color: white;
+            background: #fff;
+            border-color: #cbd5e1;
+            color: var(--p-night);
         }
 
         .btn-secondary:hover {
-            background: #4a5568;
-            box-shadow: var(--elevation-2);
+            background: #f1f5f9;
+            border-color: #94a3b8;
         }
 
         .btn-danger {
             background: var(--p-fire);
+            border-color: var(--p-fire);
             color: white;
         }
 
         .btn-danger:hover {
             background: #d83d00;
-            box-shadow: var(--elevation-2);
         }
 
         .btn-exit {
@@ -873,7 +992,7 @@
 
         /* Dashboard Layout */
         .dashboard {
-            padding: 24px;
+            padding: 16px;
             background: var(--bg);
             display: none;
         }
@@ -881,9 +1000,9 @@
         .progress-container {
             width: 100%;
             background: #e2e8f0;
-            height: 6px;
-            border-radius: 3px;
-            margin-bottom: 24px;
+            height: 4px;
+            border-radius: 2px;
+            margin-bottom: 12px;
             overflow: hidden;
         }
 
@@ -896,9 +1015,9 @@
 
         .mat-card {
             background: var(--surface);
-            border-radius: 6px;
-            padding: 20px;
-            box-shadow: var(--elevation-1);
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
             position: relative;
             overflow: hidden;
             border: 1px solid var(--border);
@@ -916,22 +1035,37 @@
 
         .stats-grid-6 {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 16px;
-            margin-bottom: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .stats-grid-6 .mat-card {
+            padding: 12px 14px 34px;
+        }
+
+        .stats-grid-6 .sparkline-container {
+            height: 30px;
         }
 
         .chart-grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .stat-value {
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 300;
             color: var(--text);
+            font-variant-numeric: tabular-nums;
         }
 
         .stat-subtitle {
@@ -1515,6 +1649,45 @@
         .insight-badge.status-insufficient_metadata { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
         .insight-badge.status-not_supported { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
         .insight-badge.status-explain_unavailable { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+        .insight-badge.band-inefficient { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+        .insight-badge.band-moderate { background: #fef9c3; border-color: #fde68a; color: #854d0e; }
+        .insight-badge.band-efficient { background: #dcfce7; border-color: #86efac; color: #166534; }
+        .insight-badge.band-unconfirmed, .insight-badge.band-none { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+        .eff-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 8px 0 10px 0; }
+        .eff-controls label { display: flex; flex-direction: column; font-size: 11px; font-weight: 700; color: var(--text-secondary); gap: 3px; }
+        .eff-controls select { font-size: 12px; padding: 4px 6px; }
+        #efficiencyTable, #trendTable { overflow-x: auto; }
+        .eff-table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; }
+        .eff-table caption { text-align: left; font-size: 11px; color: var(--text-secondary); padding-bottom: 4px; }
+        .eff-table th, .eff-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; line-height: 1.4; }
+        .eff-table th { font-size: 11px; color: var(--text-secondary); background: #f8fafc; font-weight: 600; vertical-align: bottom; }
+        .eff-table tbody tr:hover td { background: #f8fafc; }
+        #efficiencyRows { min-width: 1000px; }
+        #efficiencyRows .eff-col-ns { min-width: 100px; }
+        #efficiencyRows .eff-col-shape { min-width: 140px; }
+        #efficiencyRows .eff-col-score, #efficiencyRows .eff-col-band, #efficiencyRows .eff-col-conf { white-space: nowrap; }
+        #efficiencyRows .eff-col-lat, #efficiencyRows .eff-col-impact, #efficiencyRows .eff-col-overhead { min-width: 130px; }
+        #efficiencyRows .eff-col-other { min-width: 110px; font-size: 11px; color: var(--text-secondary); }
+        #efficiencyRows .eff-col-cov { min-width: 90px; }
+        .eff-notes { margin-bottom: 8px; }
+        .eff-notes > summary { cursor: pointer; font-size: 12px; font-weight: 500; color: #0b5cc2; padding: 2px 0 6px; }
+        .eff-notes > summary:hover { text-decoration: underline; }
+        .eff-notes .eff-scope-note { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 8px 20px; margin: 0; }
+        .eff-notes .eff-scope-note dd { margin: 2px 0 0; }
+        .eff-table td .insights-row-subtitle { overflow-wrap: anywhere; }
+        .eff-table .insight-badge, .eff-table button { white-space: nowrap; }
+        .insight-badge.trend-improved { background: #dcfce7; border-color: #86efac; color: #166534; }
+        .insight-badge.trend-regressed { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+        .insight-badge.trend-increased, .insight-badge.trend-decreased { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+        .eff-table tr.trend-detail td { background: var(--bg); }
+        .eff-table td.num, .eff-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .eff-table tr.selected td { background: #eef2ff; }
+        .eff-table tr.eff-row-clickable { cursor: pointer; }
+        .eff-table tr.eff-row-clickable:hover td { background: #eef2ff; }
+        .eff-row-hint { font-size: 12px; color: var(--text); background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+        .eff-scope-note { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 8px; }
+        .eff-detail { margin-top: 12px; }
+        .eff-detail ul { margin: 4px 0 6px 16px; padding: 0; }
 
         .toggle-chip {
             border: 1px solid var(--border);
@@ -1545,7 +1718,22 @@
 
         .adv-layout {
             display: grid;
-            gap: 14px;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .adv-layout>.settings-card {
+            margin-bottom: 0;
+        }
+
+        .insights-explain-notice {
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 6px 0 10px;
+            font-size: 12px;
         }
 
         .settings-note {
@@ -1572,13 +1760,12 @@
         .time-machine-bar {
             display: flex;
             align-items: center;
-            gap: 15px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
             background: var(--surface);
-            padding: 12px 20px;
-            border-radius: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
             border: 1px solid var(--border);
-            box-shadow: var(--elevation-1);
         }
 
         .time-machine-bar span {
@@ -1771,7 +1958,7 @@
                 <div class="mat-card" style="margin-bottom:0;">
                     <div class="mat-card-title" style="color: var(--p-pink);">Aggregate Ops</div>
                     <div class="stat-value" id="ops-aggregate">0</div>
-                    <div class="stat-subtitle"><span id="rate-aggregate">0</span> ops/sec</div>
+                    <div class="stat-subtitle" id="rate-aggregate">0 ops/sec</div>
                     <div class="sparkline-container"><canvas id="spark-aggregate"></canvas></div>
                 </div>
             </div>
@@ -1779,6 +1966,7 @@
             <div class="dash-tabs run-summary-sticky" id="dashTabs">
                 <button type="button" class="dash-tab-btn active" data-dashtab="overview" onclick="showDashTab('overview', this)">Live Metrics</button>
                 <button type="button" class="dash-tab-btn" data-dashtab="latency" onclick="showDashTab('latency', this)">Latency Analysis</button>
+                <button type="button" class="dash-tab-btn" data-dashtab="queries" onclick="showDashTab('queries', this)">Query &amp; Index Analysis</button>
                 <button type="button" class="dash-tab-btn" data-dashtab="insights" onclick="showDashTab('insights', this)">Insights</button>
             </div>
 
@@ -1940,51 +2128,40 @@
 
             <div id="insightsPanel" class="mat-card" style="display:none; margin-top: 16px;">
                 <div class="insights-header">
-                    <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN SLOW QUERY & INDEX ANALYSIS</div>
+                    <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN INSIGHTS</div>
                     <span id="insightsPill" class="insights-pill pending">Pending</span>
                 </div>
                 <div id="insightsStatus" class="insights-status-line"></div>
+                <div id="insightsExplainNotice" class="insights-explain-notice" role="status" hidden></div>
                 <details id="insightsGuide" class="insights-guide">
                     <summary>
                         <span>Insights Quick Guide (How To Read This Panel)</span>
                     </summary>
                     <div class="insights-guide-body">
                         <ol class="insights-guide-list">
-                            <li>Start with <strong>Top Findings</strong> to identify the highest-impact slow shape.</li>
-                            <li>Open <strong>Slow Queries</strong> and prioritize high <code>p95/p99</code> with high count.</li>
-                            <li>Check <strong>Explain</strong> status and reason to see if guidance is explain-backed or heuristic.</li>
-                            <li>Use <strong>Potential Index Issues</strong> confidence and evidence level to rank remediation work.</li>
+                            <li>Start with <strong>Workload Impact</strong>: shapes ranked by summed concurrent operation time across every completed operation, including fast ones. It is not wall-clock or CPU time, and it does not say why a shape is expensive.</li>
+                            <li>Use <strong>Top Findings</strong> to identify the highest-impact and highest-severity shapes.</li>
                             <li>Use <strong>Affected Collections</strong>, <strong>Iterations</strong>, and <strong>Timeline</strong> for scope and drift context.</li>
+                            <li>Open the <strong>Query &amp; Index Analysis</strong> tab for per-query efficiency, slow queries, explain results, index issues, and recommended actions. Most of that tab requires <strong>Post-Run Explain Sampling</strong> (settings tab Query Analysis (Explain)), which is on by default.</li>
                         </ol>
                     </div>
                 </details>
-                <div class="latency-toggles" style="margin-bottom: 10px;">
-                    <button type="button" id="insTabOverviewBtn" class="toggle-chip active" onclick="showInsightsTab('overview')">Overview</button>
-                    <button type="button" id="insTabIterBtn" class="toggle-chip" onclick="showInsightsTab('iteration')">Iterations</button>
-                    <button type="button" id="insTabTimelineBtn" class="toggle-chip" onclick="showInsightsTab('timeline')">Timeline</button>
+                <div class="latency-toggles" style="margin-bottom: 10px;" role="group" aria-label="Insights views">
+                    <button type="button" id="insTabOverviewBtn" class="toggle-chip active" aria-pressed="true" onclick="showInsightsTab('overview')">Overview</button>
+                    <button type="button" id="insTabIterBtn" class="toggle-chip" aria-pressed="false" onclick="showInsightsTab('iteration')">Iterations</button>
+                    <button type="button" id="insTabTimelineBtn" class="toggle-chip" aria-pressed="false" onclick="showInsightsTab('timeline')">Timeline</button>
                 </div>
 
                 <div id="insightsTabOverview">
                     <div id="insightsTopFindings" class="insights-top-list"></div>
-                    <div class="grid-2" style="gap: 16px;">
-                        <div class="insights-section-card">
-                            <div class="insights-section-title">Slow Queries</div>
-                            <div id="insightsSlowQueries"></div>
-                        </div>
-                        <div class="insights-section-card">
-                            <div class="insights-section-title">Affected Collections</div>
-                            <div id="insightsCollections"></div>
-                        </div>
+                    <div class="insights-section-card" style="margin-bottom: 14px;">
+                        <div class="insights-section-title">Workload Impact (ranked by summed concurrent operation time)</div>
+                        <div id="insightsImpactCoverage" class="insights-row-subtitle"></div>
+                        <div id="insightsImpact"></div>
                     </div>
-                    <div class="grid-2" style="gap: 16px; margin-top: 14px;">
-                        <div class="insights-section-card">
-                            <div class="insights-section-title">Potential Index Issues</div>
-                            <div id="insightsIndexIssues"></div>
-                        </div>
-                        <div class="insights-section-card">
-                            <div class="insights-section-title">Recommended Actions</div>
-                            <div id="insightsRecommendations"></div>
-                        </div>
+                    <div class="insights-section-card">
+                        <div class="insights-section-title">Affected Collections</div>
+                        <div id="insightsCollections"></div>
                     </div>
                 </div>
 
@@ -1996,6 +2173,123 @@
                 <div id="insightsTabTimeline" style="display:none;">
                     <div class="insights-section-title">Time-Sliced Drill-Down</div>
                     <div id="insightsTimeSlices"></div>
+                </div>
+            </div>
+
+            <div id="queryAnalysisPanel" class="mat-card" style="display:none; margin-top: 16px;">
+                <div class="insights-header">
+                    <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN QUERY &amp; INDEX ANALYSIS</div>
+                    <span id="queryAnalysisPill" class="insights-pill pending">Pending</span>
+                </div>
+                <div id="queryAnalysisStatus" class="insights-status-line"></div>
+                <div id="queryAnalysisExplainNotice" class="insights-explain-notice" role="status" hidden></div>
+                <details class="insights-guide">
+                    <summary>
+                        <span>Query &amp; Index Analysis Quick Guide</span>
+                    </summary>
+                    <div class="insights-guide-body">
+                        <p id="queryAnalysisExplainRequirement"><strong>Requires Post-Run Explain Sampling.</strong> Scan efficiency, execution overhead, sort and spill measurements, plan-based index recommendations, and efficiency trends come from explain output collected after the workload finishes. The setting is on the Query Analysis (Explain) settings tab and is on by default. If it is off, this tab reports only latency and workload impact, and the remaining columns show as unassessed or not measured.</p>
+                        <ol class="insights-guide-list">
+                            <li>Open <strong>Efficiency</strong> to find shapes that examine many more documents or index keys than they return, including fast ones. Scan efficiency, query latency, workload impact, execution overhead (in-memory sorts, disk spills), and $lookup/lock/network measurements each have their own column; each column's explanation is shown above the table.</li>
+                            <li>Open <strong>Slow Queries &amp; Indexes</strong> and prioritize high <code>p95/p99</code> with high count.</li>
+                            <li>Check <strong>Explain</strong> status and reason to see if guidance is explain-backed or heuristic.</li>
+                            <li>Use <strong>Potential Index Issues</strong> confidence and evidence level, then <strong>Recommended Actions</strong>, to rank remediation work.</li>
+                            <li>Open <strong>Trends</strong> to compare each shape with its stored baseline from earlier runs. Efficiency, latency, and impact are compared separately; a shape is labeled improved or regressed only when the baseline is compatible and both runs meet the published evidence minimums. Annotations such as a plan or index change are not evidence of cause.</li>
+                        </ol>
+                    </div>
+                </details>
+                <div class="latency-toggles" style="margin-bottom: 10px;" role="group" aria-label="Query and index analysis views">
+                    <button type="button" id="qaTabEfficiencyBtn" class="toggle-chip active" aria-pressed="true" onclick="showQueryAnalysisTab('efficiency')">Efficiency</button>
+                    <button type="button" id="qaTabFindingsBtn" class="toggle-chip" aria-pressed="false" onclick="showQueryAnalysisTab('findings')">Slow Queries &amp; Indexes</button>
+                    <button type="button" id="qaTabTrendsBtn" class="toggle-chip" aria-pressed="false" onclick="showQueryAnalysisTab('trends')">Trends</button>
+                </div>
+
+                <div id="queryAnalysisTabTrends" style="display:none;">
+                    <div class="insights-section-card">
+                        <div class="insights-section-title">Trends vs Baseline</div>
+                        <div id="trendCausationNote" class="eff-scope-note"></div>
+                        <div id="trendSummary" class="insights-row-subtitle"></div>
+                        <div class="eff-controls">
+                            <label for="trendStateFilter">Show
+                                <select id="trendStateFilter" onchange="setTrendFilter(this.value)">
+                                    <option value="all" selected>All shapes</option>
+                                    <option value="labeled">Labeled changes (improved, regressed, share changed)</option>
+                                    <option value="insufficient">Insufficient evidence</option>
+                                    <option value="not_comparable">Not comparable or no baseline</option>
+                                </select>
+                            </label>
+                            <button type="button" id="trendResetBtn" class="insights-explore-btn" onclick="resetTrendBaselines()">Reset baselines</button>
+                        </div>
+                        <div id="trendResetStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                        <div id="trendTable"></div>
+                        <div id="trendCriteria" class="insights-row-subtitle"></div>
+                        <div id="trendLimitations" class="insights-row-subtitle"></div>
+                    </div>
+                </div>
+
+                <div id="queryAnalysisTabFindings" style="display:none;">
+                    <div class="grid-2" style="gap: 16px;">
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Slow Queries</div>
+                            <div id="insightsSlowQueries"></div>
+                        </div>
+                        <div class="insights-section-card">
+                            <div class="insights-section-title">Potential Index Issues</div>
+                            <div id="insightsIndexIssues"></div>
+                        </div>
+                    </div>
+                    <div class="insights-section-card" style="margin-top: 14px;">
+                        <div class="insights-section-title">Recommended Actions</div>
+                        <div id="insightsRecommendations"></div>
+                        <div id="insightsRecommendationsPager" class="insights-row-subtitle" aria-live="polite"></div>
+                    </div>
+                </div>
+
+                <div id="queryAnalysisTabEfficiency">
+                    <div class="insights-section-card">
+                        <div class="insights-section-title">Query Assessment</div>
+                        <details class="eff-notes">
+                            <summary>How to read each column</summary>
+                            <dl id="efficiencyColumnNotes" class="eff-scope-note"></dl>
+                        </details>
+                        <details class="eff-notes">
+                            <summary>Coverage and rating details</summary>
+                            <div id="efficiencyCoverage" class="insights-row-subtitle"></div>
+                        </details>
+                        <div class="eff-controls">
+                            <label for="efficiencyBandFilter">Scan efficiency
+                                <select id="efficiencyBandFilter" onchange="setEfficiencyControl('band', this.value)">
+                                    <option value="all" selected>All shapes (scored and unscored)</option>
+                                    <option value="inefficient">Inefficient</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="efficient">Efficient</option>
+                                    <option value="unconfirmed">Unconfirmed (partial upper bound)</option>
+                                    <option value="scored">Any score</option>
+                                    <option value="unscored">Unassessed or not applicable</option>
+                                </select>
+                            </label>
+                            <label for="efficiencyLatencyFilter">Latency severity
+                                <select id="efficiencyLatencyFilter" onchange="setEfficiencyControl('latency', this.value)">
+                                    <option value="all" selected>All latencies</option>
+                                    <option value="critical">Critical</option>
+                                    <option value="high">High</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="low">Low</option>
+                                    <option value="below_threshold">Below slow threshold</option>
+                                    <option value="not_listed">Not in slow-query view</option>
+                                </select>
+                            </label>
+                            <label for="efficiencySort">Sort
+                                <select id="efficiencySort" onchange="setEfficiencyControl('sort', this.value)">
+                                    <option value="efficiency" selected>Lowest scan efficiency first</option>
+                                    <option value="impact">Highest workload impact first</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="efficiencyTable"></div>
+                        <div id="efficiencyLimitations" class="insights-row-subtitle"></div>
+                    </div>
+                    <div id="efficiencyDetail" class="insights-section-card eff-detail" role="region" aria-label="Efficiency details" aria-live="polite" style="display:none;"></div>
                 </div>
             </div>
 
@@ -2020,6 +2314,7 @@
 
             <div id="finishActions" style="display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-secondary" onclick="downloadSummaryReport()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" stroke-linejoin="round"
@@ -2033,10 +2328,10 @@
                     <button type="button" class="btn btn-secondary" onclick="openHtmlReport()" title="Open a self-contained HTML report (print to PDF from the browser)">
                         Export HTML Report
                     </button>
+                    </div>
 
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                        <button type="button" class="btn btn-flat" onclick="showConfigure()"
-                            style="border: 1px solid var(--p-stone); color: var(--p-night);">Configure Settings</button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-secondary" onclick="showConfigure()">Configure Settings</button>
                         <button type="button" class="btn btn-primary" onclick="runAgain()">Run Again</button>
                     </div>
                 </div>
@@ -2046,29 +2341,22 @@
         <form id="configForm" enctype="multipart/form-data">
             <div class="settings-console">
                 <aside class="settings-sidebar">
-                    <div class="settings-sidebar-title">Settings Navigation</div>
-                    <div class="tabs">
-                        <button type="button" class="tab-btn active" onclick="showTab('tab-conn', this)">Execution / Runtime</button>
-                        <button type="button" class="tab-btn" onclick="showTab('tab-workload', this)">Workload Configuration</button>
-                        <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
-                        <button type="button" class="tab-btn" onclick="showTab('tab-adv', this)">Metrics & Insights</button>
-                        <button type="button" class="tab-btn" onclick="showTab('tab-raw', this)">Expert / Raw Injector</button>
-                    </div>
-                    <div class="settings-sidebar-note">
-                        Configure workload safely with structured sections. Changes apply when you launch a new run.
+                    <div class="settings-sidebar-inner">
+                        <div class="settings-sidebar-title">Settings</div>
+                        <div class="tabs">
+                            <button type="button" class="tab-btn active" onclick="showTab('tab-conn', this)">Execution / Runtime</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-workload', this)">Workload Configuration</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-adv', this)">Metrics & Insights</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-query-analysis', this)">Query Analysis (Explain)</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-raw', this)">Expert / Debug</button>
+                        </div>
                     </div>
                 </aside>
                 <section class="settings-content">
                     <div class="settings-topbar">
-                        <div>
-                            <h3>Benchmark Settings Console</h3>
-                            <p>Professional configuration workspace for DBAs/SREs. Use recommended defaults first, then tune targeted sections only when needed.</p>
-                        </div>
-                        <div class="settings-badges">
-                            <span class="settings-badge recommended">Safe Defaults</span>
-                            <span class="settings-badge">Post-Run Insights</span>
-                            <span class="settings-badge">Power User Ready</span>
-                        </div>
+                        <h3>Benchmark Settings</h3>
+                        <p>The defaults work for most runs. Changes apply the next time you launch a workload.</p>
                     </div>
                     <div id="configInlineError" class="settings-inline-error"></div>
 
@@ -2123,11 +2411,27 @@
                         <div class="form-group"><label>Max Idle Time (m)</label><input type="number" name="max_idle_time"
                                 value="30"></div>
                     </div>
-                    <div class="grid-2">
+                    <div class="checkbox-row">
                         <div class="checkbox-group"><input type="checkbox" id="directConn" name="direct_connection"
                                 value="true"><label for="directConn">Direct Connection (Bypass Topology)</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="debugLogs" name="debug" value="true"><label
                                 for="debugLogs">Enable Driver Debug Logs</label></div>
+                    </div>
+                </section>
+                <section class="settings-card">
+                    <h4>Execution / Runtime Tuning</h4>
+                    <div class="settings-help">Low-level runtime controls for request shaping and operation timeout behavior.</div>
+                    <div class="grid-3">
+                        <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size" value="10"></div>
+                        <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
+                        <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size" value="10"></div>
+                        <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000"></div>
+                        <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size" value="1000"></div>
+                        <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500"></div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="useFindOne" name="use_findone_for_limit_one" value="true" checked>
+                        <label for="useFindOne">Use <code>FindOne</code> when limit is 1 (recommended)</label>
                     </div>
                 </section>
             </div>
@@ -2137,19 +2441,18 @@
                     <h4>Workload Control</h4>
                     <div class="settings-help">Defines the worker count, how that count is shaped over time, and how long the run lasts. The load profile is the single source of truth for concurrency.</div>
 
-                    <div class="form-group">
-                        <label>Load Profile <span style="font-weight:400; color:var(--text-secondary);">(how worker count behaves over time)</span></label>
-                        <select name="load_profile_kind" id="loadProfileKind" onchange="onLoadProfileKindChange()">
-                            <option value="fixed">Fixed — constant worker count</option>
-                            <option value="ramp">Ramp — linearly grow/shrink over time</option>
-                            <option value="step">Step — hold staged worker counts</option>
-                            <option value="spike">Spike — short burst above a baseline</option>
-                            <option value="sine">Sine — oscillate periodically</option>
-                        </select>
-                        <div class="settings-help" id="loadProfileHint"></div>
-                    </div>
-
                     <div class="grid-2">
+                        <div class="form-group">
+                            <label>Load Profile</label>
+                            <select name="load_profile_kind" id="loadProfileKind" onchange="onLoadProfileKindChange()">
+                                <option value="fixed">Fixed — constant worker count</option>
+                                <option value="ramp">Ramp — linearly grow/shrink over time</option>
+                                <option value="step">Step — hold staged worker counts</option>
+                                <option value="spike">Spike — short burst above a baseline</option>
+                                <option value="sine">Sine — oscillate periodically</option>
+                            </select>
+                            <div class="settings-help" id="loadProfileHint"></div>
+                        </div>
                         <div class="form-group" id="concurrencyGroup">
                             <label id="concurrencyLabel">Concurrency (Active Workers)</label>
                             <input type="number" name="concurrency" id="concurrencyInput" value="16" min="1" required>
@@ -2158,16 +2461,16 @@
                         <div class="form-group">
                             <label>Duration (e.g. 60s, 5m)</label>
                             <input type="text" name="duration" value="60s" required>
-                            <div class="settings-help"><strong>Total run length</strong> per iteration &mdash; the whole benchmark. All load-profile timings (ramp/step/spike/<strong>period</strong>) happen <em>inside</em> this window, so they should each be shorter than the Duration.</div>
+                            <div class="settings-help"><strong>Total run length</strong> per iteration. Load-profile timings (ramp, step, spike, <strong>period</strong>) happen <em>inside</em> this window, so each should be shorter.</div>
                         </div>
                     </div>
 
                     <div class="lp-group" data-lp="ramp" style="display:none;">
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div class="form-group"><label>Start Workers</label><input type="number" name="load_profile_start_workers" value="1" min="0"></div>
                             <div class="form-group"><label>End Workers</label><input type="number" name="load_profile_end_workers" value="50" min="0"></div>
+                            <div class="form-group"><label>Ramp Over (e.g. 30s)</label><input type="text" name="load_profile_ramp_over" value="30s"></div>
                         </div>
-                        <div class="form-group"><label>Ramp Over (e.g. 30s)</label><input type="text" name="load_profile_ramp_over" value="30s"></div>
                     </div>
 
                     <div class="lp-group" data-lp="step" style="display:none;">
@@ -2178,27 +2481,26 @@
                     </div>
 
                     <div class="lp-group" data-lp="spike" style="display:none;">
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div class="form-group"><label>Base Workers</label><input type="number" name="load_profile_base_workers" value="5" min="0"></div>
                             <div class="form-group"><label>Peak Workers</label><input type="number" name="load_profile_peak_workers" value="50" min="0"></div>
-                        </div>
-                        <div class="grid-2">
                             <div class="form-group"><label>Spike At (e.g. 20s)</label><input type="text" name="load_profile_spike_at" value="20s"></div>
                             <div class="form-group"><label>Spike For (e.g. 5s)</label><input type="text" name="load_profile_spike_for" value="5s"></div>
                         </div>
                     </div>
 
                     <div class="lp-group" data-lp="sine" style="display:none;">
-                        <div class="grid-2">
+                        <div class="grid-3">
                             <div class="form-group"><label>Min Workers</label><input type="number" name="load_profile_min_workers" value="5" min="0"></div>
                             <div class="form-group"><label>Max Workers</label><input type="number" name="load_profile_max_workers" value="50" min="0"></div>
+                            <div class="form-group"><label>Period (e.g. 30s)</label><input type="text" name="load_profile_period" value="30s"></div>
                         </div>
-                        <div class="form-group"><label>Period (e.g. 30s)</label><input type="text" name="load_profile_period" value="30s">
-                            <div class="settings-help">Length of <strong>one full oscillation</strong> (Min &rarr; Max &rarr; Min). This is <em>not</em> the run length. Keep Period &le; Duration; for whole cycles, make Duration a multiple of Period (e.g. Duration 120s &divide; Period 30s = 4 complete waves).</div>
-                        </div>
+                        <div class="settings-help">Period is the length of <strong>one full oscillation</strong> (Min &rarr; Max &rarr; Min), <em>not</em> the run length. Keep Period &le; Duration; for whole cycles, make Duration a multiple of Period (e.g. 120s &divide; 30s = 4 waves).</div>
                     </div>
 
-                    <div class="grid-2">
+                    <h4 class="settings-subhead">Iterations</h4>
+                    <div class="settings-help">Repeat the whole workload, with an optional pause between runs.</div>
+                    <div class="grid-3">
                         <div class="form-group">
                             <label>Iterations (Run Count)</label>
                             <input type="number" name="iterations" value="1" min="1" required>
@@ -2214,53 +2516,72 @@
                     <h4>Client Pacing &amp; Access Pattern</h4>
                     <div class="settings-help">Emulate realistic client behavior with per-operation pacing and skew which records are accessed. Defaults preserve no-pacing, uniform behavior.</div>
 
-                    <h4 style="margin-top:6px;">Think Time / Pacing</h4>
-                    <div class="settings-help">Per-worker delay between operations. Excluded from measured latency. 0 = run as fast as possible.</div>
-                    <div class="grid-2">
-                        <div class="form-group"><label>Think Time (ms)</label><input type="number" name="think_time_ms" value="0" min="0"></div>
-                        <div class="form-group"><label>Think Jitter (ms)</label><input type="number" name="think_jitter_ms" value="0" min="0"></div>
-                    </div>
-
-                    <h4 style="margin-top:18px;">Access Pattern</h4>
-                    <div class="settings-help">Distribution used to pick existing records for find/update/delete targeting.</div>
-                    <div class="form-group">
-                        <label>Pattern</label>
-                        <select name="access_pattern_kind" id="accessPatternKind" onchange="onAccessPatternKindChange()">
-                            <option value="uniform">Uniform (every record equally likely)</option>
-                            <option value="zipfian">Zipfian (power-law skew)</option>
-                            <option value="hotspot">Hotspot (small subset gets most traffic)</option>
-                        </select>
-                    </div>
-                    <div class="ap-group" data-ap="zipfian" style="display:none;">
-                        <div class="form-group"><label>Zipfian Exponent (&ge; 1.0)</label><input type="number" step="0.1" name="access_pattern_zipfian_exponent" value="1.2" min="1"></div>
-                    </div>
-                    <div class="ap-group" data-ap="hotspot" style="display:none;">
-                        <div class="grid-2">
-                            <div class="form-group"><label>Hot Records (%)</label><input type="number" name="access_pattern_hotspot_percent" value="20" min="1" max="99"></div>
-                            <div class="form-group"><label>Hot Traffic (%)</label><input type="number" name="access_pattern_hotspot_traffic_percent" value="80" min="1" max="100"></div>
+                    <div class="settings-columns">
+                        <div>
+                            <h4 class="settings-subhead">Think Time / Pacing</h4>
+                            <div class="settings-help">Per-worker delay between operations. Excluded from measured latency. 0 = run as fast as possible.</div>
+                            <div class="grid-3">
+                                <div class="form-group"><label>Think Time (ms)</label><input type="number" name="think_time_ms" value="0" min="0"></div>
+                                <div class="form-group"><label>Think Jitter (ms)</label><input type="number" name="think_jitter_ms" value="0" min="0"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="settings-subhead">Access Pattern</h4>
+                            <div class="settings-help">Distribution used to pick existing records for find/update/delete targeting.</div>
+                            <div class="form-group">
+                                <label>Pattern</label>
+                                <select name="access_pattern_kind" id="accessPatternKind" onchange="onAccessPatternKindChange()">
+                                    <option value="uniform">Uniform (every record equally likely)</option>
+                                    <option value="zipfian">Zipfian (power-law skew)</option>
+                                    <option value="hotspot">Hotspot (small subset gets most traffic)</option>
+                                </select>
+                            </div>
+                            <div class="ap-group" data-ap="zipfian" style="display:none;">
+                                <div class="grid-3">
+                                    <div class="form-group"><label>Zipfian Exponent (&ge; 1.0)</label><input type="number" step="0.1" name="access_pattern_zipfian_exponent" value="1.2" min="1"></div>
+                                </div>
+                            </div>
+                            <div class="ap-group" data-ap="hotspot" style="display:none;">
+                                <div class="grid-3">
+                                    <div class="form-group"><label>Hot Records (%)</label><input type="number" name="access_pattern_hotspot_percent" value="20" min="1" max="99"></div>
+                                    <div class="form-group"><label>Hot Traffic (%)</label><input type="number" name="access_pattern_hotspot_traffic_percent" value="80" min="1" max="100"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
 
                 <section class="settings-card">
-                    <h4>Schema Inference from Query Logs</h4>
-                    <div class="settings-help">Paste mongod JSON slow-query logs, system.profile documents, or raw command documents to infer collections, operation patterns, and a suggested operation mix. Use the result to pre-fill the distribution below.</div>
-                    <div class="form-group">
-                        <textarea id="schemaInferInput" rows="5" placeholder='{"attr":{"ns":"shop.orders","command":{"find":"orders","filter":{"status":"open"}}}}'></textarea>
+                    <h4>Sharding Strategy</h4>
+                    <div class="settings-help">Controls how PLGM applies per-collection sharding setup in sharded, non-sharded, or mixed topologies.</div>
+                    <div class="grid-2">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Sharding Mode</label>
+                            <select name="sharding_mode">
+                                <option value="auto" selected>Auto Detect (Recommended)</option>
+                                <option value="force_on">Force On</option>
+                                <option value="force_off">Force Off</option>
+                            </select>
+                            <div class="settings-note">Auto applies sharding logic only when connected via mongos. Force On requires mongos and is best for controlled sharded benchmarks.</div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="shardSkipNoConfig" name="sharding_skip_generic_without_config" value="true">
+                                <label for="shardSkipNoConfig">Skip Generic Setup When shardConfig Is Missing</label>
+                            </div>
+                            <div class="settings-note">Recommended for mixed workloads. Collections without explicit <code>shardConfig</code> are treated as non-sharded targets for setup purposes.</div>
+                        </div>
                     </div>
-                    <div class="definition-actions">
-                        <button type="button" class="btn btn-primary btn-small" onclick="runSchemaInference()">Infer Schema</button>
-                        <button type="button" class="btn btn-small" onclick="applyInferredMix()" id="applyMixBtn" style="display:none;">Apply Suggested Mix</button>
-                    </div>
-                    <div id="schemaInferResult" class="definition-status"></div>
                 </section>
+            </div>
 
+            <div id="tab-mix" class="tab-content">
                 <section class="settings-card">
                     <h4>Data &amp; Query Definitions</h4>
                     <div class="settings-help">Pick the collection and query definitions for this run from the Saved Definition Library. Built-in defaults are always available, and you can import your own JSON files to add more. Your last selection is remembered in this browser.</div>
                     <input type="hidden" id="selectedCollectionDefinitionId" name="collection_definition_id">
                     <input type="hidden" id="selectedQueryDefinitionId" name="query_definition_id">
-                    <div class="grid-2">
+                    <div class="grid-2 definition-grid">
                         <div class="definition-card">
                             <div class="definition-card-title">Collection Definitions</div>
                             <div class="form-group">
@@ -2293,6 +2614,7 @@
                                 <div id="queryDefinitionEmpty" class="definition-empty" style="display:none;">No saved query definitions yet.</div>
                             </div>
                             <div id="queryDefinitionSummary" class="definition-summary" style="display:none;"></div>
+                            <div id="querySortReview" class="sort-review" role="alert" style="display:none;"></div>
                             <details class="definition-import">
                                 <summary>Import a query JSON file</summary>
                                 <div class="definition-import-body">
@@ -2305,7 +2627,7 @@
                             </details>
                             <div id="queryDefinitionStatus" class="definition-status"></div>
                             <details class="definition-editor-wrap">
-                                <summary>Create or edit a query definition</summary>
+                                <summary id="queryEditorSummary">Create or edit a query definition</summary>
                                 <div class="definition-editor">
                                     <div>
                                         <div class="form-group">
@@ -2337,13 +2659,14 @@
                         queries: <code>{"queries":[...]}</code> or <code>[...]</code>.
                         Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.
                     </div>
-                    <div class="grid-2" style="margin-top: 14px;">
+                    <h4 class="settings-subhead">Seeding &amp; Transactions</h4>
+                    <div class="grid-3">
                         <div class="form-group"><label>Seed Document Count</label><input type="number"
                                 name="documents_count" value="100000"></div>
                         <div class="form-group"><label>Max Transaction Ops</label><input type="number"
                                 name="max_transaction_ops" value="5"></div>
                     </div>
-                    <div class="grid-3">
+                    <div class="checkbox-row">
                         <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
                                 value="true"><label for="dropColl">Drop Collections First</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
@@ -2352,13 +2675,11 @@
                                 value="true"><label for="useTx">Use Transactions</label></div>
                     </div>
                 </section>
-            </div>
 
-            <div id="tab-mix" class="tab-content">
                 <section class="settings-card">
-                    <h4>Operation Mix Allocation</h4>
+                    <h4>Operation Mix Allocation <span id="mixTotal" class="mix-total"></span></h4>
                     <div class="settings-help">Define workload composition by operation percentage. Backend normalizes totals to 100%.</div>
-                    <div class="grid-3">
+                    <div class="grid-3 mix-grid" oninput="updateMixTotal()">
                         <div class="form-group"><label>Find (%)</label><input type="number" name="find_percent" value="60"></div>
                         <div class="form-group"><label>Update (%)</label><input type="number" name="update_percent" value="20"></div>
                         <div class="form-group"><label>Delete (%)</label><input type="number" name="delete_percent" value="10"></div>
@@ -2369,65 +2690,38 @@
                     </div>
                     <div class="settings-note">Tip: keep uncommon operations low initially, then increase selectively when investigating specific behaviors.</div>
                 </section>
+
+                <section class="settings-card">
+                    <h4>Schema Inference from Query Logs</h4>
+                    <div class="settings-help">Paste mongod JSON slow-query logs, system.profile documents, or raw command documents to infer collections, operation patterns, and a suggested operation mix. Use the result to pre-fill the operation mix above.</div>
+                    <div class="form-group">
+                        <textarea id="schemaInferInput" rows="5" placeholder='{"attr":{"ns":"shop.orders","command":{"find":"orders","filter":{"status":"open"}}}}'></textarea>
+                    </div>
+                    <div class="definition-actions">
+                        <button type="button" class="btn btn-primary btn-small" onclick="runSchemaInference()">Infer Schema</button>
+                        <button type="button" class="btn btn-small" onclick="applyInferredMix()" id="applyMixBtn" style="display:none;">Apply Suggested Mix</button>
+                    </div>
+                    <div id="schemaInferResult" class="definition-status"></div>
+                </section>
             </div>
 
             <div id="tab-adv" class="tab-content">
                 <div class="adv-layout">
                     <section class="settings-card">
-                        <h4>Execution / Runtime Tuning</h4>
-                        <div class="settings-help">Low-level runtime controls for request shaping and operation timeout behavior.</div>
-                        <div class="grid-3">
-                            <div class="form-group"><label>Find Batch Size</label><input type="number" name="find_batch_size" value="10"></div>
-                            <div class="form-group"><label>Find Limit</label><input type="number" name="find_limit" value="5"></div>
-                            <div class="form-group"><label>Insert Batch Size</label><input type="number" name="insert_batch_size" value="10"></div>
-                            <div class="form-group"><label>Seed Batch Size</label><input type="number" name="seed_batch_size" value="1000"></div>
-                            <div class="form-group"><label>Insert Cache Size</label><input type="number" name="insert_cache_size" value="1000"></div>
-                            <div class="form-group"><label>Op Timeout (ms)</label><input type="number" name="op_timeout_ms" value="500"></div>
-                        </div>
-                        <div class="checkbox-group" style="margin-top:4px; width:max-content;">
-                            <input type="checkbox" id="useFindOne" name="use_findone_for_limit_one" value="true" checked>
-                            <label for="useFindOne">Use <code>FindOne</code> when limit is 1 (recommended)</label>
-                        </div>
-                    </section>
-
-                    <section class="settings-card">
-                        <h4>Sharding Strategy</h4>
-                        <div class="settings-help">Controls how PLGM applies per-collection sharding setup in sharded, non-sharded, or mixed topologies.</div>
-                        <div class="grid-2">
-                            <div class="form-group" style="margin-bottom:0;">
-                                <label>Sharding Mode</label>
-                                <select name="sharding_mode">
-                                    <option value="auto" selected>Auto Detect (Recommended)</option>
-                                    <option value="force_on">Force On</option>
-                                    <option value="force_off">Force Off</option>
-                                </select>
-                                <div class="settings-note">Auto applies sharding logic only when connected via mongos. Force On requires mongos and is best for controlled sharded benchmarks.</div>
-                            </div>
-                            <div style="display:flex; flex-direction:column; gap:12px;">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="shardSkipNoConfig" name="sharding_skip_generic_without_config" value="true">
-                                    <label for="shardSkipNoConfig">Skip Generic Setup When shardConfig Is Missing</label>
-                                </div>
-                                <div class="settings-note">Recommended for mixed workloads. Collections without explicit <code>shardConfig</code> are treated as non-sharded targets for setup purposes.</div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="settings-card">
                         <h4>Export & Reporting</h4>
                         <div class="settings-help">Stream real-time metrics to CSV during workload execution.</div>
-                        <div class="grid-2">
-                            <div style="display:flex; flex-direction:column; gap:12px;">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="csvExport" name="csv_export_enabled" value="true">
-                                    <label for="csvExport">Enable Real-Time CSV Metrics Export</label>
-                                </div>
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="csvAppend" name="csv_export_append" value="true">
-                                    <label for="csvAppend">Append to existing file (do not overwrite)</label>
-                                </div>
+                        <div class="checkbox-row">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="csvExport" name="csv_export_enabled" value="true">
+                                <label for="csvExport">Enable Real-Time CSV Metrics Export</label>
                             </div>
-                            <div class="form-group" style="margin-bottom:0;">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="csvAppend" name="csv_export_append" value="true">
+                                <label for="csvAppend">Append to existing file (do not overwrite)</label>
+                            </div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
                                 <label>CSV Export Path & Filename</label>
                                 <input type="text" name="csv_export_path" placeholder="plgm_metrics_export.csv">
                                 <div class="settings-note">Example: <code>/tmp/plgm_metrics_export.csv</code></div>
@@ -2436,65 +2730,81 @@
                     </section>
 
                     <section class="settings-card">
-                        <h4>Insights & Analysis</h4>
-                        <div class="settings-help">Two-step model: first capture sampled operation events, then optionally run post-run explain enrichment on selected slow shapes.</div>
-                        <div class="settings-note" style="margin-bottom: 12px;">
-                            Recommended patterns:
-                            <br>• Sampling only: lightweight slow-query profiling
-                            <br>• Sampling + Explain: full troubleshooting workflow
-                            <br>• Explain depends on retained sampled events (filters/pipelines for selected shapes)
-                        </div>
-                        <div class="settings-note" style="margin-bottom: 10px;"><strong>1) Insights Capture (Retention & Sampling)</strong></div>
-                        <div class="grid-2">
-                            <div style="display:flex; flex-direction:column; gap:12px;">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
-                                    <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
-                                </div>
-                                <div class="settings-note">Controls what telemetry is captured and retained in memory for final post-run analysis.</div>
+                        <h4>Insights Capture (Sampling &amp; Retention)</h4>
+                        <div class="settings-help">Records every completed operation by query shape during the run, so the post-run Insights and Query &amp; Index Analysis tabs can rank shapes by workload impact and latency. Sampling rate and retention apply only to the per-operation event log used for the timeline and slow-query details; impact totals always count every operation.</div>
+                        <div class="settings-note" style="margin-bottom: 12px;">Post-run explain needs this setting on. Its settings are on the <a href="#" onclick="showTab('tab-query-analysis'); return false;">Query Analysis (Explain)</a> tab.</div>
+                        <div class="checkbox-row">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="insightsEnabled" name="insights_enabled" value="true" checked>
+                                <label for="insightsEnabled">Enable Post-Run Insights Analysis</label>
                             </div>
-                            <div class="grid-2" style="gap:12px;">
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Insights Sampling Rate (0-1)</label>
-                                    <input type="number" name="insights_sampling_rate" min="0.01" max="1" step="0.01" value="0.10">
-                                </div>
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Slow Threshold (ms)</label>
-                                    <input type="number" name="insights_slow_threshold_ms" min="1" step="1" value="200">
-                                </div>
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Max Retained Events</label>
-                                    <input type="number" name="insights_max_events" min="100" step="100" value="5000">
-                                </div>
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Max Group Entries</label>
-                                    <input type="number" name="insights_max_groups" min="50" step="10" value="300">
-                                </div>
+                            <span class="settings-note">Controls what telemetry is captured and retained in memory for final post-run analysis.</span>
+                        </div>
+                        <div class="grid-3">
+                            <div class="form-group">
+                                <label>Insights Sampling Rate (0-1)</label>
+                                <input type="number" name="insights_sampling_rate" min="0.01" max="1" step="0.01" value="0.10">
+                            </div>
+                            <div class="form-group">
+                                <label>Slow Threshold (ms)</label>
+                                <input type="number" name="insights_slow_threshold_ms" min="1" step="1" value="200">
+                            </div>
+                            <div class="form-group">
+                                <label>Max Retained Events</label>
+                                <input type="number" name="insights_max_events" min="100" step="100" value="5000">
+                            </div>
+                            <div class="form-group">
+                                <label>Max Group Entries</label>
+                                <input type="number" name="insights_max_groups" min="50" step="10" value="300">
                             </div>
                         </div>
-                        <hr style="border:0; border-top:1px solid var(--p-border); margin:14px 0 12px;">
-                        <div class="settings-note" style="margin-bottom: 10px;"><strong>2) Explain Enrichment (Post-Run)</strong></div>
-                        <div class="settings-help">Runs MongoDB explain after workload completion for selected slow shapes. This does not run during measured workload execution.</div>
-                        <div class="grid-2">
-                            <div style="display:flex; flex-direction:column; gap:12px;">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true">
-                                    <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling</label>
-                                </div>
-                                <div class="settings-note">Explain requires eligible retained samples from Insights Capture. If sampling/retention are too low, explain may be unavailable for some shapes.</div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="tab-query-analysis" class="tab-content">
+                <div class="adv-layout">
+                    <section class="settings-card">
+                        <h4>Post-Run Explain</h4>
+                        <div class="checkbox-group" style="margin-bottom: 10px;">
+                            <input type="checkbox" id="insightsExplainEnabled" name="insights_explain_enabled" value="true" checked>
+                            <label for="insightsExplainEnabled">Enable Post-Run Explain Sampling (recommended, on by default)</label>
+                        </div>
+                        <div class="settings-note" id="insightsExplainOffWarning" style="display:none; color: var(--p-fire); font-weight: 600; margin-bottom: 10px;" role="status">Explain is off. Scan efficiency, execution overhead, plan-based index recommendations, and efficiency trends will not be available for this run.</div>
+                        <div class="settings-columns">
+                            <div class="settings-help" id="insightsExplainHelp">
+                                <strong>Recommended: keep on.</strong>
+                                <p style="margin:6px 0;"><strong>What it does.</strong> While the workload runs, PLGM keeps a few real example queries for each query shape. After the workload finishes, it sends a small number of them back to MongoDB as <code>explain</code> commands. The explain output shows how the server actually ran each query: which index it used (or a collection scan), how many index keys and documents it examined for the documents it returned, and whether it sorted in memory or spilled to disk. PLGM also reads the collection's existing indexes with <code>listIndexes</code>.</p>
+                                <p style="margin:6px 0;"><strong>What you get.</strong> The Query &amp; Index Analysis tab uses this output for:</p>
+                                <ul style="margin:4px 0 6px 18px; padding:0;">
+                                    <li>scan efficiency ratings (0&ndash;100) that compare work examined with results returned, including for fast queries;</li>
+                                    <li>execution overhead: in-memory sorts, disk spills, and per-sample sort/spill measurements;</li>
+                                    <li>plan-based index recommendations with ordered candidate keys, checked against the indexes that already exist;</li>
+                                    <li>efficiency trends compared with earlier runs.</li>
+                                </ul>
+                                <p style="margin:6px 0;">With it off, Query &amp; Index Analysis reports only latency and workload impact, and the other columns show as unassessed.</p>
                             </div>
-                            <div class="grid-2" style="gap:12px;">
+                            <div class="settings-help">
+                                <p style="margin:6px 0;"><strong>Cost and safety.</strong></p>
+                                <ul style="margin:4px 0 6px 18px; padding:0;">
+                                    <li>Explain runs only after the workload finishes, never during the measured window, so benchmark results are not affected.</li>
+                                    <li>It is bounded: at most 2 &times; Top N query shapes, 2 samples each (20 explain commands with the defaults), one at a time by default, each capped by Explain Max Time, plus one <code>listIndexes</code> per explained collection.</li>
+                                    <li>Updates, deletes, and <code>$out</code>/<code>$merge</code> pipelines are explained without being applied; no data is changed.</li>
+                                    <li>During the run, keeping example queries adds well under 100 ns per operation.</li>
+                                </ul>
+                                <p style="margin:6px 0;">Turn it off only if the cluster must receive no commands beyond the workload, or the connecting user is not allowed to run <code>explain</code> or <code>listIndexes</code>. It also needs <strong>Enable Post-Run Insights Analysis</strong> (Metrics &amp; Insights tab).</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Which Queries Are Explained</h4>
+                        <div class="settings-help">Explain slots come in two groups of Top N shapes each. Severity slots take the slowest shapes that pass the slow threshold and severity mode. Efficiency slots take shapes from the whole workload, alternating the highest workload impact with a spread across latency levels, so fast queries that scan too much are also found. Shapes that are not explained have no scan efficiency score; they are never shown as efficient.</div>
+                        <div class="grid-2" style="gap:12px;">
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Explain Top N Shapes</label>
                                     <input type="number" name="insights_explain_top_n" min="1" step="1" value="5">
-                                </div>
-                                <div class="form-group" style="margin-bottom:0;">
-                                    <label>Explain Verbosity</label>
-                                    <select name="insights_explain_verbosity">
-                                        <option value="executionStats" selected>executionStats (Recommended)</option>
-                                        <option value="queryPlanner">queryPlanner (lighter)</option>
-                                    </select>
-                                    <div class="settings-note">executionStats provides real examined/returned evidence and better troubleshooting recommendations.</div>
+                                    <div class="settings-note">Shapes per slot group. The default of 5 explains up to 10 shapes.</div>
                                 </div>
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Explain Severity Mode</label>
@@ -2505,6 +2815,29 @@
                                         <option value="high_and_low">High + Low</option>
                                     </select>
                                     <div class="settings-note">Default keeps explain focused on high-severity slow groups to reduce low-value attempts and timeout pressure.</div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Efficiency Slots</label>
+                                    <select name="insights_explain_efficiency_mode">
+                                        <option value="impact_and_latency_tiers" selected>Impact + latency tiers (Recommended)</option>
+                                        <option value="off">Off (severity slots only)</option>
+                                    </select>
+                                    <div class="settings-note">Adds Top N explain slots chosen from every shape regardless of the slow threshold or severity mode, so fast shapes can be assessed.</div>
+                                </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Explain Execution Limits</h4>
+                        <div class="settings-help">How each explain command is run against the cluster after the workload. A timed-out or failed explain is reported as inconclusive, never as a finding.</div>
+                        <div class="grid-2" style="gap:12px;">
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>Explain Verbosity</label>
+                                    <select name="insights_explain_verbosity">
+                                        <option value="executionStats" selected>executionStats (Recommended)</option>
+                                        <option value="queryPlanner">queryPlanner (lighter)</option>
+                                    </select>
+                                    <div class="settings-note">executionStats runs the query plan and reports keys and documents examined, which scan efficiency and sort/spill measurements need. queryPlanner only shows the chosen plan, so most results are partial.</div>
                                 </div>
                                 <div class="form-group" style="margin-bottom:0;">
                                     <label>Explain Max Time (ms)</label>
@@ -2522,25 +2855,42 @@
                                     <label>Explain Retry Backoff (ms)</label>
                                     <input type="number" name="insights_explain_backoff_ms" min="0" step="50" value="150">
                                 </div>
-                            </div>
                         </div>
                     </section>
 
                     <section class="settings-card">
-                        <h4>Debug / Experimental</h4>
-                        <div class="settings-help">Advanced retry controls for workload operations. Adjust only when debugging transient driver/server behavior.</div>
-                        <details class="expert-toggle">
-                            <summary>Show Expert Retry Controls</summary>
-                            <div class="grid-3" style="margin-top: 10px;">
-                                <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts" value="2"></div>
-                                <div class="form-group"><label>Retry Backoff (ms)</label><input type="number" name="retry_backoff_ms" value="5"></div>
+                        <h4>Query Latency Targets</h4>
+                        <div class="settings-help">Optional targets for the query latency rating in Query &amp; Index Analysis. They apply to every query shape and do not need explain. Leave empty for no target; with no target, latency is shown but not rated.</div>
+                        <div class="grid-3" style="gap:12px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Latency Target Avg (ms)</label>
+                                <input type="number" name="insights_latency_target_avg_ms" min="0" step="any" placeholder="none">
                             </div>
-                        </details>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Latency Target p95 (ms)</label>
+                                <input type="number" name="insights_latency_target_p95_ms" min="0" step="any" placeholder="none">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Latency Target p99 (ms)</label>
+                                <input type="number" name="insights_latency_target_p99_ms" min="0" step="any" placeholder="none">
+                            </div>
+                        </div>
                     </section>
                 </div>
             </div>
 
             <div id="tab-raw" class="tab-content">
+                <section class="settings-card">
+                    <h4>Debug / Experimental</h4>
+                    <div class="settings-help">Advanced retry controls for workload operations. Adjust only when debugging transient driver/server behavior.</div>
+                    <details class="expert-toggle">
+                        <summary>Show Expert Retry Controls</summary>
+                        <div class="grid-3" style="margin-top: 10px;">
+                            <div class="form-group"><label>Retry Attempts</label><input type="number" name="retry_attempts" value="2"></div>
+                            <div class="form-group"><label>Retry Backoff (ms)</label><input type="number" name="retry_backoff_ms" value="5"></div>
+                        </div>
+                    </details>
+                </section>
                 <section class="settings-card">
                     <h4>Expert / Experimental Execution</h4>
                     <div class="settings-help">Raw Injector bypasses standard workload flow for high-throughput hardware and driver stress tests.</div>
@@ -2707,8 +3057,10 @@
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            const activeBtn = btnEl || event?.currentTarget;
+            const activeBtn = btnEl || document.querySelector(`.tab-btn[onclick*="'${tabId}'"]`);
             if (activeBtn) activeBtn.classList.add('active');
+            const form = document.getElementById('configForm');
+            if (form && form.getBoundingClientRect().top < 0) form.scrollIntoView({ block: 'start' });
         }
 
         // --- Live dashboard tabs ---
@@ -2718,6 +3070,7 @@
         const dashTabPanels = {
             overview: ['dashpanel-throughput', 'dashpanel-livelatency'],
             latency: ['dashpanel-timeline', 'dashpanel-distribution', 'dashpanel-heatmap'],
+            queries: ['queryAnalysisPanel'],
             insights: ['insightsPanel']
         };
         let activeDashTab = 'overview';
@@ -2961,7 +3314,8 @@
                 return def.name || def.id;
             }
             const updated = def.updatedAt ? new Date(def.updatedAt).toLocaleString() : '';
-            return `${def.name || def.sourceFilename || def.id}${updated ? ' - ' + updated : ''}`;
+            const review = def.sortOrderReview ? ' (sort order review needed)' : '';
+            return `${def.name || def.sourceFilename || def.id}${updated ? ' - ' + updated : ''}${review}`;
         }
 
         function escHtmlSafe(value) {
@@ -3004,9 +3358,57 @@
                 }
             }
             if (!resp.ok || payload.status === 'error') {
-                throw new Error(payload.message || `HTTP ${resp.status}`);
+                const err = new Error(payload.message || `HTTP ${resp.status}`);
+                err.payload = payload;
+                throw err;
             }
             return payload;
+        }
+
+        function selectedQueryNeedsSortReview() {
+            const hidden = hiddenDefinitionInput('query');
+            const selected = definitionState.query.selected;
+            return !!(hidden && hidden.value && selected && selected.id === hidden.value && selected.sortOrderReview);
+        }
+
+        function renderSortOrderReview(def) {
+            const el = document.getElementById('querySortReview');
+            if (!el) return;
+            const review = def && def.sortOrderReview;
+            if (!review || !Array.isArray(review.issues) || !review.issues.length) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            const items = review.issues.map(is => `<li><label><input type="checkbox" class="sort-review-confirm" data-path="${escHtmlSafe(is.path)}" data-spec="${escHtmlSafe(is.sortSpec || '')}"> Query ${Number(is.queryIndex) + 1} (${escHtmlSafe(is.queryName || 'unnamed')}): <code>${escHtmlSafe(is.path)}</code> has fields in this order: <code>${escHtmlSafe((is.storedKeys || []).join(', '))}</code> (<code>${escHtmlSafe(is.sortSpec || '')}</code>). I checked this field precedence in the editor and it is the intended order (or I corrected it).</label></li>`).join('');
+            el.innerHTML = `<strong>Sort order needs review before this definition can run.</strong>
+                <div>This definition was saved by an earlier version that may have alphabetized the fields of multi-key sorts, so the original precedence is unknown and is not guessed. Open the editor, put each sort's fields in the intended order, confirm each one below, and save.</div>
+                <ul>${items}</ul>
+                <div class="definition-actions">
+                    <button type="button" class="btn btn-secondary btn-small" onclick="openQueryEditor()">Open Editor</button>
+                    <button type="button" class="btn btn-primary btn-small" id="saveReviewedSortBtn" onclick="saveQueryDefinition()">Save Reviewed Definition</button>
+                </div>
+                <div id="sortReviewStatus" class="definition-status" aria-live="polite"></div>`;
+            el.style.display = 'block';
+        }
+
+        // Each confirmation names the exact ordered sort it was given for; the backend
+        // rejects it as stale if the submitted content holds a different order.
+        function reviewedSorts() {
+            return Array.from(document.querySelectorAll('#querySortReview .sort-review-confirm:checked')).map(cb => ({ path: cb.dataset.path, sortSpec: cb.dataset.spec }));
+        }
+
+        function copySourceFields(selected) {
+            if (!selected) return {};
+            return { sourceDefinitionId: selected.id, sourceUpdatedAt: selected.updatedAt || '', sourceContentVersion: selected.contentVersion || 0 };
+        }
+
+        function openQueryEditor() {
+            const summary = document.getElementById('queryEditorSummary');
+            const details = summary ? summary.parentElement : null;
+            if (!details) return;
+            details.open = true;
+            if (details.scrollIntoView) details.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         async function loadDefinitionLibrary() {
@@ -3046,6 +3448,7 @@
             // so clear any pending run-once import to avoid an ambiguous run.
             const importInput = importFileFor(kind);
             if (importInput) importInput.value = '';
+            if (kind === 'query') renderSortOrderReview(null);
             if (!id) {
                 localStorage.removeItem(definitionLocalStorageKeys[kind]);
                 renderDefinitionSummary(kind, null);
@@ -3057,8 +3460,15 @@
                 definitionState[kind].selected = def;
                 localStorage.setItem(definitionLocalStorageKeys[kind], id);
                 renderDefinitionSummary(kind, def);
-                if (kind === 'query') populateQueryEditor(def);
-                setDefinitionStatus(kind, `Selected ${def.name}.`, 'ok');
+                if (kind === 'query') {
+                    populateQueryEditor(def);
+                    renderSortOrderReview(def);
+                }
+                if (def.sortOrderReview) {
+                    setDefinitionStatus(kind, `Selected ${def.name}. Its sort order must be reviewed and saved before it can run.`, 'error');
+                } else {
+                    setDefinitionStatus(kind, `Selected ${def.name}.`, 'ok');
+                }
             } catch (err) {
                 if (hidden) hidden.value = '';
                 renderDefinitionSummary(kind, null);
@@ -3131,6 +3541,7 @@
             definitionState.query.selected = null;
             localStorage.removeItem(definitionLocalStorageKeys.query);
             renderDefinitionSummary('query', null);
+            renderSortOrderReview(null);
             document.getElementById('queryEditorName').value = '';
             document.getElementById('queryEditorDescription').value = '';
             document.getElementById('queryDefinitionEditor').value = '{\n  "queries": [\n    {\n      "name": "find_orders",\n      "database": "shop",\n      "collection": "orders",\n      "operation": "find",\n      "filter": {}\n    }\n  ]\n}';
@@ -3169,6 +3580,10 @@
                 if (!updateExisting && selected && isBuiltinDefinitionId(selected.id) && payload.name === selected.name) {
                     payload.name = `${payload.name} (custom)`;
                 }
+                if (updateExisting && selected.sortOrderReview) {
+                    payload.reviewedSorts = reviewedSorts();
+                }
+                if (!updateExisting) Object.assign(payload, copySourceFields(selected));
                 setQueryEditorStatus('Saving query definition...', '');
                 const def = updateExisting
                     ? await apiJSON(`${endpointFor('query')}/${encodeURIComponent(selected.id)}`, {
@@ -3186,17 +3601,44 @@
                 if (select) select.value = def.id;
                 await selectDefinition('query', def.id);
                 setQueryEditorStatus(`Saved ${def.name}.`, 'ok');
+                if (payload.reviewedSorts) {
+                    setDefinitionStatus('query', `Saved ${def.name} with the reviewed sort order; it can run now.`, 'ok');
+                }
             } catch (err) {
-                setQueryEditorStatus(err.message || String(err), 'error');
+                showSortReviewSaveError(err);
             }
+        }
+
+        function showSortReviewSaveError(err) {
+            const payload = err && err.payload;
+            if (payload && payload.code === 'sort_order_review_required' && definitionState.query.selected) {
+                const checked = new Set(reviewedSorts().map(rs => rs.path + '\n' + rs.sortSpec));
+                definitionState.query.selected.sortOrderReview = payload.sortOrderReview;
+                renderSortOrderReview(definitionState.query.selected);
+                document.querySelectorAll('#querySortReview .sort-review-confirm').forEach(cb => { cb.checked = checked.has(cb.dataset.path + '\n' + cb.dataset.spec); });
+            }
+            const msg = (err && err.message) || String(err);
+            const reviewStatus = document.getElementById('sortReviewStatus');
+            if (reviewStatus) {
+                reviewStatus.textContent = msg;
+                reviewStatus.className = 'definition-status error';
+            }
+            setQueryEditorStatus(msg, 'error');
         }
 
         async function saveQueryDefinitionAsNew() {
             try {
+                const selected = definitionState.query.selected;
+                const review = selected && selected.sortOrderReview;
+                if (review && reviewedSorts().length < review.issues.length) {
+                    throw new Error('Confirm the field order of every sort listed in the sort order warning before saving this definition as new.');
+                }
                 const payload = readQueryEditorInput(false);
-                if (definitionState.query.selected && payload.name === definitionState.query.selected.name) {
+                if (selected && payload.name === selected.name) {
                     payload.name = `${payload.name} copy`;
                 }
+                Object.assign(payload, copySourceFields(selected));
+                if (review) payload.reviewedSorts = reviewedSorts();
                 setQueryEditorStatus('Saving query definition as new...', '');
                 const def = await apiJSON(endpointFor('query'), {
                     method: 'POST',
@@ -3209,7 +3651,7 @@
                 await selectDefinition('query', def.id);
                 setQueryEditorStatus(`Saved ${def.name}.`, 'ok');
             } catch (err) {
-                setQueryEditorStatus(err.message || String(err), 'error');
+                showSortReviewSaveError(err);
             }
         }
 
@@ -3258,6 +3700,11 @@
             el.style.display = 'none';
         }
         function validateConfigForm() {
+            if (selectedQueryNeedsSortReview()) {
+                showTab('tab-mix');
+                showConfigInlineError('The selected query definition cannot run until its sort order is reviewed. ' + definitionState.query.selected.sortOrderReview.message + '.');
+                return false;
+            }
             const num = (name) => Number(document.querySelector(`[name="${name}"]`)?.value || 0);
             const uri = (document.querySelector('[name="uri"]')?.value || '').trim();
             if (!uri) {
@@ -3283,7 +3730,7 @@
             const insightsSampling = Number(document.querySelector('[name="insights_sampling_rate"]')?.value || 0);
             if (insightsSampling <= 0 || insightsSampling > 1) {
                 showConfigInlineError('Insights Sampling Rate must be between 0.01 and 1.');
-                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                showTab('tab-adv');
                 return false;
             }
             const explainTopN = num('insights_explain_top_n');
@@ -3293,14 +3740,14 @@
             const explainBackoff = num('insights_explain_backoff_ms');
             if (explainTopN < 1 || explainMaxTime < 100 || explainWorkers < 1 || explainRetries < 0 || explainBackoff < 0) {
                 showConfigInlineError('Explain settings are invalid. Check top-N, max time, workers, retries, and backoff values.');
-                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                showTab('tab-query-analysis');
                 return false;
             }
             const shardingMode = (document.querySelector('[name="sharding_mode"]')?.value || 'auto').trim();
             const skipNoConfig = !!document.getElementById('shardSkipNoConfig')?.checked;
             if (shardingMode === 'force_on' && skipNoConfig) {
                 showConfigInlineError('Sharding settings conflict: Force On cannot be combined with "Skip Generic Setup When shardConfig Is Missing".');
-                showTab('tab-adv', document.querySelectorAll('.tab-btn')[3]);
+                showTab('tab-workload');
                 return false;
             }
 
@@ -3311,12 +3758,12 @@
                 const queryFile = document.querySelector('[name="queries_file"]')?.files?.length || 0;
                 if (!selectedCollection && collectionFile === 0) {
                     showConfigInlineError('Select a collection definition from the library, or import a collection JSON file.');
-                    showTab('tab-workload', document.querySelectorAll('.tab-btn')[1]);
+                    showTab('tab-mix');
                     return false;
                 }
                 if (!selectedQuery && queryFile === 0) {
                     showConfigInlineError('Select a query definition from the library, or import a query JSON file.');
-                    showTab('tab-workload', document.querySelectorAll('.tab-btn')[1]);
+                    showTab('tab-mix');
                     return false;
                 }
             }
@@ -3941,8 +4388,16 @@
             badge.textContent = "STOPPED"; badge.style.background = "rgba(255,255,255,0.2)"; badge.style.color = "white";
         }
 
+        function updateExplainOffWarning() {
+            const box = document.getElementById('insightsExplainEnabled');
+            const warn = document.getElementById('insightsExplainOffWarning');
+            if (box && warn) warn.style.display = box.checked ? 'none' : 'block';
+        }
+
         document.addEventListener("DOMContentLoaded", function () {
             initCharts();
+            document.getElementById('insightsExplainEnabled').addEventListener('change', updateExplainOffWarning);
+            updateExplainOffWarning();
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeInsightsDrawer();
             });
@@ -3995,6 +4450,7 @@
                 document.querySelector('[name="bulk_insert_percent"]').value = cfg.BulkInsertPercent || 0;
                 document.querySelector('[name="aggregate_percent"]').value = cfg.AggregatePercent || 0;
                 document.querySelector('[name="transaction_percent"]').value = cfg.TransactionPercent || 0;
+                updateMixTotal();
 
                 document.querySelector('[name="find_batch_size"]').value = cfg.FindBatchSize || 10;
                 document.querySelector('[name="find_limit"]').value = cfg.FindLimit || 5;
@@ -4009,10 +4465,15 @@
                 document.querySelector('[name="insights_slow_threshold_ms"]').value = cfg.InsightsSlowThresholdMs || 200;
                 document.querySelector('[name="insights_max_events"]').value = cfg.InsightsMaxEvents || 5000;
                 document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
-                document.getElementById('insightsExplainEnabled').checked = !!cfg.InsightsExplainEnabled;
+                document.getElementById('insightsExplainEnabled').checked = (cfg.InsightsExplainEnabled !== undefined) ? !!cfg.InsightsExplainEnabled : true;
+                updateExplainOffWarning();
                 document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
                 document.querySelector('[name="insights_explain_verbosity"]').value = cfg.InsightsExplainVerbosity || 'executionStats';
                 document.querySelector('[name="insights_explain_severity_mode"]').value = cfg.InsightsExplainSeverityMode || 'high_only';
+                document.querySelector('[name="insights_explain_efficiency_mode"]').value = cfg.InsightsExplainEfficiencyMode || 'impact_and_latency_tiers';
+                document.querySelector('[name="insights_latency_target_avg_ms"]').value = cfg.InsightsLatencyTargetAvgMs || '';
+                document.querySelector('[name="insights_latency_target_p95_ms"]').value = cfg.InsightsLatencyTargetP95Ms || '';
+                document.querySelector('[name="insights_latency_target_p99_ms"]').value = cfg.InsightsLatencyTargetP99Ms || '';
                 document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
                 document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
                 document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
@@ -4083,8 +4544,8 @@
             userInput.value = document.querySelector('[name="username"]').value || '';
             passInput.value = document.querySelector('[name="password"]').value || '';
 
-            const what = (needUser && needPass) ? 'a username and password'
-                : needUser ? 'a username' : 'a password';
+            const what = (needUser && needPass) ? 'username or password'
+                : needUser ? 'username' : 'password';
             const it = (needUser && needPass) ? 'them' : 'it';
             msg.textContent = `No ${what} was provided for the MongoDB connection. Enter ${it} below, `
                 + `or leave blank if your deployment does not require authentication.`;
@@ -4136,7 +4597,7 @@
 
         function explainReasonText(code) {
             const map = {
-                explain_disabled: 'Explain mode is disabled.',
+                explain_disabled: 'Post-run explain was turned off for this run. Enable Post-Run Explain Sampling on the Query Analysis (Explain) settings tab to get plan-based results.',
                 explain_not_attempted_yet: 'Explain was enabled but not run yet.',
                 candidate_selected_explain_pending: 'Candidate selected for explain processing.',
                 not_selected_top_n_1: 'Not selected because top-N explain limit is 1.',
@@ -4192,12 +4653,22 @@
         }
 
         function showInsightsTab(tab) {
-            const tabs = ['overview', 'iteration', 'timeline'];
-            tabs.forEach(t => {
-                const tabEl = document.getElementById(`insightsTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
-                const btnEl = document.getElementById(`insTab${t === 'overview' ? 'Overview' : (t === 'iteration' ? 'Iter' : 'Timeline')}Btn`);
+            toggleSubTabs('insightsTab', { overview: 'insTabOverviewBtn', iteration: 'insTabIterBtn', timeline: 'insTabTimelineBtn' }, tab);
+        }
+
+        function showQueryAnalysisTab(tab) {
+            toggleSubTabs('queryAnalysisTab', { efficiency: 'qaTabEfficiencyBtn', findings: 'qaTabFindingsBtn', trends: 'qaTabTrendsBtn' }, tab);
+        }
+
+        function toggleSubTabs(prefix, btnIds, tab) {
+            Object.keys(btnIds).forEach(t => {
+                const tabEl = document.getElementById(`${prefix}${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const btnEl = document.getElementById(btnIds[t]);
                 if (tabEl) tabEl.style.display = (t === tab) ? 'block' : 'none';
-                if (btnEl) btnEl.classList.toggle('active', t === tab);
+                if (btnEl) {
+                    btnEl.classList.toggle('active', t === tab);
+                    btnEl.setAttribute('aria-pressed', t === tab ? 'true' : 'false');
+                }
             });
         }
 
@@ -4232,6 +4703,32 @@
             if (d.docs_examined) chips.push(`docs ${Number(d.docs_examined)}`);
             if (d.keys_examined) chips.push(`keys ${Number(d.keys_examined)}`);
             return chips.slice(0, 6);
+        }
+
+        function explainSourceFor(item) {
+            if (!item) return {};
+            if (item.explain_finding || item.explain_diagnostics || item.explain_samples) return item;
+            const rep = finalInsightsData || {};
+            return (rep.slow_queries || []).find(s => s.shape_id === item.shape_id) || item;
+        }
+
+        function renderExplainSamples(src) {
+            const sel = src.explain_selection;
+            const samples = src.explain_samples || [];
+            if (!sel && samples.length === 0) return '';
+            const lines = [];
+            if (sel) {
+                lines.push(`<div class="insights-kv">selection: ${escHtml(sel.method || '')} | retained successful samples ${Number(sel.retained_successful_samples || 0)} (executable ${Number(sel.executable_samples || 0)}) | median ${formatMs(sel.median_ms)} | p95 ${formatMs(sel.p95_ms)}</div>`);
+                if (sel.scope_note) lines.push(`<div class="insights-kv">${escHtml(sel.scope_note)}</div>`);
+            }
+            samples.forEach(sm => {
+                const sd = sm.diagnostics || {};
+                const server = sd.execution_stats_available ? `server exec ${Number(sd.execution_time_millis || 0)}ms at explain` : 'no server execution metrics';
+                lines.push(`<div class="insights-kv">${escHtml(sm.role || '')} sample: client ${formatMs(sm.client_latency_ms)} during run | explain ${escHtml(explainStatusText(sm.status || ''))}${sm.reason ? ` (${escHtml(sm.reason)})` : ''} | ${escHtml(server)} | attempts ${Number(sm.attempts || 0)} | ${escHtml(sm.latency_comparison || 'not_comparable')}</div>`);
+            });
+            const note = (src.explain_finding && src.explain_finding.timing_note) || ((finalInsightsData || {}).metadata || {}).explain_timing_note;
+            if (note) lines.push(`<div class="insights-detail-subtitle">${escHtml(note)}</div>`);
+            return `<div class="insights-detail-label" style="margin-top:8px;">Explain Samples</div>${lines.join('')}`;
         }
 
         function findingCardId(kind, index) {
@@ -4353,7 +4850,9 @@
                 return;
             }
             const item = insightsDrawerCurrent.item;
-            const d = item.explain_diagnostics || {};
+            const src = explainSourceFor(item);
+            const d = src.explain_diagnostics || {};
+            const f = src.explain_finding || null;
             const title = `${item.operation || ''} • ${item.collection || ''}`;
             const summaryBlock = `
                 <div class="insights-detail-card">
@@ -4367,7 +4866,7 @@
             const planBlock = `
                 <div class="insights-detail-card">
                     <div class="insights-detail-label">Execution Plan Flow</div>
-                    ${renderPlanFlow(item)}
+                    ${renderPlanFlow(src)}
                     <div class="insights-plan-legend">
                         <span class="insights-plan-legend-item">Normal stage</span>
                         <span class="insights-plan-legend-item" style="border-color:#fdba74;background:#ffedd5;color:#9a3412;">Potential bottleneck</span>
@@ -4381,10 +4880,11 @@
             const recoBlock = `
                 <div class="insights-detail-card">
                     <div class="insights-detail-label">Interpretation</div>
-                    <div class="insights-kv">${escHtml(d.interpretation || item.message || 'No interpretation available.')}</div>
+                    <div class="insights-kv">${escHtml((f && f.interpretation) || item.message || d.interpretation || 'No interpretation available.')}</div>
                     <div class="insights-detail-label" style="margin-top:8px;">Next Step</div>
-                    <div class="insights-kv">${escHtml(d.recommendation || item.recommendation || 'No recommendation available.')}</div>
-                    <div class="insights-detail-subtitle">confidence: ${escHtml(d.recommendation_confidence || item.confidence || 'low')}</div>
+                    <div class="insights-kv">${escHtml((f && f.recommendation) || item.recommendation || d.recommendation || 'No recommendation available.')}</div>
+                    <div class="insights-detail-subtitle">confidence: ${escHtml((f && f.confidence) || item.confidence || d.recommendation_confidence || 'low')}${f && f.confidence_basis ? ` (${escHtml(f.confidence_basis)})` : ''}</div>
+                    ${f && Array.isArray(f.evidence) && f.evidence.length ? `<div class="insights-detail-label" style="margin-top:8px;">Evidence</div><ul style="margin:4px 0 0 16px; padding:0;">${f.evidence.map(e => `<li class="insights-kv">${escHtml(e)}</li>`).join('')}</ul>` : ''}
                 </div>
             `;
             const diagBlock = `
@@ -4393,14 +4893,15 @@
                     <div class="insights-kv">explain status: ${escHtml(explainStatusText(item.explain_status || 'explain_unavailable'))}</div>
                     <div class="insights-kv">reason: ${escHtml(explainReasonText(item.explain_reason || ''))}</div>
                     <div class="insights-kv">docs/keys/returned: ${Number(d.docs_examined || 0)}/${Number(d.keys_examined || 0)}/${Number(d.n_returned || 0)}</div>
-                    <div class="insights-kv">exec: ${Number(d.execution_time_millis || 0)}ms | elapsed: ${Number(d.elapsed_ms || 0)}ms</div>
+                    <div class="insights-kv">server exec at explain: ${Number(d.execution_time_millis || 0)}ms | explain round trip: ${Number(d.elapsed_ms || 0)}ms</div>
                     <div class="insights-kv">d/r: ${Number(d.examined_to_returned_ratio || 0).toFixed(2)} | k/r: ${Number(d.keys_to_returned_ratio || 0).toFixed(2)}</div>
+                    ${renderExplainSamples(src)}
                     <details style="margin-top:8px;">
                         <summary style="cursor:pointer; font-size:11px; color:var(--text-secondary); font-weight:700;">Technical diagnostics</summary>
-                        <pre style="white-space:pre-wrap; font-size:10px; color:var(--text-secondary); margin-top:6px;">${escHtml(diagnosticsClipboardText(item))}</pre>
+                        <pre style="white-space:pre-wrap; font-size:10px; color:var(--text-secondary); margin-top:6px;">${escHtml(diagnosticsClipboardText(src))}</pre>
                     </details>
                     <div style="margin-top:8px;">
-                        <button type="button" class="insights-copy-btn" onclick='copyExplainDiagnosticsFromEncoded("${encodeExplainDiagnosticsPayload(item)}", this)'>Copy diagnostics</button>
+                        <button type="button" class="insights-copy-btn" onclick='copyExplainDiagnosticsFromEncoded("${encodeExplainDiagnosticsPayload(src)}", this)'>Copy diagnostics</button>
                     </div>
                 </div>
             `;
@@ -4468,6 +4969,8 @@
                 `server_max_time_ms: ${d.server_max_time_ms || 0}`,
                 `client_timeout_ms: ${d.client_timeout_ms || 0}`,
                 `stage_summary: ${d.stage_summary || ''}`,
+                `command_summary: ${d.command_summary || ''}`,
+                `execution_stats_available: ${!!d.execution_stats_available}`,
                 `elapsed_ms: ${d.elapsed_ms || 0}`,
                 `winning_plan_summary: ${d.winning_plan_summary || ''}`,
                 `indexes_used: ${(d.indexes_used || []).join(', ')}`,
@@ -4488,6 +4991,9 @@
                 `examined_to_returned_ratio: ${d.examined_to_returned_ratio || 0}`,
                 `keys_to_returned_ratio: ${d.keys_to_returned_ratio || 0}`,
                 `shard_details_summary: ${d.shard_details_summary || ''}`,
+                `diagnosis: ${d.diagnosis || ''}`,
+                `finding_diagnosis: ${(s.explain_finding && s.explain_finding.diagnosis) || ''}`,
+                `finding_confidence: ${(s.explain_finding && s.explain_finding.confidence) || ''}`,
                 `interpretation: ${d.interpretation || ''}`,
                 `recommendation: ${d.recommendation || ''}`,
                 `recommendation_confidence: ${d.recommendation_confidence || ''}`,
@@ -4510,7 +5016,10 @@
                 representative_pipeline_summary: s.representative_pipeline_summary || '',
                 explain_status: s.explain_status || '',
                 explain_reason: s.explain_reason || '',
-                explain_diagnostics: s.explain_diagnostics || {}
+                explain_diagnostics: s.explain_diagnostics || {},
+                explain_selection: s.explain_selection || null,
+                explain_samples: s.explain_samples || [],
+                explain_finding: s.explain_finding || null
             }));
         }
 
@@ -4558,12 +5067,26 @@
         function clearInsightsContentForPending() {
             const ids = [
                 'insightsTopFindings',
+                'insightsImpactCoverage',
+                'insightsImpact',
                 'insightsSlowQueries',
                 'insightsCollections',
                 'insightsIndexIssues',
                 'insightsRecommendations',
+                'insightsRecommendationsPager',
                 'insightsPerIteration',
-                'insightsTimeSlices'
+                'insightsTimeSlices',
+                'efficiencyColumnNotes',
+                'efficiencyCoverage',
+                'efficiencyTable',
+                'efficiencyLimitations',
+                'efficiencyDetail',
+                'trendCausationNote',
+                'trendSummary',
+                'trendResetStatus',
+                'trendTable',
+                'trendCriteria',
+                'trendLimitations'
             ];
             ids.forEach(id => {
                 const el = document.getElementById(id);
@@ -4576,17 +5099,29 @@
             const panel = document.getElementById('insightsPanel');
             const status = document.getElementById('insightsStatus');
             const pill = document.getElementById('insightsPill');
+            const qaPill = document.getElementById('queryAnalysisPill');
+            const qaStatus = document.getElementById('queryAnalysisStatus');
             if (!panel || !status || !pill) return;
+            const notice = (rep && rep.efficiency_view && rep.efficiency_view.notice) || '';
+            ['insightsExplainNotice', 'queryAnalysisExplainNotice'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = notice;
+                el.hidden = !notice;
+            });
 
             const setPill = (state, label) => {
-                pill.className = `insights-pill ${state}`;
-                pill.textContent = label;
+                [pill, qaPill].forEach(p => {
+                    if (!p) return;
+                    p.className = `insights-pill ${state}`;
+                    p.textContent = label;
+                });
             };
 
             if (!rep || !rep.metadata || rep.metadata.status === 'pending' || rep.metadata.status === 'inactive') {
-                panel.style.display = 'block';
                 setPill('pending', 'Pending');
                 status.textContent = 'Insights are collecting in the background and will populate automatically when all iterations finish.';
+                if (qaStatus) qaStatus.textContent = 'Query and index analysis runs after all iterations finish and will populate automatically.';
                 clearInsightsContentForPending();
                 const topFindings = document.getElementById('insightsTopFindings');
                 if (topFindings) {
@@ -4596,7 +5131,6 @@
                 return;
             }
 
-            panel.style.display = 'block';
             closeInsightsDrawer();
             showInsightsTab('overview');
             const md = rep.metadata || {};
@@ -4621,8 +5155,20 @@
             const filteredThreshold = md.filtered_by_threshold || 0;
             const filteredSeverity = md.filtered_by_severity || 0;
             status.textContent = `sampled events: ${summary.total_sampled_events || 0} | slow ratio: ${ratioPct}% | threshold: ${md.slow_threshold_ms || 0}ms | filtered(threshold/severity): ${filteredThreshold}/${filteredSeverity} | evidence: ${md.evidence_level || 'heuristic'} | explain: ${explainMode} (${explainVerbosity}, ${explainSeverityMode}, workers ${explainWorkers}, retries ${explainRetries}) | impact: ${explainImpact}`;
+            const ec = rep.explain_coverage || {};
+            if (ec.status === 'ready') {
+                status.textContent += ` | explain coverage: ${ec.selected_shapes || 0}/${ec.eligible_shapes || 0} shapes selected (${ec.selected_below_slow_threshold || 0} below threshold), ${ec.completed_shapes || 0} explained, ${ec.failed_shapes || 0} failed, ${ec.cancelled_shapes || 0} cancelled, ${ec.unavailable_shapes || 0} unavailable, ${ec.excluded_shapes || 0} excluded by budget`;
+            } else if (ec.status) {
+                status.textContent += ` | explain coverage: ${ec.status}${ec.reason ? ' (' + ec.reason + ')' : ''}`;
+            }
+            if (qaStatus) qaStatus.textContent = status.textContent;
 
+            const impact = rep.impact || {};
+            const impactGroups = impact.groups || [];
             const top = [];
+            if (impactGroups[0]) {
+                top.push(`Top impact: ${impactGroups[0].explanation || ''}`);
+            }
             if (rep.slow_queries && rep.slow_queries[0]) {
                 const s = rep.slow_queries[0];
                 top.push(`Top slow group: ${s.operation} on ${s.collection} (p99 ${Number(s.p99_ms || 0).toFixed(2)}ms, count ${s.count || 0}, severity ${s.severity || 'low'})`);
@@ -4636,6 +5182,8 @@
             }
             document.getElementById('insightsTopFindings').innerHTML = top.slice(0, 3).map(t => `<div class="insights-top-item">• ${escHtml(t)}</div>`).join('');
 
+            renderImpactSection(impact);
+
             renderInsightsRows('insightsSlowQueries', (rep.slow_queries || []).slice(0, 8), (s, idx) =>
                 `<div id="${findingCardId('slow', idx)}" class="insights-finding-card">
                     <div class="insights-finding-head">
@@ -4643,7 +5191,7 @@
                             <p class="insights-finding-title">#${s.rank || '-'} ${escHtml(s.operation || '')} • ${escHtml(s.collection || '')}</p>
                             <div class="insights-finding-meta">${insightSeverityBadge(s.severity)} ${insightExplainStatusBadge(s.explain_status)}</div>
                         </div>
-                        <div class="insights-finding-meta">${insightConfidenceBadge((s.explain_diagnostics && s.explain_diagnostics.recommendation_confidence) || 'low')}</div>
+                        <div class="insights-finding-meta">${insightConfidenceBadge((s.explain_finding && s.explain_finding.confidence) || (s.explain_diagnostics && s.explain_diagnostics.recommendation_confidence) || 'low')}</div>
                     </div>
                     <div class="insights-finding-meta">${escHtml(trimText(s.shape_summary || s.shape_key || '', 120))}</div>
                     <div class="insights-finding-meta"><strong>${escHtml(insightPrimaryLocation(s))}</strong> • ${escHtml(insightWhereFound(s))}</div>
@@ -4679,13 +5227,12 @@
                 </div>`
             );
 
-            renderInsightsRows('insightsRecommendations', (rep.recommendations || []).slice(0, 8), r =>
-                `<div class="insights-row">
-                    <div class="insights-row-title">#${r.rank || '-'} ${escHtml(r.title || '')} ${insightConfidenceBadge(r.confidence)}</div>
-                    <div class="insights-row-subtitle">priority: ${escHtml(r.priority || 'low')}</div>
-                    <div class="insights-row-metrics">${escHtml(r.details || '')}</div>
-                </div>`
-            );
+            recommendationsShown = RECOMMENDATIONS_PAGE;
+            renderRecommendations();
+            efficiencyState = { sort: 'efficiency', band: 'all', latency: 'all', openShape: null };
+            renderEfficiencyView();
+            trendState = { filter: 'all', resetArmed: false, openShape: null };
+            renderTrendView();
 
             renderInsightsRows('insightsPerIteration', (rep.per_iteration || []).slice(0, 20), it =>
                 `<div class="insights-row">
@@ -4700,6 +5247,579 @@
                     <div class="insights-row-metrics">count ${ts.count || 0} | slow ${ts.slow_count || 0} | avg ${Number(ts.avg_ms || 0).toFixed(2)}ms | p95 ${Number(ts.p95_ms || 0).toFixed(2)}ms | p99 ${Number(ts.p99_ms || 0).toFixed(2)}ms</div>
                 </div>`
             );
+        }
+
+        const RECOMMENDATIONS_PAGE = 8;
+        let recommendationsShown = RECOMMENDATIONS_PAGE;
+        let efficiencyState = { sort: 'efficiency', band: 'all', latency: 'all', openShape: null };
+
+        function renderRecommendations() {
+            const recs = ((finalInsightsData || {}).recommendations) || [];
+            const shown = Math.min(recommendationsShown, recs.length);
+            renderInsightsRows('insightsRecommendations', recs.slice(0, shown), r =>
+                `<div class="insights-row">
+                    <div class="insights-row-title">#${r.rank || '-'} ${escHtml(r.title || '')} ${insightConfidenceBadge(r.confidence)}</div>
+                    <div class="insights-row-subtitle">priority: ${escHtml(r.priority || 'low')} | source: ${escHtml(r.source || 'heuristic')}</div>
+                    <div class="insights-row-metrics">${escHtml(r.details || '')}</div>
+                </div>`
+            );
+            const pager = document.getElementById('insightsRecommendationsPager');
+            if (!pager) return;
+            if (recs.length === 0) {
+                pager.innerHTML = '';
+                return;
+            }
+            const buttons = shown < recs.length
+                ? ` <button type="button" class="insights-explore-btn" id="recommendationsShowMore" onclick="showMoreRecommendations(${RECOMMENDATIONS_PAGE})">Show ${Math.min(RECOMMENDATIONS_PAGE, recs.length - shown)} more</button> <button type="button" class="insights-explore-btn" id="recommendationsShowAll" onclick="showMoreRecommendations(${recs.length})">Show all</button>`
+                : '';
+            pager.innerHTML = `<span id="recommendationsCount">Showing ${shown} of ${recs.length} recommendations</span>${buttons}`;
+        }
+
+        function showMoreRecommendations(n) {
+            recommendationsShown += Number(n || RECOMMENDATIONS_PAGE);
+            renderRecommendations();
+        }
+
+        function efficiencyView() {
+            return (finalInsightsData || {}).efficiency_view || null;
+        }
+
+        function efficiencyBandBadge(row) {
+            const band = row.band || 'none';
+            const text = row.band ? row.band : (row.status === 'not_applicable' ? 'not applicable' : 'no score');
+            return `<span class="insight-badge band-${escHtml(band)}">${escHtml(text)}</span>`;
+        }
+
+        function efficiencyVisibleRows() {
+            const v = efficiencyView();
+            if (!v) return [];
+            const st = efficiencyState;
+            const rows = (v.rows || []).filter(r => {
+                if (st.band === 'scored' && (r.score === undefined || r.score === null)) return false;
+                if (st.band === 'unscored' && r.score !== undefined && r.score !== null) return false;
+                if (!['all', 'scored', 'unscored'].includes(st.band) && r.band !== st.band) return false;
+                if (st.latency !== 'all' && r.severity !== st.latency) return false;
+                return true;
+            });
+            const rank = r => (r.impact_rank ? r.impact_rank : Number.MAX_SAFE_INTEGER);
+            if (st.sort === 'impact') {
+                rows.sort((a, b) => (rank(a) - rank(b)) || String(a.shape_id).localeCompare(String(b.shape_id)));
+            } else {
+                rows.sort((a, b) => a.efficiency_order - b.efficiency_order);
+            }
+            return rows;
+        }
+
+        function setEfficiencyControl(key, value) {
+            efficiencyState[key] = value;
+            renderEfficiencyView();
+        }
+
+        function efficiencyImpactText(r) {
+            const w = r.workload_impact || {};
+            return r.impact_rank ? `#${r.impact_rank} · ${w.summary || ''}` : `not ranked · ${w.summary || ''}`;
+        }
+
+        function efficiencyLatencyCell(r) {
+            const l = r.latency || {};
+            const rating = (l.rating || {}).label || 'Not assessed';
+            const sev = r.severity ? `; severity ${String(r.severity).replace(/_/g, ' ')}` : '';
+            return `${escHtml(l.summary || '')}<br><span class="insights-row-subtitle eff-latency-rating">${escHtml(rating + sev)}</span>`;
+        }
+
+        function efficiencyOtherCell(r) {
+            const m = r.other_measurements || {};
+            return ['lookup', 'locks', 'network'].map(k => `${k === 'lookup' ? '$lookup' : k}: ${escHtml((m[k] || {}).label || 'Not measured')}`).join('<br>');
+        }
+
+        function efficiencyTargetsText(t) {
+            const parts = [['avg', (t || {}).avg_ms], ['p95', (t || {}).p95_ms], ['p99', (t || {}).p99_ms]].filter(([, v]) => v > 0).map(([n, v]) => `${n} ≤ ${Number(v)} ms`);
+            return parts.length ? parts.join(', ') : 'none set (latency is shown but not rated)';
+        }
+
+        function efficiencyVersionsText(v) {
+            const rv = v.rating_versions || {};
+            return Object.keys(rv).sort().map(k => `${k.replace(/_/g, ' ')} ${rv[k]}`).join(', ');
+        }
+
+        function renderEfficiencyView() {
+            const v = efficiencyView();
+            const scopeEl = document.getElementById('efficiencyColumnNotes');
+            const covEl = document.getElementById('efficiencyCoverage');
+            const tableEl = document.getElementById('efficiencyTable');
+            const limEl = document.getElementById('efficiencyLimitations');
+            if (!scopeEl || !covEl || !tableEl || !limEl) return;
+            ['efficiencyBandFilter', 'efficiencyLatencyFilter', 'efficiencySort'].forEach((id, i) => {
+                const el = document.getElementById(id);
+                if (el) el.value = efficiencyState[['band', 'latency', 'sort'][i]];
+            });
+            if (!v) {
+                scopeEl.textContent = 'Query assessment is unavailable for this report.';
+                covEl.textContent = '';
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="efficiencyEmpty">No efficiency data was returned. Scores are not shown as 0 or 100 when missing.</div>`;
+                limEl.innerHTML = '';
+                renderEfficiencyDetail();
+                return;
+            }
+            scopeEl.innerHTML = (v.columns || []).map(c => `<div data-column="${escHtml(c.key)}"><dt><strong>${escHtml(c.title)}</strong></dt><dd>${escHtml(c.explanation)}</dd></div>`).join('');
+            const labels = v.coverage_labels || {};
+            const counts = v.coverage_counts || {};
+            const parts = Object.keys(labels).sort().map(k => `${labels[k]}: ${Number(counts[k] || 0)}`);
+            const unrec = v.unrecorded || {};
+            const covLines = [
+                `Status: ${v.status}${v.reason ? ` (${v.reason})` : ''} | tracked shapes: ${Number(v.shapes_total || 0)} | latency targets: ${efficiencyTargetsText(v.latency_targets)}`,
+                `Rating versions: ${efficiencyVersionsText(v)}`,
+                `Coverage: ${parts.join(' | ')}`,
+                `Not recorded (no row): ${(unrec.paths || []).join('; ') || 'none'} | untracked operations beyond the group limit: ${Number(unrec.untracked_operations || 0)}`,
+                v.sort_note || ''
+            ];
+            covEl.innerHTML = covLines.filter(Boolean).map(l => `<div>${escHtml(l)}</div>`).join('');
+            limEl.innerHTML = (v.limitations || []).map(l => `<div>⚠ ${escHtml(l)}</div>`).join('');
+
+            const all = v.rows || [];
+            const rows = efficiencyVisibleRows();
+            if (all.length === 0) {
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="efficiencyEmpty">No tracked shapes (${escHtml(v.status || '')}${v.reason ? ', ' + escHtml(v.reason) : ''}).</div>`;
+            } else if (rows.length === 0) {
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="efficiencyEmpty">No shapes match these filters; ${all.length} tracked shapes are hidden by the filters.</div>`;
+            } else {
+                const body = rows.map(r => {
+                    const open = efficiencyState.openShape === r.shape_id;
+                    return `<tr data-shape-id="${escHtml(r.shape_id)}" class="eff-row-clickable${open ? ' selected' : ''}" title="Click to show details for this query shape below" onclick="efficiencyRowClick(event, '${escHtml(r.shape_id)}')">
+                        <td class="eff-col-ns"><span class="eff-ns">${escHtml(r.namespace || '')}</span><br><span class="eff-op insights-row-subtitle">${escHtml(r.operation || '')}</span></td>
+                        <td class="eff-col-shape">${escHtml(trimText(r.shape_summary || '', 80))}</td>
+                        <td class="num eff-score eff-col-score"><strong>${escHtml(r.score_label || 'Unassessed')}</strong></td>
+                        <td class="eff-col-band">${efficiencyBandBadge(r)}</td>
+                        <td class="eff-col-conf">${escHtml(r.confidence || '–')}</td>
+                        <td class="eff-col-lat">${efficiencyLatencyCell(r)}</td>
+                        <td class="eff-col-impact">${escHtml(efficiencyImpactText(r))}</td>
+                        <td class="eff-col-overhead">${efficiencyOverheadCell(r.execution_overhead || {})}</td>
+                        <td class="eff-col-other">${efficiencyOtherCell(r)}</td>
+                        <td class="eff-col-cov">${escHtml(r.coverage_label || r.coverage || '')}${r.coverage_reason ? ` <span class="insights-row-subtitle">(${escHtml(r.coverage_reason)})</span>` : ''}</td>
+                        <td><button type="button" class="insights-explore-btn" aria-controls="efficiencyDetail" aria-expanded="${open ? 'true' : 'false'}" onclick="event.stopPropagation(); openEfficiencyDetail('${escHtml(r.shape_id)}')">Details</button></td>
+                    </tr>`;
+                }).join('');
+                tableEl.innerHTML = `<div class="eff-row-hint" id="efficiencyRowHint">👉 Click any row to see the full details for that query shape in the panel below the table.</div>
+                <table class="eff-table" id="efficiencyRows">
+                    <caption>Showing ${rows.length} of ${all.length} tracked shapes, sorted by ${efficiencyState.sort === 'impact' ? 'workload impact' : 'lowest scan efficiency'}.</caption>
+                    <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th>${efficiencyHeader(v, 'scan_efficiency', 'num')}<th scope="col">Band</th><th scope="col">Confidence</th>${efficiencyHeader(v, 'latency')}${efficiencyHeader(v, 'workload_impact')}${efficiencyHeader(v, 'execution_overhead')}${efficiencyHeader(v, 'other')}<th scope="col">Assessment coverage</th><th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
+                    <tbody>${body}</tbody>
+                </table>`;
+            }
+            renderEfficiencyDetail();
+        }
+
+        function efficiencyHeader(v, key, cls) {
+            const c = (v.columns || []).find(x => x.key === key) || { title: key, explanation: '' };
+            return `<th scope="col"${cls ? ` class="${cls}"` : ''} title="${escHtml(c.explanation)}" data-column="${escHtml(key)}">${escHtml(c.title)}</th>`;
+        }
+
+        function openEfficiencyDetail(shapeId) {
+            efficiencyState.openShape = shapeId;
+            renderEfficiencyView();
+            const detail = document.getElementById('efficiencyDetail');
+            if (detail && typeof detail.scrollIntoView === 'function') detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function efficiencyRowClick(event, shapeId) {
+            const sel = window.getSelection ? String(window.getSelection()) : '';
+            if (sel) return;
+            if (event && event.target && event.target.closest && event.target.closest('a, button, input, select, summary')) return;
+            openEfficiencyDetail(shapeId);
+        }
+
+        function closeEfficiencyDetail() {
+            efficiencyState.openShape = null;
+            renderEfficiencyView();
+        }
+
+        function efficiencyCounterText(label, c) {
+            if (!c) return `${label} not reported`;
+            return `${label} ${Number(c.value)}${c.lower_bound ? ' (lower bound)' : ''}`;
+        }
+
+        const EFF_DIMENSION_NAMES = { docs_per_result: 'documents examined per result', keys_per_result: 'index keys examined per result', collscan: 'filtered collection scan' };
+
+        function efficiencyComponentText(d) {
+            const name = EFF_DIMENSION_NAMES[d.name] || d.name;
+            if (!d.applicable) return `${name}: not applicable`;
+            let s = `${name}: `;
+            if (d.penalty === undefined || d.penalty === null) {
+                s += `not measured (${d.missing_reason || 'evidence_missing'})`;
+            } else {
+                if (d.value !== undefined && d.value !== null) s += `value ${Number(d.value)}, `;
+                s += `penalty ${Number(d.penalty).toFixed(2)}`;
+            }
+            if (d.note) s += ` (${d.note})`;
+            if (d.source) s += ` [${d.source}]`;
+            return s;
+        }
+
+        function efficiencySampleText(s) {
+            const evidence = { execution_stats: 'with executionStats counts', planner_only: 'plan only, no counts' }[s.evidence] || 'no explain data';
+            const parts = [
+                `${s.role} sample: ${Number(s.client_latency_ms || 0).toFixed(2)} ms in the run`,
+                `explain ${s.explain_status}${s.explain_reason ? ` (${s.explain_reason})` : ''}, ${evidence}`,
+                `scan efficiency ${s.score_label}${s.band ? ` (${s.band})` : ''}`
+            ];
+            if (s.evidence === 'execution_stats') {
+                parts.push([efficiencyCounterText('documents examined', s.docs_examined), efficiencyCounterText('index keys examined', s.keys_examined), efficiencyCounterText('documents returned', s.returned)].join(', '));
+                if (s.access_returned) parts.push(efficiencyCounterText('documents read by the first pipeline stage', s.access_returned));
+                if (s.matched) parts.push(efficiencyCounterText('documents matched', s.matched));
+                if (s.server_exec_ms !== undefined && s.server_exec_ms !== null) parts.push(`server time ${Number(s.server_exec_ms)} ms during explain (separate from run latency)`);
+            }
+            if (s.winning_plan) parts.push(`plan ${s.winning_plan}`);
+            if (s.indexes_used && s.indexes_used.length) parts.push(`indexes used ${s.indexes_used.join(', ')}`);
+            return parts.join('; ');
+        }
+
+        function efficiencyOverheadCell(o) {
+            const m = o.measurements || {};
+            return `${escHtml(o.label || 'Not assessed')}${m.summary ? `<br><span class="insights-row-subtitle eff-overhead-summary">${escHtml(m.summary)}</span>` : ''}`;
+        }
+
+        function efficiencyMeasurementsHtml(o) {
+            const m = o.measurements || {};
+            if (!m.details || !m.details.length) return '';
+            return `<div class="insights-kv" id="efficiencyDetailMeasurementsHead"><strong>Sort and spill measurements (${escHtml(String(m.status || '').replace(/_/g, ' '))})</strong>${m.summary ? `: ${escHtml(m.summary)}` : ''}</div>
+                <div id="efficiencyDetailMeasurements">${efficiencyList(m.details)}</div>
+                ${(m.notes || []).length ? `<details id="efficiencyDetailMeasurementNotes"><summary class="insights-row-subtitle">What these measurements mean</summary>${efficiencyList(m.notes)}</details>` : ''}`;
+        }
+
+        function efficiencyOverheadDetails(o) {
+            const out = [...((o.sort || {}).evidence || []), ...((o.spill || {}).evidence || [])];
+            if ((o.spill || {}).status === 'not_measured' && o.status !== 'not_applicable') out.push(`spill not measured (${o.spill.reason || 'execution_stats_unavailable'})`);
+            return out;
+        }
+
+        function efficiencyOtherDetails(m) {
+            const out = [];
+            [['$lookup', m.lookup], ['locks', m.locks], ['network', m.network]].forEach(([name, x]) => {
+                if (!x) return;
+                (x.evidence || []).forEach(e => out.push(`${name}: ${e}`));
+                if (x.status !== 'measured' && x.status !== 'not_applicable' && x.reason) out.push(`${name}: ${x.reason}`);
+            });
+            return out;
+        }
+
+        function efficiencyList(items) {
+            if (!items || !items.length) return '';
+            return `<ul>${items.map(i => `<li class="insights-kv">${escHtml(i)}</li>`).join('')}</ul>`;
+        }
+
+        function renderEfficiencyDetail() {
+            const el = document.getElementById('efficiencyDetail');
+            if (!el) return;
+            const v = efficiencyView();
+            const row = v && efficiencyState.openShape ? (v.rows || []).find(r => r.shape_id === efficiencyState.openShape) : null;
+            if (!row) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            const recs = ((finalInsightsData || {}).recommendations) || [];
+            const linked = (row.recommendation_ranks || []).map(rank => recs.find(r => r.rank === rank)).filter(Boolean);
+            const sel = row.selection;
+            const dataSource = [];
+            if (row.selected_by) dataSource.push(`Chosen for explain by: ${row.selected_by}`);
+            if (sel) {
+                dataSource.push(`Sample commands picked by ${sel.method} from ${Number(sel.retained_successful_samples || 0)} kept operations (${Number(sel.executable_samples || 0)} replayable; scope ${sel.scope || row.sample_scope || ''}), median ${formatMs(sel.median_ms)}, p95 ${formatMs(sel.p95_ms)}`);
+                if (sel.scope_note) dataSource.push(sel.scope_note);
+            } else if (row.sample_scope) {
+                dataSource.push(`Sample scope: ${row.sample_scope}`);
+            }
+            if (row.determining_sample) dataSource.push(`Lowest-scoring sample: ${row.determining_sample}`);
+            if (row.samples_disagree) dataSource.push('The sample commands fall in different bands');
+            if (row.query_variants > 1) dataSource.push(`${row.query_variants} redacted query variants were captured; one is shown`);
+            if (row.evidence_note) dataSource.push(row.evidence_note);
+            const lat = row.latency || {};
+            const latRating = lat.rating || {};
+            const latLines = [
+                `${lat.summary || ''}; max ${lat.max_ms === undefined ? 'not measured' : formatMs(lat.max_ms)}; percentiles from ${Number(lat.percentile_samples || 0)} sampled operations (${lat.percentile_status || 'no_samples'})`,
+                `Rating: ${latRating.label || 'Not assessed'}`
+            ].concat((latRating.checks || []).map(c => `${c.metric} target ${Number(c.target_ms)} ms: ${c.result}${c.measured_ms === undefined ? '' : ` (measured ${Number(c.measured_ms)} ms)`}`));
+            if (row.severity) latLines.push(`Latency severity: ${String(row.severity).replace(/_/g, ' ')}`);
+            const overhead = row.execution_overhead || {};
+            const other = row.other_measurements || {};
+            const plan = [];
+            if (row.plan_summary) plan.push(`Winning plan: ${row.plan_summary}`);
+            if (row.diagnosis) plan.push(`Diagnosis: ${row.diagnosis}`);
+            if (row.interpretation) plan.push(row.interpretation);
+            (row.observation_notes || []).forEach(n => plan.push(n));
+            const recHtml = linked.length ? linked.map(r => {
+                const keys = r.candidate_keys || [];
+                return `<div class="insights-detail-card eff-rec" data-rank="${Number(r.rank)}">
+                    <div class="insights-row-title">#${Number(r.rank)} ${escHtml(r.title || '')} ${insightConfidenceBadge(r.confidence)}</div>
+                    ${keys.length ? `<div class="insights-detail-label">Index candidate (keys in order)</div><ol class="eff-candidate-keys">${keys.map(k => `<li class="insights-kv"><code>${escHtml(k)}</code></li>`).join('')}</ol>` : ''}
+                    ${r.existing_index ? `<div class="insights-kv">existing index: ${escHtml(r.existing_index)}</div>` : ''}
+                    ${r.rationale ? `<div class="insights-kv">rationale: ${escHtml(r.rationale)}</div>` : ''}
+                    ${r.tradeoffs ? `<div class="insights-kv">tradeoffs: ${escHtml(r.tradeoffs)}</div>` : ''}
+                    ${r.validation_step ? `<div class="insights-kv">validation: ${escHtml(r.validation_step)}</div>` : ''}
+                    ${efficiencyList((r.limitations || []).map(l => `limitation: ${l}`))}
+                </div>`;
+            }).join('') : `<div class="insights-row-subtitle">No recommendation is linked to this shape.</div>`;
+            el.style.display = 'block';
+            el.innerHTML = `
+                <div class="insights-finding-head">
+                    <div>
+                        <p class="insights-finding-title" id="efficiencyDetailTitle">${escHtml(row.operation || '')} • ${escHtml(row.namespace || '')}</p>
+                        <div class="insights-row-subtitle">${escHtml(row.shape_summary || '')} | shape id ${escHtml(row.shape_id)}</div>
+                    </div>
+                    <button type="button" class="insights-drawer-close" onclick="closeEfficiencyDetail()">Close details</button>
+                </div>
+                <div class="insights-detail-label">Redacted query</div>
+                <div class="insights-kv">${row.query ? `<code id="efficiencyDetailQuery">${escHtml(row.query)}</code>${row.query_truncated ? ' (truncated)' : ''}` : 'No redacted query descriptor was captured for this shape.'}</div>
+                <div class="insights-detail-label" style="margin-top:8px;">Scan efficiency</div>
+                <div class="insights-kv"><strong>Scan efficiency ${escHtml(row.score_label)}</strong> ${efficiencyBandBadge(row)} ${row.confidence ? insightConfidenceBadge(row.confidence) : ''} | coverage: ${escHtml(row.coverage_label || '')}${row.coverage_reason ? ` (${escHtml(row.coverage_reason)})` : ''}</div>
+                <div class="insights-kv" id="efficiencyDetailReason">${escHtml(row.rating_explanation || '')}</div>
+                ${row.confidence_basis ? `<div class="insights-kv">confidence basis: ${escHtml(row.confidence_basis)}</div>` : ''}
+                ${efficiencyList((row.dimensions || []).map(efficiencyComponentText)) || '<div class="insights-row-subtitle">No checks: the shape was not explained.</div>'}
+                <div class="insights-detail-label">Measured metrics by sample</div>
+                ${efficiencyList((row.samples || []).map(efficiencySampleText)) || '<div class="insights-row-subtitle">No explained samples.</div>'}
+                <div class="insights-detail-label" style="margin-top:8px;">Query latency</div>
+                <div id="efficiencyDetailLatency">${efficiencyList(latLines)}</div>
+                <div class="insights-detail-label">Workload impact</div>
+                <div class="insights-kv" id="efficiencyDetailImpact">${escHtml(efficiencyImpactText(row))}</div>
+                <div class="insights-detail-label">Execution overhead</div>
+                <div id="efficiencyDetailOverhead"><div class="insights-kv"><strong>${escHtml(overhead.label || 'Not assessed')}</strong></div>${efficiencyList(efficiencyOverheadDetails(overhead))}${efficiencyMeasurementsHtml(overhead)}</div>
+                <div class="insights-detail-label">$lookup, locks, and network</div>
+                <div id="efficiencyDetailOther"><div class="insights-kv">${efficiencyOtherCell(row)}</div>${efficiencyList(efficiencyOtherDetails(other))}</div>
+                <div class="insights-detail-label" style="margin-top:8px;">How the measurements were collected</div>
+                ${efficiencyList(dataSource) || '<div class="insights-row-subtitle">No samples were explained for this shape.</div>'}
+                <div class="insights-detail-label">Plan observations</div>
+                ${efficiencyList(plan) || '<div class="insights-row-subtitle">No plan observations.</div>'}
+                ${(row.limitations || []).length ? `<div class="insights-detail-label">Limitations</div>${efficiencyList(row.limitations)}` : ''}
+                <div class="insights-detail-label" style="margin-top:8px;">Recommendations, tradeoffs, and validation</div>
+                ${recHtml}
+            `;
+        }
+
+        function currentEfficiencyViewState() {
+            const v = efficiencyView();
+            const recs = ((finalInsightsData || {}).recommendations) || [];
+            return {
+                version: v ? v.version : null,
+                sort: efficiencyState.sort,
+                efficiency_filter: efficiencyState.band,
+                latency_filter: efficiencyState.latency,
+                visible_shape_ids: efficiencyVisibleRows().map(r => r.shape_id),
+                total_rows: v ? (v.rows || []).length : 0,
+                recommendations_shown: Math.min(recommendationsShown, recs.length),
+                recommendations_total: recs.length
+            };
+        }
+
+        let trendState = { filter: 'all', resetArmed: false, openShape: null };
+        const TREND_STATE_TEXT = {
+            improved: 'improved', regressed: 'regressed', increased: 'larger share', decreased: 'smaller share',
+            no_material_change: 'no material change', insufficient_evidence: 'insufficient evidence',
+            not_comparable: 'not comparable', no_baseline: 'no baseline'
+        };
+        const TREND_LABELED = ['improved', 'regressed', 'increased', 'decreased'];
+
+        function trendView() {
+            return (finalInsightsData || {}).trends || null;
+        }
+
+        function trendStates(r) {
+            return [r.efficiency, r.latency, r.impact].map(c => (c || {}).state);
+        }
+
+        function trendVisibleRows() {
+            const v = trendView();
+            if (!v) return [];
+            const f = trendState.filter;
+            return (v.rows || []).filter(r => {
+                const st = trendStates(r);
+                if (f === 'labeled') return st.some(x => TREND_LABELED.includes(x));
+                if (f === 'insufficient') return st.includes('insufficient_evidence');
+                if (f === 'not_comparable') return st.some(x => x === 'not_comparable' || x === 'no_baseline');
+                return true;
+            });
+        }
+
+        function setTrendFilter(value) {
+            trendState.filter = value;
+            renderTrendView();
+        }
+
+        function trendCell(c) {
+            if (!c) return '–';
+            return `<span class="insight-badge trend-${escHtml(c.state)}">${escHtml(TREND_STATE_TEXT[c.state] || c.state)}</span><br><span class="insights-row-subtitle">${escHtml(c.label || '')}</span>`;
+        }
+
+        function trendBaselineAgeText(b) {
+            if (!b) return '';
+            const parts = [];
+            if (b.efficiency_age) parts.push(`efficiency ${b.efficiency_age}`);
+            if (b.workload_age) parts.push(`latency/impact ${b.workload_age}`);
+            return parts.join(', ');
+        }
+
+        function trendEvidenceText(name, s) {
+            s = s || {};
+            const has = v => v !== undefined && v !== null;
+            if (!has(s.operation_count) && !has(s.explained_commands)) return `${name}: no evidence`;
+            const parts = [];
+            if (has(s.operation_count)) parts.push(`${Number(s.operation_count)} operations (full run)`);
+            if (has(s.retained_latency_samples)) parts.push(`${Number(s.retained_latency_samples)} retained latency samples`);
+            if (has(s.explained_commands)) parts.push(`${Number(s.explained_commands)} distinct explained commands (${s.efficiency_evidence || 'none'}, confidence ${s.efficiency_confidence || 'none'}, coverage ${s.coverage || 'unknown'})`);
+            return `${name}: ${parts.join(', ')}`;
+        }
+
+        function trendRowDetails(r) {
+            const out = [];
+            (r.comparability_reasons || []).forEach(x => out.push(`Comparability: ${x}`));
+            [['Scan efficiency', r.efficiency], ['Latency', r.latency], ['Impact', r.impact]].forEach(([name, c]) => {
+                c = c || {};
+                (c.reasons || []).forEach(x => out.push(`${name} (${c.state}): ${x}`));
+                if (c.secondary) out.push(`${name}: ${c.secondary}`);
+            });
+            const ev = r.evidence || {};
+            out.push(trendEvidenceText('Evidence, baseline', ev.baseline), trendEvidenceText('Evidence, current', ev.current));
+            (r.interventions || []).forEach(a => out.push(`Intervention (${a.kind}): ${a.detail}`));
+            (r.workload_changes || []).forEach(a => out.push(`Workload change (${a.kind}): ${a.detail}`));
+            return out;
+        }
+
+        function trendCountsText(m) {
+            const keys = Object.keys(m || {}).sort();
+            return keys.length ? keys.map(k => `${k}: ${Number(m[k])}`).join(' | ') : 'none';
+        }
+
+        function renderTrendView() {
+            const v = trendView();
+            const noteEl = document.getElementById('trendCausationNote');
+            const sumEl = document.getElementById('trendSummary');
+            const tableEl = document.getElementById('trendTable');
+            const critEl = document.getElementById('trendCriteria');
+            const limEl = document.getElementById('trendLimitations');
+            if (!noteEl || !sumEl || !tableEl || !critEl || !limEl) return;
+            const filterEl = document.getElementById('trendStateFilter');
+            if (filterEl) filterEl.value = trendState.filter;
+            if (!v) {
+                noteEl.textContent = '';
+                sumEl.textContent = '';
+                critEl.textContent = '';
+                limEl.innerHTML = '';
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="trendEmpty">No trend comparison was returned. No improvement or regression is claimed.</div>`;
+                return;
+            }
+            noteEl.textContent = v.causation_note || '';
+            const st = v.store || {};
+            const counts = v.counts || {};
+            const lines = [
+                `Status: ${v.status}${v.reason ? ` (${v.reason})` : ''} | ${v.version} | baseline store: ${st.status || 'unknown'}${st.reason ? ` (${st.reason})` : ''}, ${Number(st.baselines || 0)} of max ${Number(st.max_baselines || 0)} shape baselines${st.persistent ? '' : ', not persistent'}`,
+                `Oldest / newest baseline: ${st.oldest_recorded_at || 'none'} / ${st.newest_recorded_at || 'none'}`,
+                `Comparability: ${trendCountsText(counts.comparability)}`,
+                `Scan efficiency: ${trendCountsText(counts.efficiency)} | Latency: ${trendCountsText(counts.latency)} | Impact: ${trendCountsText(counts.impact)}`,
+                v.method_note || '',
+                v.evidence_note || ''
+            ];
+            sumEl.innerHTML = lines.filter(Boolean).map(l => `<div>${escHtml(l)}</div>`).join('');
+            const crit = v.criteria || {};
+            critEl.innerHTML = `<div>Criteria: ${escHtml(crit.summary || '')}</div><div>${escHtml(crit.note || '')}</div>`;
+            limEl.innerHTML = (v.limitations || []).map(l => `<div>⚠ ${escHtml(l)}</div>`).join('');
+
+            const all = v.rows || [];
+            const rows = trendVisibleRows();
+            if (v.status === 'disabled' || v.status === 'not_run') {
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="trendEmpty">Trend comparison is ${escHtml(v.status === 'disabled' ? 'disabled' : 'not available')} (${escHtml(v.reason || '')}). No improvement or regression is claimed.</div>`;
+                return;
+            }
+            if (all.length === 0) {
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="trendEmpty">No tracked shapes to compare.</div>`;
+                return;
+            }
+            if (rows.length === 0) {
+                tableEl.innerHTML = `<div class="insights-row-subtitle" id="trendEmpty">No shapes match this filter; ${all.length} shapes are hidden by the filter.</div>`;
+                return;
+            }
+            const body = rows.map(r => {
+                const open = trendState.openShape === r.shape_id;
+                const age = trendBaselineAgeText(r.baseline);
+                const main = `<tr data-shape-id="${escHtml(r.shape_id)}"${open ? ' class="selected"' : ''}>
+                    <td><span class="eff-ns">${escHtml(r.namespace || '')}</span><br><span class="eff-op insights-row-subtitle">${escHtml(r.operation || '')}</span></td>
+                    <td>${escHtml(trimText(r.shape_summary || '', 80))}</td>
+                    <td class="trend-baseline">${escHtml(r.comparability || '')}${age ? `<br><span class="insights-row-subtitle">${escHtml(age)}</span>` : ''}</td>
+                    <td class="trend-eff">${trendCell(r.efficiency)}</td>
+                    <td class="trend-lat">${trendCell(r.latency)}</td>
+                    <td class="trend-imp">${trendCell(r.impact)}</td>
+                    <td><button type="button" class="insights-explore-btn" aria-expanded="${open ? 'true' : 'false'}" onclick="toggleTrendDetail('${escHtml(r.shape_id)}')">Details</button></td>
+                </tr>`;
+                if (!open) return main;
+                return main + `<tr class="trend-detail" data-detail-for="${escHtml(r.shape_id)}"><td colspan="7">${efficiencyList(trendRowDetails(r))}</td></tr>`;
+            }).join('');
+            tableEl.innerHTML = `<table class="eff-table" id="trendRows">
+                <caption>Showing ${rows.length} of ${all.length} shapes. Efficiency, latency, and impact are compared separately.</caption>
+                <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th><th scope="col">Baseline</th><th scope="col">Scan efficiency</th><th scope="col">Latency (full-run avg)</th><th scope="col">Impact (share of time)</th><th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
+                <tbody>${body}</tbody>
+            </table>`;
+        }
+
+        function toggleTrendDetail(shapeId) {
+            trendState.openShape = trendState.openShape === shapeId ? null : shapeId;
+            renderTrendView();
+        }
+
+        async function resetTrendBaselines() {
+            const btn = document.getElementById('trendResetBtn');
+            const status = document.getElementById('trendResetStatus');
+            if (!btn || !status) return;
+            if (!trendState.resetArmed) {
+                trendState.resetArmed = true;
+                btn.textContent = 'Confirm: delete all stored baselines';
+                status.textContent = 'Click again to delete every stored trend baseline. This cannot be undone.';
+                return;
+            }
+            trendState.resetArmed = false;
+            btn.textContent = 'Reset baselines';
+            try {
+                const res = await fetch('/api/trend-baselines', { method: 'DELETE' });
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                const st = body.store || {};
+                status.textContent = `Baselines cleared (store: ${st.status || 'unknown'}, ${Number(st.baselines || 0)} stored). The comparisons shown were made before the reset; the next completed run records new baselines.`;
+            } catch (e) {
+                status.textContent = `Reset failed: ${e.message}. Stored baselines were not changed.`;
+            }
+        }
+
+        function currentTrendViewState() {
+            const v = trendView();
+            return {
+                version: v ? v.version : null,
+                filter: trendState.filter,
+                visible_shape_ids: trendVisibleRows().map(r => r.shape_id),
+                total_rows: v ? (v.rows || []).length : 0
+            };
+        }
+
+        function renderImpactSection(impact) {
+            const cov = impact.coverage || {};
+            const covEl = document.getElementById('insightsImpactCoverage');
+            if (covEl) {
+                const lines = [];
+                if (impact.status === 'disabled') {
+                    lines.push('Insights are disabled for this run.');
+                } else {
+                    lines.push(`Observed ${Number(cov.observed_operations || 0)} operations, ${formatMs(cov.observed_operation_ms)} summed concurrent operation time (full run, all completed operations).`);
+                }
+                if (cov.time_basis_note) lines.push(cov.time_basis_note);
+                if (cov.interpretation_note) lines.push(cov.interpretation_note);
+                (cov.limitations || []).forEach(l => lines.push(`⚠ ${l}`));
+                covEl.innerHTML = lines.map(l => `<div>${escHtml(l)}</div>`).join('');
+            }
+            renderInsightsRows('insightsImpact', impact.groups || [], g => {
+                const p95 = (g.sample_p95_ms !== undefined && g.sample_p95_ms !== null)
+                    ? `sample p95 ${formatMs(g.sample_p95_ms)}`
+                    : `sample p95: ${g.sample_percentile_status || 'no_samples'}`;
+                return `<div class="insights-row">
+                    <div class="insights-row-title">#${g.rank || '-'} ${escHtml(g.operation || '')} • ${escHtml(g.namespace || '')} — ${escHtml(trimText(g.shape_summary || g.shape_key || '', 100))}</div>
+                    <div class="insights-row-metrics">operations ${Number(g.operation_count || 0)} | summed op time ${formatMs(g.total_operation_ms)} | share ${(Number(g.share_of_observed_time || 0) * 100).toFixed(1)}% | avg ${formatMs(g.avg_ms)} | errors ${Number(g.error_count || 0)} | samples ${Number(g.sample_count || 0)} | ${escHtml(p95)}</div>
+                    <div class="insights-row-subtitle">${escHtml(g.explanation || '')}</div>
+                </div>`;
+            });
         }
 
         function fetchFinalInsights() {
@@ -4731,6 +5851,10 @@
                         throw new Error(`HTTP ${r.status}: ${bodyText || 'non-JSON response from backend'}`);
                     }
                     if (!r.ok || data.status === 'error') {
+                        if (data && data.code === 'sort_order_review_required' && definitionState.query.selected) {
+                            definitionState.query.selected.sortOrderReview = data.sortOrderReview;
+                            renderSortOrderReview(definitionState.query.selected);
+                        }
                         const message = (data && data.message) ? data.message : bodyText;
                         throw new Error(message || `HTTP ${r.status}`);
                     }
@@ -4743,8 +5867,8 @@
                         document.getElementById('dashboardControls').style.display = 'flex';
                         document.getElementById('activeActions').style.display = 'block';
                         document.getElementById('finishActions').style.display = 'none';
-                        document.getElementById('insightsPanel').style.display = 'block';
                         showInsightsTab('overview');
+                        showQueryAnalysisTab('efficiency');
                         // Reset live dashboard to the first tab; this also hides the
                         // panels that belong to other tabs (e.g. insights).
                         showDashTab('overview');
@@ -5355,8 +6479,20 @@
             set('update_percent', lastInferredMix.updatePercent || 0);
             set('delete_percent', lastInferredMix.deletePercent || 0);
             set('aggregate_percent', lastInferredMix.aggregatePercent || 0);
+            updateMixTotal();
             const resultEl = document.getElementById('schemaInferResult');
             if (resultEl) resultEl.innerHTML += '<div>✓ Applied suggested mix to the distribution fields.</div>';
+        }
+
+        const MIX_FIELDS = ['find_percent', 'update_percent', 'delete_percent', 'insert_percent', 'bulk_insert_percent', 'aggregate_percent', 'transaction_percent'];
+
+        function updateMixTotal() {
+            const el = document.getElementById('mixTotal');
+            if (!el) return;
+            const total = MIX_FIELDS.reduce((sum, name) => sum + (Number(document.querySelector(`[name="${name}"]`)?.value) || 0), 0);
+            el.textContent = `Total ${total}%`;
+            el.classList.toggle('off', total !== 100);
+            el.title = total === 100 ? '' : 'Percentages are normalized to 100% when the run starts.';
         }
 
         function openHtmlReport() {
@@ -5369,6 +6505,8 @@
                 await fetchFinalInsights();
             }
             finalReportData.insights = finalInsightsData;
+            finalReportData.efficiency_view_state = currentEfficiencyViewState();
+            finalReportData.trend_view_state = currentTrendViewState();
 
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalReportData, null, 4));
 

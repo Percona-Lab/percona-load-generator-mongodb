@@ -1,0 +1,67 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Check and Race Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Format, vet, and unit tests
+        run: make check
+
+      - name: Race detector
+        run: make test-race
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Web UI DOM tests
+        run: make test-ui
+
+  integration:
+    name: Integration Tests (MongoDB ${{ matrix.mongo }} standalone)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mongo: ['7.0', '8.0']
+    services:
+      mongo:
+        image: mongo:${{ matrix.mongo }}
+        ports:
+          - 30777:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      PLGM_IT_MONGO_URI: mongodb://127.0.0.1:30777
+      # Unreachable MongoDB fails the job instead of skipping the tests.
+      PLGM_IT_REQUIRE_MONGO: 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+
+      - name: Integration tests
+        run: make test-integration

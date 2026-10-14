@@ -125,7 +125,7 @@ func TestValidateCollectionDefinitionsRejectsDuplicates(t *testing.T) {
 				{
 					DatabaseName: "db1",
 					Name:         "orders",
-					Indexes:      []IndexDefinition{{Keys: map[string]interface{}{}}},
+					Indexes:      []IndexDefinition{{Keys: IndexKeys{}}},
 				},
 			},
 			want: "index keys cannot be empty",

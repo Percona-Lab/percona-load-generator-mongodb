@@ -33,6 +33,10 @@ const reportTemplate = `<!DOCTYPE html>
   .kv .k { color:var(--muted); }
   .muted { color:var(--muted); }
   .warn { background:#fef3c7; border:1px solid #fde68a; color:#92400e; border-radius:8px; padding:10px 12px; margin:6px 0; }
+  .note { background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; border-radius:8px; padding:10px 12px; margin:6px 0; }
+  tr.detail td { border-bottom:1px solid var(--line); font-size:12px; }
+  tr.detail .k { color:var(--muted); font-weight:600; }
+  tr.detail ul { margin:2px 0 6px 18px; padding:0; }
   .chart { width:100%; height:auto; background:#fff; }
   .chart .axis { stroke:#9ca3af; stroke-width:1; }
   .chart .grid { stroke:#eef0f3; stroke-width:1; }
@@ -106,6 +110,108 @@ const reportTemplate = `<!DOCTYPE html>
     <h2>Latency Over Time</h2>
     {{latencyChart .Heatmap}}
   </section>
+
+  {{with .Impact}}
+  <section>
+    <h2>Workload Impact (summed concurrent operation time)</h2>
+    <p class="muted">{{.TimeBasisNote}} {{.InterpretationNote}}</p>
+    <p>Observed: {{.ObservedOps}} operations, {{fmtFloat .ObservedMs}} ms summed operation time.</p>
+    <table>
+      <thead><tr><th class="num">#</th><th>Namespace</th><th>Op</th><th>Shape</th><th class="num">Operations</th><th class="num">Summed ms</th><th class="num">Share %</th><th class="num">Avg ms</th><th class="num">Samples</th><th class="num">Sample p95</th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr title="{{.Explanation}}"><td class="num">{{.Rank}}</td><td>{{.Namespace}}</td><td>{{.Operation}}</td><td>{{.Shape}}</td><td class="num">{{.OperationCount}}</td><td class="num">{{fmtFloat .TotalMs}}</td><td class="num">{{fmtFloat .SharePct}}</td><td class="num">{{fmtFloat .AvgMs}}</td><td class="num">{{.SampleCount}}</td><td class="num">{{.SampleP95}}</td></tr>
+      {{else}}
+        <tr><td colspan="10" class="muted">No completed operations were observed ({{.Status}}).</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{range .Limitations}}<div class="warn">{{.}}</div>{{end}}
+  </section>
+  {{end}}
+
+  {{with .Efficiency}}
+  <section id="efficiency">
+    <h2>Query Assessment (status: {{.Status}}{{if .Reason}}, {{.Reason}}{{end}})</h2>
+    {{if .Notice}}<p class="warn" id="efficiency-notice">{{.Notice}}</p>{{end}}
+    <dl class="kv" id="efficiency-columns">{{range .Columns}}<div><dt class="k">{{.Key}}</dt><dd>{{.Value}}</dd></div>{{end}}</dl>
+    <p class="muted">Latency targets: {{.LatencyTargets}}. Rating versions: {{.RatingVersions}}.</p>
+    <p class="muted">Order: lowest scan efficiency first. {{.SortNote}}</p>
+    <div class="kv">{{range .Coverage}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}</div>
+    {{range .Unrecorded}}<div class="warn">Not recorded: {{.}}</div>{{end}}
+    <table>
+      <thead><tr><th class="num">#</th><th>Namespace</th><th>Op</th><th>Shape</th><th class="num">Scan efficiency</th><th>Band</th><th>Confidence</th><th>Query latency</th><th>Workload impact</th><th>Execution overhead</th><th>$lookup / locks / network</th><th>Coverage</th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr><td class="num">{{.Order}}</td><td>{{.Namespace}}</td><td>{{.Operation}}</td><td>{{.Shape}}</td><td class="num"><strong>{{.ScoreLabel}}</strong></td><td>{{if .Band}}{{.Band}}{{else}}&ndash;{{end}}</td><td>{{if .Confidence}}{{.Confidence}}{{else}}&ndash;{{end}}</td><td>{{.Latency}}<br><span class="muted">{{.LatencyRating}}{{if .Severity}}; severity {{.Severity}}{{end}}</span></td><td>{{.Impact}}</td><td>{{.Overhead}}{{if .OverheadSummary}}<br><span class="muted">{{.OverheadSummary}}</span>{{end}}</td><td>$lookup: {{.Lookup}}<br>locks: {{.Locks}}<br>network: {{.Network}}</td><td>{{.Coverage}}{{if .CoverageReason}} <span class="muted">({{.CoverageReason}})</span>{{end}}</td></tr>
+        <tr class="detail"><td></td><td colspan="11">
+          <details><summary>Details: {{.Operation}} {{.Namespace}} ({{.ShapeID}})</summary>
+            {{if .Query}}<div><span class="k">Redacted query:</span> <code>{{.Query}}</code></div>{{end}}
+            <div><span class="k">Scan efficiency:</span> {{.RatingExplanation}}</div>
+            {{if .Components}}<div class="k">Scan efficiency checks</div><ul>{{range .Components}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .Samples}}<div class="k">Measured samples</div><ul>{{range .Samples}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .OverheadEvidence}}<div class="k">Execution overhead evidence</div><ul>{{range .OverheadEvidence}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .OverheadMeasurements}}<div class="k">Sort and spill measurements ({{.OverheadMeasurementStatus}})</div><ul>{{range .OverheadMeasurements}}<li>{{.}}</li>{{end}}</ul>{{if .OverheadNotes}}<div class="k">What these measurements mean</div><ul>{{range .OverheadNotes}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
+            {{if .OtherDetails}}<div class="k">$lookup, locks, and network</div><ul>{{range .OtherDetails}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .DataSource}}<div class="k">How the measurements were collected</div><ul>{{range .DataSource}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .PlanSummary}}<div><span class="k">Plan:</span> {{.PlanSummary}}</div>{{end}}
+            {{if .Observations}}<div class="k">Plan observations</div><ul>{{range .Observations}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{if .Limitations}}<div class="k">Limitations</div><ul>{{range .Limitations}}<li>{{.}}</li>{{end}}</ul>{{end}}
+            {{range .Recommendations}}<div class="k">Recommendation #{{.Rank}}: {{.Title}}</div><ul>
+              {{if .CandidateKeys}}<li>Index candidate (ordered keys): <code>{{range $i, $k := .CandidateKeys}}{{if $i}}, {{end}}{{$k}}{{end}}</code></li>{{end}}
+              {{if .Rationale}}<li>Rationale: {{.Rationale}}</li>{{end}}
+              {{if .Tradeoffs}}<li>Tradeoffs: {{.Tradeoffs}}</li>{{end}}
+              {{if .ValidationStep}}<li>Validation: {{.ValidationStep}}</li>{{end}}
+              {{range .Limitations}}<li>Limitation: {{.}}</li>{{end}}
+            </ul>{{end}}
+          </details>
+        </td></tr>
+      {{else}}
+        <tr><td colspan="12" class="muted">No tracked shapes ({{.Status}}).</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{range .Limitations}}<div class="warn">{{.}}</div>{{end}}
+  </section>
+  {{end}}
+
+  {{with .Trends}}
+  <section id="trends">
+    <h2>Trends vs Baseline ({{.Version}}, status: {{.Status}}{{if .Reason}}, {{.Reason}}{{end}})</h2>
+    <p class="note">{{.CausationNote}}</p>
+    <p class="muted">{{.MethodNote}}</p>
+    <p class="muted">{{.EvidenceNote}}</p>
+    <p class="muted">Criteria: {{.CriteriaSummary}} {{.CriteriaNote}}</p>
+    <div class="kv">{{range .Store}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}</div>
+    <div class="kv">{{range .Counts}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}</div>
+    <table>
+      <thead><tr><th>Namespace</th><th>Op</th><th>Shape</th><th>Baseline</th><th>Scan efficiency</th><th>Latency</th><th>Impact</th></tr></thead>
+      <tbody>
+      {{range .Rows}}
+        <tr><td>{{.Namespace}}</td><td>{{.Operation}}</td><td>{{.Shape}}</td><td>{{.Comparability}}{{if .BaselineAge}} <span class="muted">({{.BaselineAge}})</span>{{end}}</td><td>{{.Efficiency}}</td><td>{{.Latency}}</td><td>{{.Impact}}</td></tr>
+        {{if .Details}}<tr class="detail"><td></td><td colspan="6"><details><summary>Comparison details: {{.Operation}} {{.Namespace}} ({{.ShapeID}})</summary><ul>{{range .Details}}<li>{{.}}</li>{{end}}</ul></details></td></tr>{{end}}
+      {{else}}
+        <tr><td colspan="7" class="muted">No trend rows ({{.Status}}).</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{range .Limitations}}<div class="warn">{{.}}</div>{{end}}
+  </section>
+  {{end}}
+
+  {{if .Recommendations}}
+  <section>
+    <h2>Recommendations</h2>
+    <table>
+      <thead><tr><th class="num">#</th><th>Priority</th><th>Recommendation</th><th>Confidence</th><th>Source</th></tr></thead>
+      <tbody>
+      {{range .Recommendations}}
+        <tr><td class="num">{{.Rank}}</td><td>{{.Priority}}</td><td><strong>{{.Title}}</strong><br>{{.Details}}</td><td>{{.Confidence}}</td><td>{{.Source}}</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+  </section>
+  {{end}}
 
   {{if .Insights}}
   <section>

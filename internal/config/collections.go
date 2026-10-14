@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,13 +29,9 @@ type CollectionField struct {
 	ArraySize int                        `json:"arraySize,omitempty"`
 }
 
-type IndexDefinition struct {
-	Keys map[string]interface{} `json:"keys"`
-}
-
 type ShardConfig struct {
-	Key    map[string]interface{} `json:"key"`
-	Unique bool                   `json:"unique,omitempty"`
+	Key    IndexKeys `json:"key"`
+	Unique bool      `json:"unique,omitempty"`
 }
 
 type CollectionDefinition struct {
@@ -138,14 +135,23 @@ func loadCollectionsFromFile(path string) (*CollectionsFile, error) {
 }
 
 func parseCollectionsBytes(b []byte) (*CollectionsFile, error) {
-	var wrapped CollectionsFile
-	if err := json.Unmarshal(b, &wrapped); err == nil && len(wrapped.Collections) > 0 {
-		return &wrapped, nil
-	}
-
-	var arr []CollectionDefinition
-	if err := json.Unmarshal(b, &arr); err == nil && len(arr) > 0 {
-		return &CollectionsFile{Collections: arr}, nil
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var wrapped CollectionsFile
+		if err := json.Unmarshal(trimmed, &wrapped); err != nil {
+			return nil, fmt.Errorf("invalid collections format: %w", err)
+		}
+		if len(wrapped.Collections) > 0 {
+			return &wrapped, nil
+		}
+	} else if len(trimmed) > 0 && trimmed[0] == '[' {
+		var arr []CollectionDefinition
+		if err := json.Unmarshal(trimmed, &arr); err != nil {
+			return nil, fmt.Errorf("invalid collections format: %w", err)
+		}
+		if len(arr) > 0 {
+			return &CollectionsFile{Collections: arr}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("invalid collections format")
@@ -169,9 +175,12 @@ func ValidateCollectionDefinitions(cols []CollectionDefinition) error {
 		}
 		seenNamespaces[nsKey] = i
 
-		for idxPos, idx := range col.Indexes {
-			if len(idx.Keys) == 0 {
-				return fmt.Errorf("collection %q has invalid index at position %d: index keys cannot be empty", col.Name, idxPos)
+		if err := validateIndexes(col.Indexes); err != nil {
+			return fmt.Errorf("collection %q: %w", col.DatabaseName+"."+col.Name, err)
+		}
+		if col.ShardConfig != nil && len(col.ShardConfig.Key) > 0 {
+			if err := validateShardKey(col.ShardConfig.Key); err != nil {
+				return fmt.Errorf("collection %q has invalid shardConfig: %w", col.DatabaseName+"."+col.Name, err)
 			}
 		}
 		if err := validateFieldConstraints(col.Fields, ""); err != nil {
