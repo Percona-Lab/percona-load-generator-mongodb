@@ -458,3 +458,50 @@ func TestRunWorkloadIntegration_FastFindCapturesRepresentativeSamplesBelowSlowTh
 		_ = cur.Close(ctx)
 	}
 }
+
+func TestInsertRandomDocumentsIntegrationParallel(t *testing.T) {
+	client := connectIntegrationMongoOrSkip(t)
+	defer client.Disconnect(context.Background())
+	db := client.Database(fmt.Sprintf("plgm_seed_it_%d", time.Now().UnixNano()))
+	defer db.Drop(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for _, workers := range []int{1, 4} {
+		t.Run(fmt.Sprintf("writers_%d", workers), func(t *testing.T) {
+			col := config.CollectionDefinition{
+				DatabaseName: db.Name(), Name: fmt.Sprintf("docs_%d", workers),
+				Fields: map[string]config.CollectionField{"value": {Type: "int"}},
+			}
+			cfg := &config.AppConfig{SeedBatchSize: 100, SeedConcurrency: workers}
+			// Supply a different default database to verify namespace routing.
+			if err := InsertRandomDocuments(ctx, client.Database("unused"), col, 1003, cfg); err != nil {
+				t.Fatal(err)
+			}
+			count, err := db.Collection(col.Name).CountDocuments(ctx, bson.M{})
+			if err != nil || count != 1003 {
+				t.Fatalf("count/error = %d/%v, want 1003/nil", count, err)
+			}
+		})
+	}
+}
+
+func TestInsertRandomDocumentsIntegrationDuplicateKey(t *testing.T) {
+	client := connectIntegrationMongoOrSkip(t)
+	defer client.Disconnect(context.Background())
+	db := client.Database(fmt.Sprintf("plgm_seed_error_it_%d", time.Now().UnixNano()))
+	defer db.Drop(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	col := config.CollectionDefinition{DatabaseName: db.Name(), Name: "duplicates", Fields: map[string]config.CollectionField{
+		"_id": {Type: "string", Enum: []interface{}{"same-id"}},
+	}}
+	err := InsertRandomDocuments(ctx, db, col, 1000, &config.AppConfig{SeedBatchSize: 10, SeedConcurrency: 4})
+	if !driverMongo.IsDuplicateKeyError(err) {
+		t.Fatalf("expected underlying duplicate-key error, got %v", err)
+	}
+	count, err := db.Collection(col.Name).CountDocuments(ctx, bson.M{})
+	if err != nil || count != 1 {
+		t.Fatalf("count/error = %d/%v, want 1/nil (accepted writes are not rolled back)", count, err)
+	}
+}

@@ -35,6 +35,7 @@ type AppConfig struct {
 	BulkInsertPercent  int    `yaml:"bulk_insert_percent"`
 	InsertBatchSize    int    `yaml:"insert_batch_size"`
 	SeedBatchSize      int    `yaml:"seed_batch_size"`
+	SeedConcurrency    int    `yaml:"seed_concurrency"`
 	UseTransactions    bool   `yaml:"use_transactions"`
 	MaxTransactionOps  int    `yaml:"max_transaction_ops"`
 	DebugMode          bool   `yaml:"debug_mode"`
@@ -51,10 +52,10 @@ type AppConfig struct {
 	RecordPoolMaxSize         int   `yaml:"record_pool_max_size"`
 	RecordPoolBootstrapSample int   `yaml:"record_pool_bootstrap_sample"`
 
-	// RandomSeed enables deterministic data generation when set to a non-zero
-	// value. Reproducibility is best-effort: the seed dataset (generated during
-	// the single-threaded seed phase) is fully reproducible, while concurrent
-	// workload streams are seeded per-worker from this base.
+	// RandomSeed seeds data generation when set to a non-zero value.
+	// Reproducibility is best-effort. The serial seed generator's random seed
+	// sequence is independent of writer scheduling; concurrent workload streams
+	// are seeded per-worker from this base.
 	RandomSeed int64 `yaml:"random_seed"`
 
 	// ThinkTimeMs is an optional fixed delay each worker waits between operations
@@ -351,6 +352,9 @@ func applyBaseDefaults(cfg *AppConfig) {
 	if cfg.SeedBatchSize <= 0 {
 		cfg.SeedBatchSize = 1000
 	}
+	if cfg.SeedConcurrency <= 0 {
+		cfg.SeedConcurrency = 1
+	}
 	if cfg.InsertCacheSize <= 0 {
 		cfg.InsertCacheSize = 1000
 	}
@@ -605,6 +609,11 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	if v := os.Getenv("PLGM_INSERT_BATCH_SIZE"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.InsertBatchSize = n
+		}
+	}
+	if v := os.Getenv("PLGM_SEED_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.SeedConcurrency = n
 		}
 	}
 	if v := os.Getenv("PLGM_SEED_BATCH_SIZE"); v != "" {

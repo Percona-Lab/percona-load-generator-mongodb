@@ -878,6 +878,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsertCacheSize = parseInt(r.FormValue("insert_cache_size"), cfg.InsertCacheSize)
 	cfg.InsertBatchSize = parseInt(r.FormValue("insert_batch_size"), cfg.InsertBatchSize)
 	cfg.SeedBatchSize = parseInt(r.FormValue("seed_batch_size"), cfg.SeedBatchSize)
+	cfg.SeedConcurrency = parseInt(r.FormValue("seed_concurrency"), cfg.SeedConcurrency)
 	cfg.StatusRefreshRateSec = parseInt(r.FormValue("status_refresh_rate_sec"), cfg.StatusRefreshRateSec)
 	cfg.OpTimeoutMs = parseInt(r.FormValue("op_timeout_ms"), cfg.OpTimeoutMs)
 	cfg.RetryAttempts = parseInt(r.FormValue("retry_attempts"), cfg.RetryAttempts)
@@ -1052,6 +1053,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	if cfg.SeedBatchSize <= 0 {
 		cfg.SeedBatchSize = 1000
+	}
+	if cfg.SeedConcurrency <= 0 {
+		cfg.SeedConcurrency = 1
 	}
 	if cfg.MaxTransactionOps <= 0 {
 		cfg.MaxTransactionOps = 1

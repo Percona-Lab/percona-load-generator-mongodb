@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -18,68 +19,95 @@ import (
 )
 
 func InsertRandomDocuments(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, count int, cfg *config.AppConfig) error {
-	// Configure deterministic generation (no-op when random_seed == 0). The seed
-	// phase is single-threaded, so the generated dataset is fully reproducible.
-	if cfg != nil {
-		datagen.ConfigureSeed(cfg.RandomSeed)
-	}
-	logger.Info("Seeding %d documents into '%s.%s'...", count, col.DatabaseName, col.Name)
+	collection := db.Client().Database(col.DatabaseName).Collection(col.Name)
+	return insertRandomDocuments(ctx, col, count, cfg, func(ctx context.Context, batch []interface{}) error {
+		_, err := collection.InsertMany(ctx, batch)
+		return err
+	})
+}
 
-	// 1. Configure Batch Size
+// insertRandomDocuments keeps generation serial and dispatches owned batches to
+// concurrent writers. insertBatch must not retain a batch after returning.
+func insertRandomDocuments(ctx context.Context, col config.CollectionDefinition, count int, cfg *config.AppConfig, insertBatch func(context.Context, []interface{}) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if count <= 0 {
+		return nil
+	}
+	if cfg == nil {
+		cfg = &config.AppConfig{}
+	}
+	datagen.ConfigureSeed(cfg.RandomSeed)
 	batchSize := cfg.SeedBatchSize
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
-
-	// 2. Configure Progress Reporting
-	// Calculate 10% interval
-	modu := int(float32(count) * 0.1)
-	if modu < 1 {
-		modu = 1
+	batchSize = min(batchSize, count)
+	workers := cfg.SeedConcurrency
+	if workers <= 0 {
+		workers = 1
 	}
+	workers = min(workers, 1+(count-1)/batchSize)
+	logger.Info("Seeding %d documents into '%s.%s' with %d writer(s)...", count, col.DatabaseName, col.Name, workers)
+
+	modu := max(1, count/10)
 	nextLogTarget := modu
-
-	logger.Debug("Inserting documents in batches of %d", batchSize)
-	logger.Debug("Progress reporting every %d documents", modu)
-
-	targetDB := db.Client().Database(col.DatabaseName)
-	collection := targetDB.Collection(col.Name)
-
-	// Pre-allocate batch slice
-	batch := make([]interface{}, 0, batchSize)
 	totalInserted := 0
+	var progressMu sync.Mutex
+	var wg sync.WaitGroup
 
-	for i := 0; i < count; i++ {
-		// Generate document
-		batch = append(batch, workloads.GenerateDocument(col, cfg))
-
-		// If batch is full, InsertMany
-		if len(batch) >= batchSize {
-			if _, err := collection.InsertMany(ctx, batch); err != nil {
-				return fmt.Errorf("insert batch into %s.%s: %w", col.DatabaseName, col.Name, err)
-			}
-
-			totalInserted += len(batch)
-			batch = batch[:0] // Reset batch, keep capacity
-
-			// Check if we crossed the 10% threshold
-			if totalInserted >= nextLogTarget {
-				logger.Info("-- Inserted %d documents...", totalInserted)
-				// Advance target to next 10% marker
-				for totalInserted >= nextLogTarget {
-					nextLogTarget += modu
+	workCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	// No queued batches: at most one batch per writer plus the producer's batch
+	// is held in memory, independent of documents_count.
+	batches := make(chan []interface{})
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for batch := range batches {
+				if workCtx.Err() != nil {
+					return
 				}
+				if err := insertBatch(workCtx, batch); err != nil {
+					cancel(fmt.Errorf("insert batch into %s.%s: %w", col.DatabaseName, col.Name, err))
+					return
+				}
+				progressMu.Lock()
+				totalInserted += len(batch)
+				if totalInserted >= nextLogTarget || totalInserted == count {
+					logger.Info("-- Inserted %d documents...", totalInserted)
+					nextLogTarget = totalInserted + modu
+				}
+				progressMu.Unlock()
 			}
-		}
+		}()
 	}
 
-	// Insert any remaining documents
-	if len(batch) > 0 {
-		if _, err := collection.InsertMany(ctx, batch); err != nil {
-			return fmt.Errorf("insert remaining documents into %s.%s: %w", col.DatabaseName, col.Name, err)
+generate:
+	for generated := 0; generated < count; {
+		// Each dispatched batch owns its backing array; never reuse it while a
+		// writer may still be serializing its documents.
+		size := min(batchSize, count-generated)
+		batch := make([]interface{}, 0, size)
+		for i := 0; i < size; i++ {
+			if workCtx.Err() != nil {
+				break generate
+			}
+			batch = append(batch, workloads.GenerateDocument(col, cfg))
 		}
-		totalInserted += len(batch)
-		logger.Info("-- Inserted %d documents (Final)...", totalInserted)
+		select {
+		case batches <- batch:
+			generated += size
+		case <-workCtx.Done():
+			break generate
+		}
+	}
+	close(batches)
+	wg.Wait()
+	if err := context.Cause(workCtx); err != nil {
+		return err
 	}
 
 	logger.Debug("Document generation and seeding complete")

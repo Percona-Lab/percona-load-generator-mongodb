@@ -5,6 +5,24 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v4.8.0 - Parallel Initial Data Seeding
+
+**Highlights**
+
+**New: Parallel Seed Writers**
+- Added `seed_concurrency` / `PLGM_SEED_CONCURRENCY` to run concurrent `InsertMany` calls within each collection during the SEED phase. Defaults to `1` (serial) and is independent of workload `concurrency`.
+- The Web UI exposes **Seed Concurrency** next to **Seed Batch Size** in the Execution / Runtime tab.
+- Document generation stays serial, so the `random_seed` sequence is unchanged; batches may finish out of order.
+- Memory stays bounded to about `(writers + 1) * seed_batch_size` documents regardless of `documents_count`.
+- On the first insert error or cancellation, remaining writers are cancelled and the underlying error is returned. Already accepted writes are not rolled back.
+
+**Testing & Docs**
+- Added unit tests for batching, writer concurrency, generated-data integrity, failure, and cancellation, plus config and Web UI wiring tests.
+- Added integration tests for serial/parallel seed counts, database routing, and duplicate-key error propagation, and a `BenchmarkInsertRandomDocumentsIntegration` throughput benchmark.
+- Documented usage and limitations in `README.md`, `config.yaml`, and `TESTING.md`.
+
+Thanks to @FranzLi347 for the contribution ([#3](https://github.com/Percona-Lab/percona-load-generator-mongodb/pull/3)).
+
 ## v4.7.0 - Add post-run query and index analysis, explain settings tab, and trends
 
 This release adds post-run query analysis. Beyond telling you that a query is slow, PLGM now shows what the server did for each query shape: how much it scanned, whether it sorted in memory or spilled to disk, and which index would help.

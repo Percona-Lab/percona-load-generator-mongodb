@@ -82,6 +82,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DOCUMENTS_COUNT", "Initial seed document count")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DROP_COLLECTIONS", "Drop collections on start (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_SKIP_SEED", "Do not seed initial data on start (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_SEED_CONCURRENCY", "Number of concurrent seed writers (default: 1)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_SEED_BATCH_SIZE", "Number of documents to insert per batch during SEED phase")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_DEBUG_MODE", "Enable verbose logic logs (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_PPROF_ENABLED", "Enable pprof server on localhost:6060 (true/false)")
