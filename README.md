@@ -177,27 +177,13 @@ Because SSH already provides the encryption, **you do not need to enable HTTPS/T
 
 ### PLGM UI Sample Usage
 
-**Default Workload**
+This walkthrough runs the bundled `query_analysis_demo` workload, which mixes index-backed queries with deliberately unindexed ones, against a local MongoDB:
 
-<video src="https://github.com/user-attachments/assets/1d1d9641-1b11-4b6c-b82f-ff85bd18c4d6" controls width="700"></video>
+1. **Configure:** set the connection, workload shape, query mix, and the insights, explain, and trend settings, then upload the demo collection and query definitions.
+2. **Run:** seed 100,000 documents and run for 60 seconds while the Live Metrics and Latency Analysis dashboards update, including the latency percentile timeline, cumulative distribution, and heatmap.
+3. **Analyze:** after the run, PLGM samples explain plans and opens the Query & Index Analysis views: per-shape efficiency, slow queries and index issues with a detail drawer (summary, execution plan, recommendation, diagnostics, query reference), and trends compared with a previous run. The Insights overview, per-iteration, and timeline views follow.
 
-**Custom Workload**
-
-<video src="https://github.com/user-attachments/assets/e05d08ed-77ea-4ca1-9fee-9206811295f6" controls width="700"></video>
-
-**Raw Injector Workload**
-
-<video src="https://github.com/user-attachments/assets/d3ff03b0-4941-4cef-88b3-df4e3c012fa2" controls width="700"></video>
-
-**Time machine**
-
-<video src="https://github.com/user-attachments/assets/68a57bb0-f500-4f75-99c3-c599d485444a" controls width="700"></video>
-
-**Multiple Iterations**
-
-You can configure how PLGM repeats a given workload and control the time between runs in the `Workload` tab. Set the iterations value to determine how many times the workload will run, and configure the interval to define the time between each run. See [Workload Iterations & Scheduling](#workload-iterations--scheduling) section for more details.
-
-<video src="https://github.com/user-attachments/assets/58c51250-8acc-46ce-a756-8f897f73a2b2" controls width="700"></video>
+<video src="https://github.com/user-attachments/assets/f133fd5a-baf8-4d6f-89e1-c179b83c4bef" controls width="700"></video>
 
 
 ### 2. UI Features
