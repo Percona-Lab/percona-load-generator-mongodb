@@ -89,13 +89,13 @@ For unit and integration test instructions (including Docker-based MongoDB setup
 
 ### 5. Post-Run Insights
 
-PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Metrics & Insights and Query Analysis (Explain) settings tabs).
+PLGM includes a post-run **Slow Query and Index Analysis** layer that is configurable from the Web UI (Metrics & Insights, Query Analysis (Explain), and Trends & History settings tabs).
 
 > **Post-Run Explain Sampling is required for the full query analysis.** Scan efficiency, execution overhead (sorts and disk spills), plan-based index recommendations, and efficiency trends are built from explain output collected after the workload finishes. The setting (`insights_explain_enabled`, Web UI settings tab: `Query Analysis (Explain)`) is on by default. With it off, the analysis reports only latency and workload impact, and the dashboard and HTML report state that explain was turned off. Explain does not run during the measured workload, so benchmark results are unaffected.
 
 Quick access:
 * Full guide: [`INSIGHTS.md`](./INSIGHTS.md)
-* Web UI paths: `Metrics & Insights -> Insights Capture` and `Query Analysis (Explain)`
+* Web UI paths: `Metrics & Insights -> Insights Capture`, `Query Analysis (Explain)`, and `Trends & History` (run history, comparison, export/import; see the trend history notes under [User-Managed Query and Collection Definitions](#7-user-managed-query-and-collection-definitions))
 * Output: Dashboard insights panel + `Download Summary` JSON (`insights` section)
 * Includes explain support matrix, status/reason glossary, confidence model, troubleshooting, and limitations
 * Includes `executionStats` vs `queryPlanner` guidance, severity-based explain eligibility, filtering counters, and expected outcomes
@@ -324,7 +324,7 @@ export PLGM_TREND_BASELINE_STORE=off   # no history and no trend comparison
 
 **History, labels, and pinning.** The store keeps the newest `trend_history_runs` unpinned runs (default 5); older runs and their snapshots are pruned. Every run has a label: `trend_run_label` if set, otherwise `mongo-<server version>`, or `run-<UTC time>` when the version is unknown. Rename a run later in **Trends & History**. Pin a run to keep it as a reference: pinned runs (at most 10) do not count toward `trend_history_runs`, are never pruned, and never expire. Unpinned runs older than `trend_max_age_days` (default 30; `0` = never) stay stored but are reported as `outdated` instead of compared.
 
-**Comparison.** By default each shape is compared with the previous compatible run: for each metric, the newest earlier snapshot that passes the compatibility gates. The Trends view can instead compare every shape with a chosen run or with the newest pinned run, or show a matrix of up to 8 runs (one column per run with average and p95 latency, efficiency score, and impact share, the current run highlighted). Each pair is gated separately; when a pair is not comparable, the cell shows the reason. Efficiency, latency, and impact are never combined.
+**Comparison.** By default each shape is compared with the previous compatible run: for each metric, the newest earlier snapshot that passes the compatibility gates. The Trends view can instead compare every shape with a chosen run or with the newest pinned run, or show a matrix of the current run and up to 8 stored runs (one column per run with average and p95 latency, efficiency score, and impact share, the current run highlighted). Each pair is gated separately; when a pair is not comparable, the cell shows the reason. Efficiency, latency, and impact are never combined. The same views are available from `GET /api/trends/compare?baseline=previous|pinned|<run id>` or `GET /api/trends/compare?runs=<id>,<id>` (matrix); both use the last finished run.
 
 **Sharing.** Export selected runs (or all) from **Trends & History**, or with `GET /api/trend-baselines/export?runs=<id>,<id>&source=<label>`. Import a file in the same tab (or `POST /api/trend-baselines/import`, multipart field `file` or a raw JSON body). Imports must use the current schema (`tb-2`) and stay within the limits (32 MiB, 64 runs, 500 shapes). Runs are merged by `run_id`: duplicates are skipped, and the result lists what was added, skipped, or not kept (pruned by `trend_history_runs`). Imported runs show their source label. Only the redacted trend fields are read; anything else in the file is ignored and reported. Run ids combine a UTC timestamp, a run counter, and 64 random bits, so they stay unique across machines. Several instances can share one store file (for example on a shared volume). Every write takes a lock file (`<store>.lock`), re-reads the file, merges its change, and replaces the file atomically. A lock older than 30 seconds is treated as stale.
 
@@ -1083,6 +1083,12 @@ You can override any setting in `config.yaml` using environment variables. This 
 | `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retry count for explain timeout/failure | `1` |
 | `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Backoff between explain retries (ms) | `150` |
 | `insights_latency_target_avg_ms`, `_p95_ms`, `_p99_ms` | `PLGM_INSIGHTS_LATENCY_TARGET_AVG_MS`, `_P95_MS`, `_P99_MS` | Per-shape client latency targets used only for the Query latency rating; 0 means no target (latency is shown but not rated) | `0` |
+| **Trend History** | | | |
+| `trend_history_runs` | `PLGM_TREND_HISTORY_RUNS` | Unpinned runs to keep per store (1-50); pinned runs (max 10) are extra | `5` |
+| `trend_max_age_days` | `PLGM_TREND_MAX_AGE_DAYS` | Unpinned runs older than this are reported as outdated, not compared (`0` = never, max 3650) | `30` |
+| `trend_baseline_store` | `PLGM_TREND_BASELINE_STORE` | Trend store file; empty = `<user config dir>/plgm/trend_baselines.json`, `off` disables history | `""` |
+| `trend_default_comparison` | `PLGM_TREND_DEFAULT_COMPARISON` | Baseline for each shape: `previous` (previous compatible run) or `pinned` (newest pinned run) | `previous` |
+| `trend_run_label` | `PLGM_TREND_RUN_LABEL` | Label for runs started with this config (max 64 bytes); empty = `mongo-<server version>`, or `run-<UTC time>` when unknown | `""` |
 | **Sharding Strategy** | | | |
 | `sharding_mode` | `PLGM_SHARDING_MODE` | Per-collection sharding behavior: `auto`, `force_on`, `force_off` | `auto` |
 | `sharding_skip_generic_without_config` | `PLGM_SHARDING_SKIP_GENERIC_WITHOUT_CONFIG` | Skip generic sharding setup for collections without `shardConfig` (recommended for mixed workloads) | `true` |
