@@ -11,6 +11,13 @@ bin/
 # Web UI test dependencies
 internal/webui/uitest/node_modules/
 
+# Web UI demo recorder (scripts/demo)
+scripts/demo/node_modules/
+scripts/demo/.video/
+demo-ui.webm
+demo-ui.mp4
+demo-ui-small.mp4
+
 # OS Specific
 .DS_Store
 Thumbs.db
