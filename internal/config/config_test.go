@@ -4,7 +4,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
@@ -460,6 +462,53 @@ func TestLatencyTargetsFromEnvAndDefaults(t *testing.T) {
 	applyBaseDefaults(cfg)
 	if cfg.InsightsLatencyTargetAvgMs != 0 || cfg.InsightsLatencyTargetP95Ms != 0 || cfg.InsightsLatencyTargetP99Ms != 0 {
 		t.Fatalf("invalid YAML targets must mean no target: %+v", cfg)
+	}
+}
+
+func TestTrendSettingsConfig(t *testing.T) {
+	type want struct {
+		runs, age       int
+		store, cmp, lbl string
+	}
+	yaml := "trend_history_runs: 8\ntrend_max_age_days: 0\ntrend_baseline_store: /data/shared.json\ntrend_default_comparison: pinned\ntrend_run_label: yaml-label\n"
+	for _, tc := range []struct {
+		name, yaml string
+		env        map[string]string
+		want       want
+	}{
+		{"defaults", "", nil, want{5, 30, "", "previous", ""}},
+		{"yaml", yaml, nil, want{8, 0, "/data/shared.json", "pinned", "yaml-label"}},
+		{"env_overrides_yaml", yaml, map[string]string{
+			"PLGM_TREND_HISTORY_RUNS": "12", "PLGM_TREND_MAX_AGE_DAYS": "7", "PLGM_TREND_BASELINE_STORE": "off",
+			"PLGM_TREND_DEFAULT_COMPARISON": "previous", "PLGM_TREND_RUN_LABEL": "env-label",
+		}, want{12, 7, "off", "previous", "env-label"}},
+		{"invalid_env_keeps_yaml", yaml, map[string]string{"PLGM_TREND_HISTORY_RUNS": "0", "PLGM_TREND_MAX_AGE_DAYS": "-3"}, want{8, 0, "/data/shared.json", "pinned", "yaml-label"}},
+		{"env_age_zero_is_never", "", map[string]string{"PLGM_TREND_MAX_AGE_DAYS": "0"}, want{5, 0, "", "previous", ""}},
+		{"clamped_yaml", "trend_history_runs: 900\ntrend_max_age_days: 99999\ntrend_default_comparison: bogus\ntrend_run_label: \"  a\\tb  \"\n", nil, want{50, 3650, "", "previous", "ab"}},
+		{"invalid_yaml_uses_defaults", "trend_history_runs: -1\ntrend_max_age_days: -1\n", nil, want{5, 30, "", "previous", ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, k := range []string{"PLGM_TREND_HISTORY_RUNS", "PLGM_TREND_MAX_AGE_DAYS", "PLGM_TREND_BASELINE_STORE", "PLGM_TREND_DEFAULT_COMPARISON", "PLGM_TREND_RUN_LABEL"} {
+				t.Setenv(k, tc.env[k])
+			}
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(path, []byte(tc.yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := LoadAppConfig(path, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := want{cfg.TrendHistoryRuns, *cfg.TrendMaxAgeDays, cfg.TrendBaselineStore, cfg.TrendDefaultComparison, cfg.TrendRunLabel}
+			if got != tc.want {
+				t.Fatalf("trend settings = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+	long := &AppConfig{TrendRunLabel: strings.Repeat("é", 40), TrendBaselineStore: "/a\n/b"}
+	NormalizeTrendSettings(long)
+	if len(long.TrendRunLabel) != 64 || !utf8.ValidString(long.TrendRunLabel) || long.TrendBaselineStore != "" {
+		t.Fatalf("label must be cut on a character boundary and an unsafe path dropped: %q %q", long.TrendRunLabel, long.TrendBaselineStore)
 	}
 }
 

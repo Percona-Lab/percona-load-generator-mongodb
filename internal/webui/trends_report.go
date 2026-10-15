@@ -21,9 +21,16 @@ func reportTrendSection(v *stats.TrendView) *report.TrendSection {
 		CriteriaSummary: v.Criteria.Summary, CriteriaNote: v.Criteria.Note, Limitations: v.Limitations,
 	}
 	st := v.Store
+	cmp := v.Comparison.Mode
+	if v.Comparison.BaselineRunID != "" {
+		cmp += fmt.Sprintf(": %s (%s)", emptyFallback(v.Comparison.BaselineLabel, "unlabeled"), v.Comparison.BaselineRunID)
+	}
 	sec.Store = []report.KV{
+		{Key: "Current run", Value: fmt.Sprintf("%s (%s)", emptyFallback(v.CurrentRun.Label, "unlabeled"), v.CurrentRun.RunID)},
+		{Key: "Compared with", Value: cmp + reasonSuffix(v.Comparison.Note)},
 		{Key: "Baseline store", Value: st.Status + reasonSuffix(st.Reason)},
 		{Key: "Persistent", Value: fmt.Sprint(st.Persistent)},
+		{Key: "Stored runs", Value: fmt.Sprintf("%d (%d pinned, max %d pinned)", st.Runs, st.PinnedRuns, st.MaxPinnedRuns)},
 		{Key: "Stored shape baselines", Value: fmt.Sprintf("%d (max %d)", st.Baselines, st.MaxBaselines)},
 		{Key: "Oldest / newest baseline", Value: emptyFallback(st.OldestRecordedAt, "none") + " / " + emptyFallback(st.NewestRecordedAt, "none")},
 	}
@@ -63,12 +70,19 @@ func trendBaselineAgeText(b *stats.TrendBaselineInfo) string {
 	}
 	var parts []string
 	if b.EfficiencyAge != "" {
-		parts = append(parts, "scan efficiency "+b.EfficiencyAge)
+		parts = append(parts, "scan efficiency "+b.EfficiencyAge+runLabelSuffix(b.EfficiencyRunLabel))
 	}
 	if b.WorkloadAge != "" {
-		parts = append(parts, "latency/impact "+b.WorkloadAge)
+		parts = append(parts, "latency/impact "+b.WorkloadAge+runLabelSuffix(b.WorkloadRunLabel))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func runLabelSuffix(label string) string {
+	if label == "" {
+		return ""
+	}
+	return " (" + label + ")"
 }
 
 func trendEvidenceText(name string, s stats.TrendEvidenceSide) string {

@@ -5777,7 +5777,13 @@
     }
   ],
   "trends": {
+    "available_runs": [],
     "causation_note": "Annotations list what changed between the baseline and this run (plans, indexes, server, sampling, workload). They are not evidence of cause: data distribution, cache state, concurrent load, or any annotated change can move these metrics, and PLGM does not attribute a change to any of them.",
+    "comparison": {
+      "mode": "previous",
+      "note": "Compared with the previous compatible run of each shape.",
+      "requested_mode": "previous"
+    },
     "counts": {
       "comparability": {
         "missing": 13
@@ -5804,10 +5810,11 @@
       "max_baseline_age_hours": 720,
       "min_operations": 30,
       "note": "These thresholds are PLGM heuristics set on synthetic fixtures. They are not statistical significance tests and have not been calibrated against real customer workloads.",
-      "summary": "Efficiency: both runs assessed (not partial) with at least 2 distinct explained commands and high scan efficiency confidence; a change of 15 or more points is labeled. Latency: at least 30 operations in both runs; the full-run average must move by at least 1 ms and 20%, and a p95 from at least 20 retained samples on both sides must not move materially the other way. Impact: at least 30 operations and complete impact group coverage in both runs; the share of observed operation time must move by at least 5 percentage points and 25%. Baselines older than 30 days are outdated.",
+      "summary": "Efficiency: both runs assessed (not partial) with at least 2 distinct explained commands and high scan efficiency confidence; a change of 15 or more points is labeled. Latency: at least 30 operations in both runs; the full-run average must move by at least 1 ms and 20%, and a p95 from at least 20 retained samples on both sides must not move materially the other way. Impact: at least 30 operations and complete impact group coverage in both runs; the share of observed operation time must move by at least 5 percentage points and 25%. Unpinned baselines older than 30 days are outdated; pinned reference runs never are.",
       "workload_count_change_relative": 0.25
     },
     "current_run": {
+      "label": "mongo-8.0.4",
       "recorded_at": "normalized",
       "run_id": "normalized",
       "sampling": {
@@ -5842,10 +5849,10 @@
       "Efficiency evidence is at most 2 explained representative commands per shape per run, chosen from retained samples; it is not a statistical sample of the shape's operations.",
       "Only full-run sums are kept for latency, so there is no variance estimate; latency labels are a magnitude rule, not a statistical test.",
       "Data distribution, collection size, cache state, and load from other clients are not recorded; any of them can change these metrics without an annotation.",
-      "Baselines roll forward: each run replaces the latency and impact baseline of every shape it saw, and the efficiency baseline only when the new run has assessed evidence (or the old baseline had none).",
+      "History keeps one snapshot per shape per run for the newest 5 unpinned runs plus up to 10 pinned reference runs. With the previous-run comparison, latency and impact use the newest compatible earlier snapshot, and efficiency prefers the newest compatible snapshot with assessed evidence, so the two can come from different runs.",
       "Topology comes from the explain layout: mongod means a mongod answered directly (standalone or replica-set member, not distinguished); sharded_cluster means a mongos layout."
     ],
-    "method_note": "Each tracked shape is compared with its persisted baseline from earlier runs, matched by shape id and namespace. Scan efficiency score, latency (full-run average), and workload impact (share of observed operation time) are compared separately and are never combined. A label is given only when the baseline is compatible (same shape identity and score version, not outdated) and both runs meet the evidence minimums; otherwise the state says why there is no label.",
+    "method_note": "Each tracked shape is compared with its stored snapshot from an earlier run, matched by shape id and namespace. By default the baseline is the previous compatible run: for each shape and metric, the newest earlier snapshot that passes the compatibility gates (efficiency prefers assessed evidence). A chosen run or pinned reference run is used for every shape instead. Scan efficiency score, latency (full-run average), and workload impact (share of observed operation time) are compared separately and are never combined. A label is given only when the baseline is compatible (same shape identity and score version, not outdated) and both runs meet the evidence minimums; otherwise the state says why there is no label.",
     "reason": "no_stored_baselines",
     "rows": [
       {
@@ -6318,10 +6325,13 @@
     "store": {
       "baselines": 0,
       "max_baselines": 500,
+      "max_pinned_runs": 10,
+      "path": "normalized",
       "persistent": true,
+      "pinned_runs": 0,
       "runs": 0,
       "status": "empty"
     },
-    "version": "tc-1"
+    "version": "tc-2"
   }
 }

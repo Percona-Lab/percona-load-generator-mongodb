@@ -489,29 +489,34 @@ func TestUIFixturesMatchAPI(t *testing.T) {
 			s, _ := efficiencyFixtureServer(t, mode)
 			api = getInsightsJSON(t, s)
 		}
-		normalizeVolatile(api)
-		got, err := json.MarshalIndent(api, "", "  ")
-		if err != nil {
+		checkUIFixture(t, "insights_"+mode+".json", api)
+	}
+}
+
+func checkUIFixture(t *testing.T, name string, api map[string]interface{}) {
+	t.Helper()
+	normalizeVolatile(api)
+	got, err := json.MarshalIndent(api, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = append(got, '\n')
+	path := filepath.Join("testdata", "ui", name)
+	if *updateUIFixtures {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		got = append(got, '\n')
-		path := filepath.Join("testdata", "ui", "insights_"+mode+".json")
-		if *updateUIFixtures {
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(path, got, 0o644); err != nil {
-				t.Fatal(err)
-			}
-			continue
+		if err := os.WriteFile(path, got, 0o644); err != nil {
+			t.Fatal(err)
 		}
-		want, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("read %s (run go test ./internal/webui -run TestUIFixturesMatchAPI -update-ui-fixtures): %v", path, err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Fatalf("%s is stale; regenerate with -update-ui-fixtures", path)
-		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s (run go test ./internal/webui -run TestUIFixturesMatchAPI -update-ui-fixtures): %v", path, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("%s is stale; regenerate with -update-ui-fixtures", path)
 	}
 }
 
@@ -519,12 +524,24 @@ func normalizeVolatile(v interface{}) {
 	switch t := v.(type) {
 	case map[string]interface{}:
 		for k, val := range t {
+			if s, ok := val.(string); ok && strings.HasPrefix(s, "fixture-run-") {
+				continue
+			}
 			switch k {
 			case "generated_at", "fetched_at", "timestamp_ms", "recorded_at", "run_id", "efficiency_run_id", "workload_run_id",
-				"efficiency_recorded_at", "workload_recorded_at", "oldest_recorded_at", "newest_recorded_at", "efficiency_age", "workload_age":
+				"efficiency_recorded_at", "workload_recorded_at", "oldest_recorded_at", "newest_recorded_at", "efficiency_age", "workload_age",
+				"baseline_run_id", "imported_at", "age":
 				t[k] = "normalized"
-			case "elapsed_ms", "efficiency_age_seconds", "workload_age_seconds":
+			case "elapsed_ms", "efficiency_age_seconds", "workload_age_seconds", "age_seconds":
 				t[k] = 0
+			case "path", "store_path":
+				if s, ok := val.(string); ok && strings.HasSuffix(s, ".json") {
+					t[k] = "normalized"
+				}
+			case "label", "baseline_label", "efficiency_run_label", "workload_run_label":
+				if s, ok := val.(string); ok && strings.HasPrefix(s, "run-2") {
+					t[k] = "run-normalized"
+				}
 			default:
 				normalizeVolatile(val)
 			}

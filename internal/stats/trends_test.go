@@ -38,14 +38,24 @@ func wlSnap(run TrendRunContext, ops uint64, avg float64, share float64) *TrendW
 	}
 }
 
-func shape(e *TrendEfficiencySnapshot, w *TrendWorkloadSnapshot) TrendShapeBaseline {
-	return TrendShapeBaseline{ShapeID: "shape_a", Namespace: "db.c", Operation: "find", ShapeSummary: "find on fields: a", Efficiency: e, Workload: w}
+func shape(e *TrendEfficiencySnapshot, w *TrendWorkloadSnapshot) TrendShapeSnapshot {
+	return TrendShapeSnapshot{ShapeID: "shape_a", Namespace: "db.c", Operation: "find", ShapeSummary: "find on fields: a", Efficiency: e, Workload: w}
 }
 
-func compareOne(t *testing.T, base, cur TrendShapeBaseline, baseRun, curRun TrendRunContext) TrendRow {
-	t.Helper()
-	return compareTrendShape(cur, &base, curRun, map[string]TrendRunContext{baseRun.RunID: baseRun}, trendNow)
+func testCtx(cur TrendRunContext, runs ...TrendRunContext) trendCompareCtx {
+	m := map[string]TrendRunContext{}
+	for _, r := range runs {
+		m[r.RunID] = r
+	}
+	return trendCompareCtx{run: cur, runs: m, now: trendNow, policy: DefaultTrendPolicy()}
 }
+
+func compareOne(t *testing.T, base, cur TrendShapeSnapshot, baseRun, curRun TrendRunContext) TrendRow {
+	t.Helper()
+	return compareTrendShape(cur, &base, testCtx(curRun, baseRun), "")
+}
+
+func viewOpts() TrendOptions { return TrendOptions{Policy: DefaultTrendPolicy()} }
 
 func TestTrendEfficiencySupportedChanges(t *testing.T) {
 	br, cr := trendRun("r1", trendNow.Add(-time.Hour)), trendRun("r2", trendNow)
@@ -170,7 +180,7 @@ func TestTrendVersionAgeAndShapeMismatch(t *testing.T) {
 		t.Fatalf("a shape id reused by another operation is incompatible: %+v", row)
 	}
 
-	row = compareTrendShape(shape(effSnap(cr, 100, 2), wlSnap(cr, 100, 5, 0.1)), nil, cr, nil, trendNow)
+	row = compareTrendShape(shape(effSnap(cr, 100, 2), wlSnap(cr, 100, 5, 0.1)), nil, testCtx(cr), "")
 	if row.Comparability != TrendMissing || row.Efficiency.State != TrendNoBaseline || row.Latency.State != TrendNoBaseline || row.Impact.State != TrendNoBaseline {
 		t.Fatalf("missing baseline: %+v", row)
 	}
@@ -258,52 +268,71 @@ func TestTrendInterventionsAreAnnotatedWithoutDiscarding(t *testing.T) {
 		}
 	}
 
-	row = compareTrendShape(shape(c, nil), &TrendShapeBaseline{ShapeID: "shape_a", Namespace: "db.c", Operation: "find", Efficiency: effSnap(br, 0, 2)}, cr, map[string]TrendRunContext{}, trendNow)
+	row = compareTrendShape(shape(c, nil), &TrendShapeSnapshot{ShapeID: "shape_a", Namespace: "db.c", Operation: "find", Efficiency: effSnap(br, 0, 2)}, testCtx(cr), "")
 	if len(row.Interventions) == 0 || row.Interventions[len(row.Interventions)-1].Kind != "run_context_unavailable" {
 		t.Fatalf("missing run context must be disclosed: %v", row.Interventions)
 	}
 }
 
 func TestMergeTrendBaselinesRulesAndBounds(t *testing.T) {
-	r1, r2 := trendRun("r1", trendNow.Add(-time.Hour)), trendRun("r2", trendNow)
-	prev := MergeTrendBaselines(TrendStoreData{}, r1, []TrendShapeBaseline{shape(effSnap(r1, 33, 2), wlSnap(r1, 100, 5, 0.1))})
+	r1, r2 := trendRun("r1", trendNow.Add(-2*time.Hour)), trendRun("r2", trendNow.Add(-time.Hour))
+	p := DefaultTrendPolicy()
+	prev := MergeTrendBaselines(TrendStoreData{}, r1, []TrendShapeSnapshot{shape(effSnap(r1, 33, 2), wlSnap(r1, 100, 5, 0.1))}, p)
 	excluded := effSnap(r2, 0, 0)
 	excluded.Coverage, excluded.Status, excluded.Score = EffCoverageBudgetExcluded, EfficiencyUnassessed, nil
-	next := MergeTrendBaselines(prev, r2, []TrendShapeBaseline{shape(excluded, wlSnap(r2, 200, 6, 0.2))})
+	next := MergeTrendBaselines(prev, r2, []TrendShapeSnapshot{shape(excluded, wlSnap(r2, 200, 6, 0.2))}, p)
 	got := next.Shapes[0]
-	if got.Efficiency.RunID != "r1" || got.Workload.RunID != "r2" {
-		t.Fatalf("budget-excluded run must keep the assessed efficiency baseline and replace workload: eff=%s wl=%s", got.Efficiency.RunID, got.Workload.RunID)
+	if len(got.EfficiencyHistory) != 2 || got.EfficiencyHistory[0].RunID != "r2" || got.WorkloadHistory[0].RunID != "r2" || got.WorkloadHistory[1].RunID != "r1" {
+		t.Fatalf("each run keeps its own snapshot, newest first: %+v", got)
 	}
-	if len(next.Runs) != 2 {
-		t.Fatalf("both referenced runs must be kept, got %d", len(next.Runs))
+	if len(next.Runs) != 2 || next.Runs[0].RunID != "r2" {
+		t.Fatalf("both runs must be kept newest first, got %+v", next.Runs)
 	}
-	next = MergeTrendBaselines(next, trendRun("r3", trendNow.Add(time.Minute)), []TrendShapeBaseline{shape(effSnap(trendRun("r3", trendNow.Add(time.Minute)), 100, 2), nil)})
-	if next.Shapes[0].Efficiency.RunID != "r3" {
-		t.Fatalf("assessed run must replace the efficiency baseline")
+	cur := trendRun("r3", trendNow)
+	sel := selectPreviousBaseline(next.Shapes[0], testCtx(cur, next.Runs...))
+	if sel.Efficiency.RunID != "r1" || sel.Workload.RunID != "r2" {
+		t.Fatalf("a budget-excluded run must not hide the assessed efficiency baseline; workload uses the newest: eff=%s wl=%s", sel.Efficiency.RunID, sel.Workload.RunID)
+	}
+	again := MergeTrendBaselines(next, r2, []TrendShapeSnapshot{shape(effSnap(r2, 100, 2), nil)}, p)
+	if n := len(again.Shapes[0].EfficiencyHistory); n != 2 || again.Shapes[0].EfficiencyHistory[0].Score == nil || len(again.Shapes[0].WorkloadHistory) != 1 {
+		t.Fatalf("re-recording a run id replaces that run's snapshots: %+v", again.Shapes[0])
 	}
 
-	var many []TrendShapeBaseline
-	var data TrendStoreData
+	var many []TrendShapeSnapshot
+	data := TrendStoreData{}
+	big := TrendPolicy{KeepRuns: 50}
 	for i := 0; i < TrendMaxShapeBaselines+40; i++ {
 		run := trendRun(fmt.Sprintf("run%03d", i), trendNow.Add(time.Duration(i)*time.Second))
 		s := shape(nil, wlSnap(run, 50, 1, 0.01))
 		s.ShapeID = fmt.Sprintf("shape_%04d", i)
 		many = append(many, s)
-		data = MergeTrendBaselines(data, run, []TrendShapeBaseline{s})
+		data = MergeTrendBaselines(data, run, []TrendShapeSnapshot{s}, big)
 	}
-	if len(data.Shapes) > TrendMaxShapeBaselines || len(data.Runs) > TrendMaxRuns {
+	if len(data.Shapes) > TrendMaxShapeBaselines || len(data.Runs) != 50 {
 		t.Fatalf("bounds exceeded: shapes=%d runs=%d", len(data.Shapes), len(data.Runs))
 	}
 	if data.Shapes[0].ShapeID != many[len(many)-1].ShapeID {
 		t.Fatalf("newest shapes must be kept first, got %s", data.Shapes[0].ShapeID)
 	}
+	assertSnapshotsHaveRuns(t, data)
+}
+
+func assertSnapshotsHaveRuns(t *testing.T, d TrendStoreData) {
+	t.Helper()
 	runs := map[string]bool{}
-	for _, r := range data.Runs {
+	for _, r := range d.Runs {
 		runs[r.RunID] = true
 	}
-	for _, s := range data.Shapes {
-		if s.Workload != nil && !runs[s.Workload.RunID] {
-			t.Fatalf("snapshot without a stored run context: %s", s.Workload.RunID)
+	for _, s := range d.Shapes {
+		for _, w := range s.WorkloadHistory {
+			if !runs[w.RunID] {
+				t.Fatalf("snapshot without a stored run context: %s", w.RunID)
+			}
+		}
+		for _, e := range s.EfficiencyHistory {
+			if !runs[e.RunID] {
+				t.Fatalf("snapshot without a stored run context: %s", e.RunID)
+			}
 		}
 	}
 }
@@ -318,7 +347,7 @@ func TestTrendStorePersistsAcrossRestartWithBoundedRedactedText(t *testing.T) {
 	sh := shape(effSnap(run, 67, 2), wlSnap(run, 100, 5, 0.1))
 	sh.ShapeSummary = strings.Repeat("x", 5000)
 	sh.Efficiency.PlanSignatures = []string{"a", "b", "c", "d", "e", "f"}
-	if err := s.Record(run, []TrendShapeBaseline{sh}); err != nil {
+	if err := s.Record(run, []TrendShapeSnapshot{sh}, DefaultTrendPolicy()); err != nil {
 		t.Fatal(err)
 	}
 	reopened := OpenTrendStore(path)
@@ -327,7 +356,7 @@ func TestTrendStorePersistsAcrossRestartWithBoundedRedactedText(t *testing.T) {
 		t.Fatalf("restart must reload baselines: %+v", reopened.Status())
 	}
 	got := snap.Shapes[0]
-	if len(got.ShapeSummary) > trendMaxText || got.Efficiency == nil || *got.Efficiency.Score != 67 {
+	if len(got.ShapeSummary) > trendMaxText || len(got.EfficiencyHistory) != 1 || *got.EfficiencyHistory[0].Score != 67 {
 		t.Fatalf("persisted baseline: %+v", got)
 	}
 	raw, _ := os.ReadFile(path)
@@ -336,16 +365,16 @@ func TestTrendStorePersistsAcrossRestartWithBoundedRedactedText(t *testing.T) {
 		t.Fatalf("file schema: %v %s", err, file.SchemaVersion)
 	}
 
-	big := shape(effSnap(run, 67, 2), nil)
-	big.Efficiency.PlanSignatures = []string{"a", "b", "c", "d", "e", "f"}
+	big := historyShape(shape(effSnap(run, 67, 2), nil))
+	big.EfficiencyHistory[0].PlanSignatures = []string{"a", "b", "c", "d", "e", "f"}
 	big.ShapeSummary = strings.Repeat("y", 5000)
 	edited, _ := json.Marshal(TrendStoreData{SchemaVersion: TrendStoreSchemaVersion, Runs: []TrendRunContext{run}, Shapes: []TrendShapeBaseline{big}})
 	if err := os.WriteFile(path, edited, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got = OpenTrendStore(path).Snapshot().Shapes[0]
-	if len(got.ShapeSummary) > trendMaxText || len(got.Efficiency.PlanSignatures) > trendMaxPlans {
-		t.Fatalf("hand-edited file must be re-bounded on load: %d %d", len(got.ShapeSummary), len(got.Efficiency.PlanSignatures))
+	if len(got.ShapeSummary) > trendMaxText || len(got.EfficiencyHistory[0].PlanSignatures) > trendMaxPlans {
+		t.Fatalf("hand-edited file must be re-bounded on load: %d %d", len(got.ShapeSummary), len(got.EfficiencyHistory[0].PlanSignatures))
 	}
 
 	if err := reopened.Reset(); err != nil {
@@ -386,10 +415,10 @@ func TestTrendStoreOldCorruptAndInvalidFiles(t *testing.T) {
 				t.Fatalf("moved file must keep its content")
 			}
 			run := trendRun("r1", trendNow)
-			if err := s.Record(run, []TrendShapeBaseline{shape(effSnap(run, 67, 2), nil)}); err != nil || OpenTrendStore(path).Status().Baselines != 1 {
+			if err := s.Record(run, []TrendShapeSnapshot{shape(effSnap(run, 67, 2), nil)}, DefaultTrendPolicy()); err != nil || OpenTrendStore(path).Status().Baselines != 1 {
 				t.Fatalf("store must recover and record: %v", err)
 			}
-			v := BuildTrendView(InsightsReport{Metadata: InsightsMetadata{Status: "ready"}, EfficiencyView: &EfficiencyView{}}, run, TrendStoreData{}, st, trendNow)
+			v := BuildTrendView(InsightsReport{Metadata: InsightsMetadata{Status: "ready"}, EfficiencyView: &EfficiencyView{}}, run, TrendStoreData{}, st, trendNow, viewOpts())
 			if !strings.Contains(strings.Join(v.Limitations, " "), "Baseline store "+tc.status) {
 				t.Fatalf("store problem must be disclosed: %v", v.Limitations)
 			}
@@ -399,11 +428,11 @@ func TestTrendStoreOldCorruptAndInvalidFiles(t *testing.T) {
 	t.Run("invalid entries dropped", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "trend_baselines.json")
 		run := trendRun("r1", trendNow)
-		bad := shape(effSnap(run, 67, 2), nil)
-		bad.Efficiency.RecordedAt = "yesterday"
-		noID := shape(nil, wlSnap(run, 10, 1, 0.1))
+		bad := historyShape(shape(effSnap(run, 67, 2), nil))
+		bad.EfficiencyHistory[0].RecordedAt = "yesterday"
+		noID := historyShape(shape(nil, wlSnap(run, 10, 1, 0.1)))
 		noID.ShapeID = ""
-		good := shape(nil, wlSnap(run, 10, 1, 0.1))
+		good := historyShape(shape(nil, wlSnap(run, 10, 1, 0.1)))
 		good.ShapeID = "shape_good"
 		b, _ := json.Marshal(TrendStoreData{SchemaVersion: TrendStoreSchemaVersion, Runs: []TrendRunContext{run}, Shapes: []TrendShapeBaseline{bad, noID, good}})
 		_ = os.WriteFile(path, b, 0o600)
@@ -424,7 +453,7 @@ func TestTrendStoreOldCorruptAndInvalidFiles(t *testing.T) {
 	t.Run("disabled store records nothing", func(t *testing.T) {
 		s := DisabledTrendStore()
 		run := trendRun("r1", trendNow)
-		if err := s.Record(run, []TrendShapeBaseline{shape(effSnap(run, 67, 2), nil)}); err != nil || s.Status().Baselines != 0 || s.Status().Status != "disabled" {
+		if err := s.Record(run, []TrendShapeSnapshot{shape(effSnap(run, 67, 2), nil)}, DefaultTrendPolicy()); err != nil || s.Status().Baselines != 0 || s.Status().Status != "disabled" {
 			t.Fatalf("disabled store: %+v", s.Status())
 		}
 	})
@@ -436,7 +465,7 @@ func TestBuildTrendViewStates(t *testing.T) {
 	rep := InsightsReport{Metadata: InsightsMetadata{Status: "ready", ShapeIdentityVersion: ShapeIdentityVersion}, EfficiencyView: &EfficiencyView{Rows: []EfficiencyViewRow{{
 		ShapeID: "shape_a", Namespace: "db.c", Operation: "find", Coverage: EffCoverageAssessed, Status: EfficiencyRated, Score: &score, Confidence: "high", OperationCount: 40, AvgMs: 1,
 	}}}}
-	v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "empty"}, trendNow)
+	v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "empty"}, trendNow, viewOpts())
 	if v.Status != TrendNoBaseline || len(v.Rows) != 1 || v.Rows[0].Efficiency.State != TrendNoBaseline || v.Counts["comparability"][TrendMissing] != 1 {
 		t.Fatalf("no baseline view: %+v", v)
 	}
@@ -444,17 +473,35 @@ func TestBuildTrendViewStates(t *testing.T) {
 		t.Fatalf("criteria must be published as heuristics: %+v", v.Criteria)
 	}
 	rep.Metadata.Status = "disabled"
-	if v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "ok"}, trendNow); v.Status != "not_run" || len(v.Rows) != 0 {
+	if v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "ok"}, trendNow, viewOpts()); v.Status != "not_run" || len(v.Rows) != 0 {
 		t.Fatalf("insights not ready: %+v", v)
 	}
-	if v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "disabled"}, trendNow); v.Status != "disabled" {
+	if v := BuildTrendView(rep, run, TrendStoreData{}, TrendStoreStatus{Status: "disabled"}, trendNow, viewOpts()); v.Status != "disabled" {
 		t.Fatalf("disabled: %+v", v)
 	}
 	rep.Metadata.Status = "ready"
-	other := shape(nil, wlSnap(run, 10, 1, 0.1))
+	old := trendRun("r1", trendNow.Add(-time.Hour))
+	other := historyShape(shape(nil, wlSnap(old, 10, 1, 0.1)))
 	other.ShapeID = "shape_gone"
-	v = BuildTrendView(rep, run, TrendStoreData{Shapes: []TrendShapeBaseline{other}}, TrendStoreStatus{Status: "ok"}, trendNow)
+	v = BuildTrendView(rep, run, TrendStoreData{Runs: []TrendRunContext{old}, Shapes: []TrendShapeBaseline{other}}, TrendStoreStatus{Status: "ok"}, trendNow, viewOpts())
 	if !strings.Contains(strings.Join(v.Limitations, " "), "1 baseline shapes were not seen") {
 		t.Fatalf("unseen baselines must be disclosed: %v", v.Limitations)
 	}
+	self := historyShape(shape(nil, wlSnap(run, 10, 1, 0.1)))
+	v = BuildTrendView(rep, run, TrendStoreData{Runs: []TrendRunContext{run}, Shapes: []TrendShapeBaseline{self}}, TrendStoreStatus{Status: "ok"}, trendNow, viewOpts())
+	if v.Status != TrendNoBaseline || len(v.AvailableRuns) != 0 {
+		t.Fatalf("the current run's own snapshots are never a baseline: %s %v", v.Status, v.AvailableRuns)
+	}
+}
+
+// historyShape turns a one-run snapshot into a persisted shape.
+func historyShape(s TrendShapeSnapshot) TrendShapeBaseline {
+	b := TrendShapeBaseline{ShapeID: s.ShapeID, Namespace: s.Namespace, Operation: s.Operation, ShapeSummary: s.ShapeSummary}
+	if s.Efficiency != nil {
+		b.EfficiencyHistory = []TrendEfficiencySnapshot{*s.Efficiency}
+	}
+	if s.Workload != nil {
+		b.WorkloadHistory = []TrendWorkloadSnapshot{*s.Workload}
+	}
+	return b
 }

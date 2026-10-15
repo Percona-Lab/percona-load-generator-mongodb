@@ -108,6 +108,14 @@ type AppConfig struct {
 	InsightsLatencyTargetP95Ms float64 `yaml:"insights_latency_target_p95_ms"`
 	InsightsLatencyTargetP99Ms float64 `yaml:"insights_latency_target_p99_ms"`
 
+	// Trend history. See NormalizeTrendSettings for defaults and bounds.
+	TrendHistoryRuns int `yaml:"trend_history_runs"`
+	// TrendMaxAgeDays is nil when unset (default 30); 0 means never outdated.
+	TrendMaxAgeDays        *int   `yaml:"trend_max_age_days"`
+	TrendBaselineStore     string `yaml:"trend_baseline_store"`
+	TrendDefaultComparison string `yaml:"trend_default_comparison"`
+	TrendRunLabel          string `yaml:"trend_run_label"`
+
 	ShardingMode                     string `yaml:"sharding_mode"`
 	ShardingSkipGenericWithoutConfig bool   `yaml:"sharding_skip_generic_without_config"`
 }
@@ -316,6 +324,7 @@ func applyBaseDefaults(cfg *AppConfig) {
 		}
 	}
 	cfg.ShardingMode = NormalizeShardingMode(cfg.ShardingMode)
+	NormalizeTrendSettings(cfg)
 
 	// Web UI Port
 	if cfg.WebUI.Port <= 0 {
@@ -816,6 +825,26 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 			}
 		}
 	}
+	// --- Trend History Overrides ---
+	if v := os.Getenv("PLGM_TREND_HISTORY_RUNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= MinTrendHistoryRuns {
+			cfg.TrendHistoryRuns = n
+		}
+	}
+	if v := os.Getenv("PLGM_TREND_MAX_AGE_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.TrendMaxAgeDays = &n
+		}
+	}
+	if v := os.Getenv("PLGM_TREND_BASELINE_STORE"); v != "" {
+		cfg.TrendBaselineStore = v
+	}
+	if v := os.Getenv("PLGM_TREND_DEFAULT_COMPARISON"); v != "" {
+		cfg.TrendDefaultComparison = v
+	}
+	if v := os.Getenv("PLGM_TREND_RUN_LABEL"); v != "" {
+		cfg.TrendRunLabel = v
+	}
 	if v := os.Getenv("PLGM_SHARDING_MODE"); v != "" {
 		cfg.ShardingMode = v
 	}
@@ -893,6 +922,71 @@ func NormalizeExplainEfficiencyMode(mode string) string {
 		return ExplainEfficiencyModeOff
 	}
 	return ExplainEfficiencyModeDefault
+}
+
+const (
+	DefaultTrendHistoryRuns   = 5
+	MinTrendHistoryRuns       = 1
+	MaxTrendHistoryRuns       = 50
+	DefaultTrendMaxAgeDays    = 30
+	MaxTrendMaxAgeDays        = 3650
+	TrendComparisonPrevious   = "previous"
+	TrendComparisonPinned     = "pinned"
+	MaxTrendRunLabelBytes     = 64
+	MaxTrendBaselineStorePath = 1024
+)
+
+// NormalizeTrendSettings applies the trend history defaults and bounds: an
+// unset or non-positive run count uses the default and a larger one is capped;
+// a negative or unset age uses the default (0 = never outdated); an unknown
+// comparison is "previous".
+func NormalizeTrendSettings(cfg *AppConfig) {
+	switch {
+	case cfg.TrendHistoryRuns < MinTrendHistoryRuns:
+		cfg.TrendHistoryRuns = DefaultTrendHistoryRuns
+	case cfg.TrendHistoryRuns > MaxTrendHistoryRuns:
+		cfg.TrendHistoryRuns = MaxTrendHistoryRuns
+	}
+	days := DefaultTrendMaxAgeDays
+	if cfg.TrendMaxAgeDays != nil && *cfg.TrendMaxAgeDays >= 0 {
+		days = *cfg.TrendMaxAgeDays
+		if days > MaxTrendMaxAgeDays {
+			days = MaxTrendMaxAgeDays
+		}
+	}
+	cfg.TrendMaxAgeDays = &days
+	cfg.TrendDefaultComparison = NormalizeTrendComparison(cfg.TrendDefaultComparison)
+	cfg.TrendRunLabel = SanitizeTrendRunLabel(cfg.TrendRunLabel)
+	cfg.TrendBaselineStore = strings.TrimSpace(cfg.TrendBaselineStore)
+	if len(cfg.TrendBaselineStore) > MaxTrendBaselineStorePath || strings.ContainsAny(cfg.TrendBaselineStore, "\x00\r\n") {
+		cfg.TrendBaselineStore = ""
+	}
+}
+
+func NormalizeTrendComparison(mode string) string {
+	if strings.ToLower(strings.TrimSpace(mode)) == TrendComparisonPinned {
+		return TrendComparisonPinned
+	}
+	return TrendComparisonPrevious
+}
+
+// SanitizeTrendRunLabel trims a run label, drops control characters, and
+// bounds it to MaxTrendRunLabelBytes without splitting a UTF-8 character.
+func SanitizeTrendRunLabel(label string) string {
+	label = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, strings.TrimSpace(label))
+	if len(label) <= MaxTrendRunLabelBytes {
+		return strings.TrimSpace(label)
+	}
+	cut := MaxTrendRunLabelBytes
+	for cut > 0 && (label[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	return strings.TrimSpace(label[:cut])
 }
 
 func NormalizeShardingMode(mode string) string {

@@ -7,7 +7,8 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pageHTML = readFileSync(join(here, '..', 'static', 'index.html'), 'utf8');
-export const fixture = name => JSON.parse(readFileSync(join(here, '..', 'testdata', 'ui', `insights_${name}.json`), 'utf8'));
+export const readFixture = file => JSON.parse(readFileSync(join(here, '..', 'testdata', 'ui', file), 'utf8'));
+export const fixture = name => readFixture(`insights_${name}.json`);
 
 // routes maps a URL prefix to async (url, init) => { status, body }.
 export async function loadPage(insights, routes = {}) {

@@ -1679,6 +1679,7 @@
         .insight-badge.trend-improved { background: #dcfce7; border-color: #86efac; color: #166534; }
         .insight-badge.trend-regressed { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
         .insight-badge.trend-increased, .insight-badge.trend-decreased { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+        #trendMatrixTable .trend-current { background: #eff6ff; border-left: 3px solid #3b82f6; }
         .eff-table tr.trend-detail td { background: var(--bg); }
         .eff-table td.num, .eff-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
         .eff-table tr.selected td { background: #eef2ff; }
@@ -2218,10 +2219,25 @@
                                     <option value="not_comparable">Not comparable or no baseline</option>
                                 </select>
                             </label>
+                            <label for="trendCompareSelect">Compare with
+                                <select id="trendCompareSelect" onchange="compareTrendBaseline(this.value)"></select>
+                            </label>
                             <button type="button" id="trendResetBtn" class="insights-explore-btn" onclick="resetTrendBaselines()">Reset baselines</button>
                         </div>
                         <div id="trendResetStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                        <div id="trendCompareStatus" class="insights-row-subtitle" aria-live="polite"></div>
                         <div id="trendTable"></div>
+                        <details id="trendMatrixPanel" style="margin-top:12px;">
+                            <summary>Compare several runs (matrix)</summary>
+                            <div class="eff-controls">
+                                <label for="trendMatrixRuns">Runs (up to 8)
+                                    <select id="trendMatrixRuns" multiple size="4"></select>
+                                </label>
+                                <button type="button" id="trendMatrixBtn" class="insights-explore-btn" onclick="loadTrendMatrix()">Show matrix</button>
+                            </div>
+                            <div id="trendMatrixStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                            <div id="trendMatrix"></div>
+                        </details>
                         <div id="trendCriteria" class="insights-row-subtitle"></div>
                         <div id="trendLimitations" class="insights-row-subtitle"></div>
                     </div>
@@ -2349,6 +2365,7 @@
                             <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-adv', this)">Metrics & Insights</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-query-analysis', this)">Query Analysis (Explain)</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-trends', this)">Trends &amp; History</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-raw', this)">Expert / Debug</button>
                         </div>
                     </div>
@@ -2880,6 +2897,60 @@
                 </div>
             </div>
 
+            <div id="tab-trends" class="tab-content">
+                <div class="adv-layout">
+                    <section class="settings-card">
+                        <h4>Trend History</h4>
+                        <div class="settings-help">Each finished run stores one redacted snapshot per query shape (no query text, literals, or URI). Results are compared on the <strong>Trends</strong> view of Query &amp; Index Analysis. These settings apply to the next run; config.yaml keys and PLGM_* environment variables set the defaults (environment over YAML over built-in default).</div>
+                        <div class="grid-3" style="gap:12px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="trendHistoryRuns">Runs to keep</label>
+                                <input type="number" id="trendHistoryRuns" name="trend_history_runs" min="1" max="50" step="1" value="5">
+                                <div class="settings-note">Default 5, 1–50. Unpinned runs only; the oldest are pruned first. <code>trend_history_runs</code> / <code>PLGM_TREND_HISTORY_RUNS</code></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="trendMaxAgeDays">Age expiry (days)</label>
+                                <input type="number" id="trendMaxAgeDays" name="trend_max_age_days" min="0" max="3650" step="1" value="30">
+                                <div class="settings-note">Default 30; 0 = never. Older unpinned runs are kept but not compared. <code>trend_max_age_days</code> / <code>PLGM_TREND_MAX_AGE_DAYS</code></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="trendDefaultComparison">Default comparison</label>
+                                <select id="trendDefaultComparison" name="trend_default_comparison">
+                                    <option value="previous" selected>Previous compatible run (default)</option>
+                                    <option value="pinned">Newest pinned reference run</option>
+                                </select>
+                                <div class="settings-note"><code>trend_default_comparison</code> / <code>PLGM_TREND_DEFAULT_COMPARISON</code></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="trendRunLabel">Run label</label>
+                                <input type="text" id="trendRunLabel" name="trend_run_label" maxlength="64" placeholder="mongo-&lt;server version&gt;">
+                                <div class="settings-note">Default: <code>mongo-&lt;server version&gt;</code>, or <code>run-&lt;UTC time&gt;</code> when the version is unknown. Up to 64 bytes; editable later. <code>trend_run_label</code> / <code>PLGM_TREND_RUN_LABEL</code></div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="trendBaselineStore">Store path</label>
+                                <input type="text" id="trendBaselineStore" name="trend_baseline_store" maxlength="1024" placeholder="default location">
+                                <div class="settings-note">Empty = default (<code>&lt;user config dir&gt;/plgm/trend_baselines.json</code>); <code>off</code> disables history and comparison. Instances may share one file. <code>trend_baseline_store</code> / <code>PLGM_TREND_BASELINE_STORE</code></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="settings-card">
+                        <h4>Stored Runs</h4>
+                        <div id="trendHistoryStore" class="settings-help">Open this tab to load the stored runs.</div>
+                        <div class="eff-controls">
+                            <button type="button" id="trendHistoryRefreshBtn" class="insights-explore-btn" onclick="loadTrendHistory()">Refresh</button>
+                            <button type="button" id="trendExportSelectedBtn" class="insights-explore-btn" onclick="exportTrendRuns(true)">Export selected</button>
+                            <button type="button" id="trendExportAllBtn" class="insights-explore-btn" onclick="exportTrendRuns(false)">Export all</button>
+                            <label for="trendImportFile">Import <input type="file" id="trendImportFile" accept=".json,application/json"></label>
+                            <button type="button" id="trendImportBtn" class="insights-explore-btn" onclick="importTrendRuns()">Import file</button>
+                            <button type="button" id="trendHistoryResetBtn" class="insights-explore-btn" onclick="resetTrendHistory()">Reset baselines</button>
+                        </div>
+                        <div id="trendHistoryStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                        <div id="trendHistoryRuns"></div>
+                    </section>
+                </div>
+            </div>
+
             <div id="tab-raw" class="tab-content">
                 <section class="settings-card">
                     <h4>Debug / Experimental</h4>
@@ -3062,6 +3133,7 @@
             if (activeBtn) activeBtn.classList.add('active');
             const form = document.getElementById('configForm');
             if (form && form.getBoundingClientRect().top < 0) form.scrollIntoView({ block: 'start' });
+            if (tabId === 'tab-trends') loadTrendHistory();
         }
 
         // --- Live dashboard tabs ---
@@ -3742,6 +3814,12 @@
             if (explainTopN < 1 || explainMaxTime < 100 || explainWorkers < 1 || explainRetries < 0 || explainBackoff < 0) {
                 showConfigInlineError('Explain settings are invalid. Check top-N, max time, workers, retries, and backoff values.');
                 showTab('tab-query-analysis');
+                return false;
+            }
+            const trendErr = validateTrendSettings();
+            if (trendErr) {
+                showConfigInlineError(trendErr);
+                showTab('tab-trends');
                 return false;
             }
             const shardingMode = (document.querySelector('[name="sharding_mode"]')?.value || 'auto').trim();
@@ -4480,6 +4558,11 @@
                 document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
                 document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
                 document.querySelector('[name="insights_explain_backoff_ms"]').value = (cfg.InsightsExplainBackoffMS !== undefined) ? cfg.InsightsExplainBackoffMS : 150;
+                document.querySelector('[name="trend_history_runs"]').value = cfg.TrendHistoryRuns || 5;
+                document.querySelector('[name="trend_max_age_days"]').value = (cfg.TrendMaxAgeDays !== undefined && cfg.TrendMaxAgeDays !== null) ? cfg.TrendMaxAgeDays : 30;
+                document.querySelector('[name="trend_default_comparison"]').value = cfg.TrendDefaultComparison === 'pinned' ? 'pinned' : 'previous';
+                document.querySelector('[name="trend_run_label"]').value = cfg.TrendRunLabel || '';
+                document.querySelector('[name="trend_baseline_store"]').value = cfg.TrendBaselineStore || '';
                 document.querySelector('[name="sharding_mode"]').value = cfg.ShardingMode || 'auto';
                 document.getElementById('shardSkipNoConfig').checked = (cfg.ShardingSkipGenericWithoutConfig !== undefined) ? !!cfg.ShardingSkipGenericWithoutConfig : true;
 
@@ -5233,7 +5316,7 @@
             renderRecommendations();
             efficiencyState = { sort: 'efficiency', band: 'all', latency: 'all', openShape: null };
             renderEfficiencyView();
-            trendState = { filter: 'all', resetArmed: false, openShape: null };
+            trendState = newTrendState();
             renderTrendView();
 
             renderInsightsRows('insightsPerIteration', (rep.per_iteration || []).slice(0, 20), it =>
@@ -5611,7 +5694,10 @@
             };
         }
 
-        let trendState = { filter: 'all', resetArmed: false, openShape: null };
+        // override is a view fetched for another baseline; matrix is the last
+        // multi-run comparison.
+        const newTrendState = () => ({ filter: 'all', resetArmed: false, openShape: null, compare: 'default', override: null, matrix: null });
+        let trendState = newTrendState();
         const TREND_STATE_TEXT = {
             improved: 'improved', regressed: 'regressed', increased: 'larger share', decreased: 'smaller share',
             no_material_change: 'no material change', insufficient_evidence: 'insufficient evidence',
@@ -5619,8 +5705,21 @@
         };
         const TREND_LABELED = ['improved', 'regressed', 'increased', 'decreased'];
 
-        function trendView() {
+        function runTrendView() {
             return (finalInsightsData || {}).trends || null;
+        }
+
+        function trendView() {
+            return trendState.override || runTrendView();
+        }
+
+        function trendRunText(r) {
+            if (!r) return '';
+            const bits = [r.label || r.run_id, r.recorded_at || ''];
+            if (r.pinned) bits.push('pinned');
+            if (r.source) bits.push(`from ${r.source}`);
+            if (r.outdated) bits.push('outdated');
+            return bits.filter(Boolean).join(' · ');
         }
 
         function trendStates(r) {
@@ -5653,8 +5752,9 @@
         function trendBaselineAgeText(b) {
             if (!b) return '';
             const parts = [];
-            if (b.efficiency_age) parts.push(`efficiency ${b.efficiency_age}`);
-            if (b.workload_age) parts.push(`latency/impact ${b.workload_age}`);
+            const of = l => (l ? ` (${l})` : '');
+            if (b.efficiency_age) parts.push(`efficiency ${b.efficiency_age}${of(b.efficiency_run_label)}`);
+            if (b.workload_age) parts.push(`latency/impact ${b.workload_age}${of(b.workload_run_label)}`);
             return parts.join(', ');
         }
 
@@ -5699,6 +5799,8 @@
             if (!noteEl || !sumEl || !tableEl || !critEl || !limEl) return;
             const filterEl = document.getElementById('trendStateFilter');
             if (filterEl) filterEl.value = trendState.filter;
+            renderTrendRunPickers();
+            renderTrendMatrix();
             if (!v) {
                 noteEl.textContent = '';
                 sumEl.textContent = '';
@@ -5710,8 +5812,12 @@
             noteEl.textContent = v.causation_note || '';
             const st = v.store || {};
             const counts = v.counts || {};
+            const cmp = v.comparison || {};
+            const cur = v.current_run || {};
             const lines = [
                 `Status: ${v.status}${v.reason ? ` (${v.reason})` : ''} | ${v.version} | baseline store: ${st.status || 'unknown'}${st.reason ? ` (${st.reason})` : ''}, ${Number(st.baselines || 0)} of max ${Number(st.max_baselines || 0)} shape baselines${st.persistent ? '' : ', not persistent'}`,
+                cur.run_id ? `Current run: ${cur.label || cur.run_id}` : '',
+                cmp.mode ? `Compared with: ${cmp.mode === 'previous' ? 'the previous compatible run of each shape' : `${cmp.mode === 'pinned' ? 'pinned ' : ''}run ${cmp.baseline_label || cmp.baseline_run_id}`}${cmp.note && cmp.mode !== 'previous' ? ` (${cmp.note})` : ''}${cmp.requested_mode && cmp.requested_mode !== cmp.mode ? ` (${cmp.note})` : ''}` : '',
                 `Oldest / newest baseline: ${st.oldest_recorded_at || 'none'} / ${st.newest_recorded_at || 'none'}`,
                 `Comparability: ${trendCountsText(counts.comparability)}`,
                 `Scan efficiency: ${trendCountsText(counts.efficiency)} | Latency: ${trendCountsText(counts.latency)} | Impact: ${trendCountsText(counts.impact)}`,
@@ -5789,12 +5895,309 @@
 
         function currentTrendViewState() {
             const v = trendView();
+            const cmp = (v && v.comparison) || {};
             return {
                 version: v ? v.version : null,
                 filter: trendState.filter,
+                comparison: cmp.mode || null,
+                baseline_run_id: cmp.baseline_run_id || null,
+                matrix_run_ids: trendState.matrix ? (trendState.matrix.columns || []).slice(1).map(c => c.run_id) : [],
                 visible_shape_ids: trendVisibleRows().map(r => r.shape_id),
                 total_rows: v ? (v.rows || []).length : 0
             };
+        }
+
+        function renderTrendRunPickers() {
+            const base = runTrendView();
+            const runs = (base && base.available_runs) || [];
+            const sel = document.getElementById('trendCompareSelect');
+            if (sel) {
+                const opts = [['default', 'Default setting'], ['previous', 'Previous compatible run'], ['pinned', 'Newest pinned run']]
+                    .concat(runs.map(r => [r.run_id, trendRunText(r)]));
+                sel.innerHTML = opts.map(([v, l]) => `<option value="${escHtml(v)}">${escHtml(l)}</option>`).join('');
+                sel.value = trendState.compare;
+                sel.disabled = runs.length === 0;
+            }
+            const msel = document.getElementById('trendMatrixRuns');
+            if (msel) {
+                const chosen = new Set(trendState.matrix ? (trendState.matrix.columns || []).slice(1).map(c => c.run_id) : []);
+                msel.innerHTML = runs.map(r => `<option value="${escHtml(r.run_id)}"${chosen.has(r.run_id) ? ' selected' : ''}>${escHtml(trendRunText(r))}</option>`).join('');
+                msel.disabled = runs.length === 0;
+            }
+            const btn = document.getElementById('trendMatrixBtn');
+            if (btn) btn.disabled = runs.length === 0;
+        }
+
+        async function compareTrendBaseline(value) {
+            const status = document.getElementById('trendCompareStatus');
+            if (value === 'default') {
+                trendState.compare = 'default';
+                trendState.override = null;
+                if (status) status.textContent = '';
+                renderTrendView();
+                return;
+            }
+            try {
+                const res = await fetch(`/api/trends/compare?baseline=${encodeURIComponent(value)}`);
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                trendState.compare = value;
+                trendState.override = body.view;
+                trendState.openShape = null;
+                if (status) status.textContent = '';
+            } catch (e) {
+                if (status) status.textContent = `Comparison failed: ${e.message}. The table still shows the previous comparison.`;
+            }
+            renderTrendView();
+        }
+
+        async function loadTrendMatrix() {
+            const msel = document.getElementById('trendMatrixRuns');
+            const status = document.getElementById('trendMatrixStatus');
+            const ids = msel ? [...msel.options].filter(o => o.selected).map(o => o.value) : [];
+            if (ids.length === 0 || ids.length > 8) {
+                if (status) status.textContent = 'Choose 1 to 8 stored runs.';
+                return;
+            }
+            try {
+                const res = await fetch(`/api/trends/compare?runs=${ids.map(encodeURIComponent).join(',')}`);
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                trendState.matrix = body.matrix;
+                if (status) status.textContent = '';
+            } catch (e) {
+                if (status) status.textContent = `Matrix failed: ${e.message}`;
+            }
+            renderTrendView();
+        }
+
+        function trendMatrixCellHTML(c, current) {
+            if (!c.recorded) return `<span class="insights-row-subtitle">not recorded</span>${(c.reasons || []).length ? `<br><span class="insights-row-subtitle">${escHtml(c.reasons.join('; '))}</span>` : ''}`;
+            const num = (x, d, unit) => (x === undefined || x === null ? '–' : `${Number(x).toFixed(d)}${unit}`);
+            const score = c.score === undefined || c.score === null ? '–' : `${c.score_is_upper_bound ? '≤' : ''}${c.score}`;
+            const state = s => (current || !s ? '' : ` <span class="insight-badge trend-${escHtml(s)}">${escHtml(TREND_STATE_TEXT[s] || s)}</span>`);
+            const lines = [
+                `<div class="trend-m-eff">Efficiency ${escHtml(score)}${state(c.efficiency)}</div>`,
+                `<div class="trend-m-lat">Avg ${escHtml(num(c.avg_ms, 2, ' ms'))} · p95 ${escHtml(num(c.sample_p95_ms, 2, ' ms'))}${state(c.latency)}</div>`,
+                `<div class="trend-m-imp">Impact ${escHtml(c.impact_share === undefined || c.impact_share === null ? '–' : `${(Number(c.impact_share) * 100).toFixed(1)}%`)}${state(c.impact)}</div>`
+            ];
+            if (!current && c.comparability && c.comparability !== 'comparable') {
+                lines.push(`<div class="trend-m-gate insights-row-subtitle">${escHtml(c.comparability)}${(c.reasons || []).length ? `: ${escHtml(c.reasons.join('; '))}` : ''}</div>`);
+            }
+            return lines.join('');
+        }
+
+        function renderTrendMatrix() {
+            const el = document.getElementById('trendMatrix');
+            if (!el) return;
+            const m = trendState.matrix;
+            if (!m) { el.innerHTML = ''; return; }
+            const cols = m.columns || [];
+            const isCur = c => c.run_id === m.current_run_id;
+            const head = cols.map(c => `<th scope="col" data-run-id="${escHtml(c.run_id)}"${isCur(c) ? ' class="trend-current"' : ''}>${escHtml(c.label || c.run_id)}${isCur(c) ? ' (current)' : ''}<br><span class="insights-row-subtitle">${escHtml(c.recorded_at || '')}${c.pinned ? ' · pinned' : ''}${c.source ? ` · from ${escHtml(c.source)}` : ''}</span></th>`).join('');
+            const body = (m.rows || []).map(r => `<tr data-shape-id="${escHtml(r.shape_id)}"><td><span class="eff-ns">${escHtml(r.namespace || '')}</span><br>${escHtml(trimText(r.shape_summary || '', 80))}</td>${(r.cells || []).map(c => `<td data-run-id="${escHtml(c.run_id)}"${c.current ? ' class="trend-current"' : ''}>${trendMatrixCellHTML(c, c.current)}</td>`).join('')}</tr>`).join('');
+            el.innerHTML = `<div class="insights-row-subtitle">${escHtml(m.note || '')}</div><table class="eff-table" id="trendMatrixTable">
+                <caption>${(m.rows || []).length} shapes × ${cols.length} runs. Each earlier run is compared with the current run on its own; efficiency, latency, and impact stay separate.</caption>
+                <thead><tr><th scope="col">Shape</th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+        }
+
+        // --- Trends & History settings tab ---
+        function utf8Bytes(s) {
+            let n = 0;
+            for (const ch of s) {
+                const c = ch.codePointAt(0);
+                n += c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+            }
+            return n;
+        }
+
+        let trendHistoryState = { data: null, deleteArmed: null, resetArmed: false };
+
+        function setTrendHistoryStatus(msg) {
+            const el = document.getElementById('trendHistoryStatus');
+            if (el) el.textContent = msg;
+        }
+
+        async function loadTrendHistory() {
+            try {
+                const res = await fetch('/api/trend-baselines');
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                trendHistoryState.data = body;
+            } catch (e) {
+                setTrendHistoryStatus(`Could not load stored runs: ${e.message}`);
+            }
+            renderTrendHistory();
+        }
+
+        function renderTrendHistory() {
+            const d = trendHistoryState.data;
+            const storeEl = document.getElementById('trendHistoryStore');
+            const listEl = document.getElementById('trendHistoryRuns');
+            if (!storeEl || !listEl || !d) return;
+            const st = d.store || {};
+            const set = d.settings || {};
+            storeEl.textContent = set.disabled
+                ? `History is off (${st.reason || 'trend_baseline_store=off'}). Nothing is stored or compared.`
+                : `Store: ${set.store_path || st.path || 'unknown'} (${st.status || 'unknown'}${st.reason ? `: ${st.reason}` : ''}). ${Number(st.runs || 0)} runs, ${Number(st.pinned_runs || 0)} of max ${Number(st.max_pinned_runs || 0)} pinned. Keeping ${Number(set.history_runs || 0)} unpinned runs; age expiry ${Number(set.max_age_days) === 0 ? 'off' : `${Number(set.max_age_days)} days`}.`;
+            const runs = d.runs || [];
+            if (runs.length === 0) {
+                listEl.innerHTML = `<div class="insights-row-subtitle" id="trendHistoryEmpty">No stored runs.</div>`;
+                return;
+            }
+            const rows = runs.map(r => {
+                const id = escHtml(r.run_id);
+                const armed = trendHistoryState.deleteArmed === r.run_id;
+                return `<tr data-run-id="${id}">
+                    <td><input type="checkbox" class="trend-run-select" value="${id}" aria-label="Select ${escHtml(r.label || r.run_id)}"></td>
+                    <td><input type="text" class="trend-run-label" maxlength="64" value="${escHtml(r.label || '')}" aria-label="Label"> <button type="button" class="insights-explore-btn trend-run-rename" onclick="renameTrendRun('${id}', this)">Rename</button></td>
+                    <td>${escHtml((r.server_versions || []).join(', ') || 'unknown')}</td>
+                    <td>${escHtml(r.recorded_at || '')}<br><span class="insights-row-subtitle">${escHtml(r.age || '')}${r.outdated ? ' · outdated' : ''}</span></td>
+                    <td>${r.source ? `${escHtml(r.source)}<br><span class="insights-row-subtitle">imported ${escHtml(r.imported_at || '')}</span>` : 'this machine'}</td>
+                    <td><button type="button" class="insights-explore-btn trend-run-pin" aria-pressed="${r.pinned ? 'true' : 'false'}" onclick="toggleTrendPin('${id}', ${r.pinned ? 'false' : 'true'})">${r.pinned ? 'Pinned' : 'Pin'}</button></td>
+                    <td><button type="button" class="insights-explore-btn trend-run-delete" onclick="deleteTrendRun('${id}')">${armed ? 'Confirm delete' : 'Delete'}</button></td>
+                </tr>`;
+            }).join('');
+            listEl.innerHTML = `<table class="eff-table" id="trendRunsTable">
+                <caption>${runs.length} stored runs, newest first. Pinned runs never expire and do not count toward the runs to keep.</caption>
+                <thead><tr><th scope="col"><span style="position:absolute;left:-9999px;">Select</span></th><th scope="col">Label</th><th scope="col">Server</th><th scope="col">Recorded</th><th scope="col">Source</th><th scope="col">Pinned</th><th scope="col"><span style="position:absolute;left:-9999px;">Delete</span></th></tr></thead>
+                <tbody>${rows}</tbody></table>`;
+        }
+
+        async function trendRunRequest(id, init, okMsg) {
+            try {
+                const res = await fetch(`/api/trend-baselines/runs/${encodeURIComponent(id)}`, init);
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                setTrendHistoryStatus(okMsg(body));
+                await loadTrendHistory();
+                return true;
+            } catch (e) {
+                setTrendHistoryStatus(`Change failed: ${e.message}. The stored run was not changed.`);
+                return false;
+            }
+        }
+
+        async function renameTrendRun(id, btn) {
+            const input = btn ? btn.parentElement.querySelector('.trend-run-label') : null;
+            const label = input ? input.value.trim() : '';
+            if (utf8Bytes(label) > 64) {
+                setTrendHistoryStatus('A label is at most 64 bytes.');
+                return;
+            }
+            await trendRunRequest(id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) },
+                b => `Renamed to "${(b.run || {}).label || ''}"${label ? '' : ' (default label)'}.`);
+        }
+
+        async function toggleTrendPin(id, pinned) {
+            await trendRunRequest(id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned }) },
+                b => (pinned ? `Pinned "${(b.run || {}).label || id}"; it never expires and is never pruned.` : `Unpinned "${(b.run || {}).label || id}"; it counts toward the runs to keep from the next run.`));
+        }
+
+        async function deleteTrendRun(id) {
+            if (trendHistoryState.deleteArmed !== id) {
+                trendHistoryState.deleteArmed = id;
+                setTrendHistoryStatus('Click Confirm delete to remove this run and its snapshots. This cannot be undone.');
+                renderTrendHistory();
+                return;
+            }
+            trendHistoryState.deleteArmed = null;
+            await trendRunRequest(id, { method: 'DELETE' }, () => 'Run deleted.');
+        }
+
+        function selectedTrendRunIds() {
+            return [...document.querySelectorAll('#trendRunsTable .trend-run-select')].filter(b => b.checked).map(b => b.value);
+        }
+
+        async function exportTrendRuns(selectedOnly) {
+            const ids = selectedOnly ? selectedTrendRunIds() : [];
+            if (selectedOnly && ids.length === 0) {
+                setTrendHistoryStatus('Select at least one run to export.');
+                return;
+            }
+            try {
+                const res = await fetch(`/api/trend-baselines/export${ids.length ? `?runs=${ids.map(encodeURIComponent).join(',')}` : ''}`);
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                const a = document.createElement('a');
+                a.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(body, null, 2)));
+                a.setAttribute('download', `plgm-trend-runs-${(body.exported_at || '').replace(/[^0-9TZ]/g, '')}.json`);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTrendHistoryStatus(`Exported ${(body.runs || []).length} runs (redacted: no query text, literals, or URI).`);
+            } catch (e) {
+                setTrendHistoryStatus(`Export failed: ${e.message}`);
+            }
+        }
+
+        function trendImportSummary(r) {
+            const list = xs => (xs || []).map(x => `${x.label || x.run_id}${x.reason ? ` (${x.reason})` : ''}`).join('; ');
+            const parts = [`Imported from ${r.source || 'import'}: ${(r.added || []).length} added, ${(r.skipped || []).length} skipped, ${(r.not_kept || []).length} not kept.`];
+            if ((r.skipped || []).length) parts.push(`Skipped: ${list(r.skipped)}.`);
+            if ((r.not_kept || []).length) parts.push(`Not kept: ${list(r.not_kept)}.`);
+            (r.warnings || []).forEach(w => parts.push(`⚠ ${w}`));
+            return parts.join(' ');
+        }
+
+        async function importTrendRuns() {
+            const input = document.getElementById('trendImportFile');
+            const file = input && input.files && input.files[0];
+            if (!file) {
+                setTrendHistoryStatus('Choose a trend export file (.json) to import.');
+                return;
+            }
+            const max = Number((((trendHistoryState.data || {}).settings || {}).limits || {}).max_file_bytes || 0);
+            if (max && file.size > max) {
+                setTrendHistoryStatus(`Import rejected: the file is larger than the limit of ${max} bytes.`);
+                return;
+            }
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const res = await fetch('/api/trend-baselines/import', { method: 'POST', body: fd });
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                await loadTrendHistory();
+                setTrendHistoryStatus(trendImportSummary(body));
+            } catch (e) {
+                setTrendHistoryStatus(`Import failed: ${e.message}. Nothing was imported.`);
+            }
+        }
+
+        async function resetTrendHistory() {
+            const btn = document.getElementById('trendHistoryResetBtn');
+            if (!trendHistoryState.resetArmed) {
+                trendHistoryState.resetArmed = true;
+                if (btn) btn.textContent = 'Confirm: delete all stored baselines';
+                setTrendHistoryStatus('Click again to delete every stored run, including pinned and imported runs. This cannot be undone.');
+                return;
+            }
+            trendHistoryState.resetArmed = false;
+            if (btn) btn.textContent = 'Reset baselines';
+            try {
+                const res = await fetch('/api/trend-baselines', { method: 'DELETE' });
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                trendHistoryState.data = body;
+                renderTrendHistory();
+                setTrendHistoryStatus('All stored runs were deleted.');
+            } catch (e) {
+                setTrendHistoryStatus(`Reset failed: ${e.message}. Stored baselines were not changed.`);
+            }
+        }
+
+        function validateTrendSettings() {
+            const val = name => (document.querySelector(`[name="${name}"]`)?.value || '').trim();
+            const whole = (v, min, max) => /^\d+$/.test(v) && Number(v) >= min && Number(v) <= max;
+            const runs = val('trend_history_runs');
+            if (runs !== '' && !whole(runs, 1, 50)) return 'Runs to keep must be a whole number from 1 to 50.';
+            const age = val('trend_max_age_days');
+            if (age !== '' && !whole(age, 0, 3650)) return 'Age expiry must be a whole number of days from 0 (never) to 3650.';
+            if (utf8Bytes(val('trend_run_label')) > 64) return 'Run label must be at most 64 bytes.';
+            const store = document.querySelector('[name="trend_baseline_store"]')?.value || '';
+            if (store.length > 1024 || /[\r\n]/.test(store)) return 'Store path must be one line of at most 1024 characters, empty for the default, or off.';
+            return '';
         }
 
         function renderImpactSection(impact) {

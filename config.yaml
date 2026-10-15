@@ -98,6 +98,22 @@ insights_explain_backoff_ms: 150
 # insights_latency_target_p99_ms: 0
 
 # ==============================================================================
+# Trend History (Trends view; see README "Trend history")
+# ==============================================================================
+# Unpinned runs to keep per store (1-50). Pinned runs (max 10) are extra.
+trend_history_runs: 5
+# Unpinned runs older than this are not compared (0 = never; max 3650).
+trend_max_age_days: 30
+# Store file; empty = <user config dir>/plgm/trend_baselines.json, "off" disables.
+# Several instances may share one file.
+# trend_baseline_store: ""
+# Baseline for each shape: "previous" (previous compatible run) or "pinned".
+trend_default_comparison: "previous"
+# Label for runs started with this config; empty = mongo-<server version>,
+# or run-<UTC time> when the version is unknown. At most 64 bytes.
+# trend_run_label: ""
+
+# ==============================================================================
 # Sharding Strategy
 # ==============================================================================
 # Controls how generic sharding setup is applied per collection.

@@ -10,12 +10,14 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 )
 
-// Trend comparisons (tc-1) compare this run with persisted per-shape baseline
-// summaries. Efficiency, latency, and workload impact are compared separately;
-// every threshold below is a PLGM heuristic, not a significance test.
+// Trend comparisons (tc-2) compare this run with persisted per-shape snapshots
+// of earlier runs. Efficiency, latency, and workload impact are compared
+// separately; every threshold below is a PLGM heuristic, not a significance test.
 const (
-	TrendVersion            = "tc-1"
-	TrendStoreSchemaVersion = "tb-1"
+	TrendVersion             = "tc-2"
+	TrendStoreSchemaVersion  = "tb-2"
+	trendLegacySchemaVersion = "tb-1"
+	TrendExportFormat        = "plgm-trend-export"
 
 	TrendImproved         = "improved"
 	TrendRegressed        = "regressed"
@@ -44,6 +46,11 @@ const (
 	TrendWorkloadCountRelative     = 0.25
 	TrendMaxShapeBaselines         = 500
 	TrendMaxRuns                   = 64
+	TrendMaxPinnedRuns             = 10
+	TrendMaxMatrixRuns             = 8
+	TrendCompareRun                = "run"
+	trendMaxRunID                  = 80
+	trendMaxSource                 = 128
 	trendMaxText                   = 256
 	trendMaxPlans                  = 4
 	trendMaxIndexesUsed            = 8
@@ -51,7 +58,7 @@ const (
 	trendMaxServerVersions         = 4
 	trendFutureTolerance           = 5 * time.Minute
 	trendCriteriaNote              = "These thresholds are PLGM heuristics set on synthetic fixtures. They are not statistical significance tests and have not been calibrated against real customer workloads."
-	trendMethodNote                = "Each tracked shape is compared with its persisted baseline from earlier runs, matched by shape id and namespace. Scan efficiency score, latency (full-run average), and workload impact (share of observed operation time) are compared separately and are never combined. A label is given only when the baseline is compatible (same shape identity and score version, not outdated) and both runs meet the evidence minimums; otherwise the state says why there is no label."
+	trendMethodNote                = "Each tracked shape is compared with its stored snapshot from an earlier run, matched by shape id and namespace. By default the baseline is the previous compatible run: for each shape and metric, the newest earlier snapshot that passes the compatibility gates (efficiency prefers assessed evidence). A chosen run or pinned reference run is used for every shape instead. Scan efficiency score, latency (full-run average), and workload impact (share of observed operation time) are compared separately and are never combined. A label is given only when the baseline is compatible (same shape identity and score version, not outdated) and both runs meet the evidence minimums; otherwise the state says why there is no label."
 	trendCausationNote             = "Annotations list what changed between the baseline and this run (plans, indexes, server, sampling, workload). They are not evidence of cause: data distribution, cache state, concurrent load, or any annotated change can move these metrics, and PLGM does not attribute a change to any of them."
 	trendEvidenceNote              = "Operation counts and average latency cover every completed operation of the run. p95 uses retained latency samples only. Efficiency uses the distinct explained representative commands (at most 2 per shape); a large operation count does not add explain evidence."
 	trendServerTopologyNote        = "Topology comes from the explain layout: mongod means a mongod answered directly (standalone or replica-set member, not distinguished); sharded_cluster means a mongos layout."
@@ -93,15 +100,88 @@ type TrendWorkload struct {
 	ObservedOperations uint64 `json:"observed_operations"`
 }
 
-// TrendRunContext is the run-level context (settings, server, workload) stored with baselines.
+// TrendRunContext is the run-level context (settings, server, workload) stored
+// with baselines. Label is user-editable; Pinned runs are reference runs that
+// do not count toward the history limit, never expire, and are never pruned.
+// Source and ImportedAt are set for runs imported from another machine.
 type TrendRunContext struct {
 	RunID                string        `json:"run_id"`
 	RecordedAt           string        `json:"recorded_at"`
+	Label                string        `json:"label,omitempty"`
+	Pinned               bool          `json:"pinned,omitempty"`
+	Source               string        `json:"source,omitempty"`
+	ImportedAt           string        `json:"imported_at,omitempty"`
 	ShapeIdentityVersion string        `json:"shape_identity_version"`
 	ScoreVersion         string        `json:"score_version"`
 	Sampling             TrendSampling `json:"sampling"`
 	Server               TrendServer   `json:"server"`
 	Workload             TrendWorkload `json:"workload"`
+}
+
+// TrendPolicy holds the history settings: how many unpinned runs to keep and
+// when an unpinned baseline is outdated (MaxAge 0 = never).
+type TrendPolicy struct {
+	KeepRuns          int
+	MaxAge            time.Duration
+	DefaultComparison string
+}
+
+// DefaultTrendPolicy keeps 5 runs, outdates after 30 days, and compares with
+// the previous compatible run.
+func DefaultTrendPolicy() TrendPolicy {
+	return TrendPolicy{KeepRuns: config.DefaultTrendHistoryRuns, MaxAge: TrendMaxBaselineAge, DefaultComparison: config.TrendComparisonPrevious}
+}
+
+// TrendPolicyFromConfig reads the normalized trend settings of cfg.
+func TrendPolicyFromConfig(cfg *config.AppConfig) TrendPolicy {
+	if cfg == nil {
+		return DefaultTrendPolicy()
+	}
+	c := *cfg
+	if c.TrendMaxAgeDays != nil {
+		v := *c.TrendMaxAgeDays
+		c.TrendMaxAgeDays = &v
+	}
+	config.NormalizeTrendSettings(&c)
+	return TrendPolicy{
+		KeepRuns: c.TrendHistoryRuns, MaxAge: time.Duration(*c.TrendMaxAgeDays) * 24 * time.Hour,
+		DefaultComparison: c.TrendDefaultComparison,
+	}
+}
+
+func (p TrendPolicy) normalized() TrendPolicy {
+	d := DefaultTrendPolicy()
+	if p.KeepRuns < config.MinTrendHistoryRuns {
+		p.KeepRuns = d.KeepRuns
+	}
+	if p.KeepRuns > config.MaxTrendHistoryRuns {
+		p.KeepRuns = config.MaxTrendHistoryRuns
+	}
+	if p.MaxAge < 0 {
+		p.MaxAge = d.MaxAge
+	}
+	p.DefaultComparison = config.NormalizeTrendComparison(p.DefaultComparison)
+	return p
+}
+
+// DefaultTrendRunLabel is "mongo-<server version>" when explain saw a server
+// version, otherwise "run-<UTC timestamp>".
+func DefaultTrendRunLabel(server TrendServer, recordedAt string) string {
+	if len(server.Versions) > 0 {
+		return config.SanitizeTrendRunLabel("mongo-" + strings.Join(server.Versions, "+"))
+	}
+	if t, err := time.Parse(time.RFC3339, recordedAt); err == nil {
+		return "run-" + t.UTC().Format("20060102T150405Z")
+	}
+	return "run-unknown-time"
+}
+
+// TrendRunLabel returns the sanitized label, or the default when it is empty.
+func TrendRunLabel(label string, server TrendServer, recordedAt string) string {
+	if l := config.SanitizeTrendRunLabel(label); l != "" {
+		return l
+	}
+	return DefaultTrendRunLabel(server, recordedAt)
 }
 
 // TrendEfficiencySnapshot is a redacted scan efficiency summary of one shape in one run.
@@ -143,9 +223,10 @@ type TrendWorkloadSnapshot struct {
 	GroupCoverageComplete bool     `json:"group_coverage_complete"`
 }
 
-// TrendShapeBaseline is one persisted shape. Efficiency and workload baselines
-// can come from different runs; each carries its own run id and time.
-type TrendShapeBaseline struct {
+// TrendShapeSnapshot is one shape in one comparison: this run's summaries, or
+// the baseline chosen for it. Efficiency and workload baselines can come from
+// different runs; each carries its own run id and time.
+type TrendShapeSnapshot struct {
 	ShapeID      string                   `json:"shape_id"`
 	Namespace    string                   `json:"namespace"`
 	Operation    string                   `json:"operation"`
@@ -154,11 +235,55 @@ type TrendShapeBaseline struct {
 	Workload     *TrendWorkloadSnapshot   `json:"workload,omitempty"`
 }
 
+// TrendShapeBaseline is one persisted shape with at most one snapshot per
+// kept run in each history, newest first.
+type TrendShapeBaseline struct {
+	ShapeID           string                    `json:"shape_id"`
+	Namespace         string                    `json:"namespace"`
+	Operation         string                    `json:"operation"`
+	ShapeSummary      string                    `json:"shape_summary,omitempty"`
+	EfficiencyHistory []TrendEfficiencySnapshot `json:"efficiency_history,omitempty"`
+	WorkloadHistory   []TrendWorkloadSnapshot   `json:"workload_history,omitempty"`
+}
+
 // TrendStoreData is the persisted baseline file.
 type TrendStoreData struct {
 	SchemaVersion string               `json:"schema_version"`
 	Runs          []TrendRunContext    `json:"runs"`
 	Shapes        []TrendShapeBaseline `json:"shapes"`
+}
+
+// TrendRunSummary describes one stored run for run lists and pickers.
+type TrendRunSummary struct {
+	RunID          string   `json:"run_id"`
+	Label          string   `json:"label"`
+	RecordedAt     string   `json:"recorded_at"`
+	ServerVersions []string `json:"server_versions,omitempty"`
+	Topology       string   `json:"topology,omitempty"`
+	Pinned         bool     `json:"pinned"`
+	Source         string   `json:"source,omitempty"`
+	ImportedAt     string   `json:"imported_at,omitempty"`
+	Shapes         int      `json:"shapes"`
+	Outdated       bool     `json:"outdated"`
+	AgeSeconds     *int64   `json:"age_seconds,omitempty"`
+	Age            string   `json:"age,omitempty"`
+}
+
+// TrendSelection says which baseline the view compares with.
+type TrendSelection struct {
+	Mode          string `json:"mode"`
+	RequestedMode string `json:"requested_mode"`
+	BaselineRunID string `json:"baseline_run_id,omitempty"`
+	BaselineLabel string `json:"baseline_label,omitempty"`
+	Note          string `json:"note,omitempty"`
+}
+
+// TrendOptions choose the baseline. Mode is "previous", "pinned", or "run"
+// (with BaselineRunID); empty uses Policy.DefaultComparison.
+type TrendOptions struct {
+	Policy        TrendPolicy
+	Mode          string
+	BaselineRunID string
 }
 
 // TrendCriteria publishes the heuristics so every consumer shows the same rules.
@@ -183,9 +308,12 @@ type TrendStoreStatus struct {
 	Status           string `json:"status"`
 	Reason           string `json:"reason,omitempty"`
 	Persistent       bool   `json:"persistent"`
+	Path             string `json:"path,omitempty"`
 	Baselines        int    `json:"baselines"`
 	MaxBaselines     int    `json:"max_baselines"`
 	Runs             int    `json:"runs"`
+	PinnedRuns       int    `json:"pinned_runs"`
+	MaxPinnedRuns    int    `json:"max_pinned_runs"`
 	OldestRecordedAt string `json:"oldest_recorded_at,omitempty"`
 	NewestRecordedAt string `json:"newest_recorded_at,omitempty"`
 }
@@ -228,10 +356,12 @@ type TrendAnnotation struct {
 // TrendBaselineInfo is the age and origin of a row's baselines.
 type TrendBaselineInfo struct {
 	EfficiencyRunID      string `json:"efficiency_run_id,omitempty"`
+	EfficiencyRunLabel   string `json:"efficiency_run_label,omitempty"`
 	EfficiencyRecordedAt string `json:"efficiency_recorded_at,omitempty"`
 	EfficiencyAgeSeconds *int64 `json:"efficiency_age_seconds,omitempty"`
 	EfficiencyAge        string `json:"efficiency_age,omitempty"`
 	WorkloadRunID        string `json:"workload_run_id,omitempty"`
+	WorkloadRunLabel     string `json:"workload_run_label,omitempty"`
 	WorkloadRecordedAt   string `json:"workload_recorded_at,omitempty"`
 	WorkloadAgeSeconds   *int64 `json:"workload_age_seconds,omitempty"`
 	WorkloadAge          string `json:"workload_age,omitempty"`
@@ -267,15 +397,27 @@ type TrendView struct {
 	Criteria      TrendCriteria             `json:"criteria"`
 	Store         TrendStoreStatus          `json:"store"`
 	CurrentRun    TrendRunContext           `json:"current_run"`
+	Comparison    TrendSelection            `json:"comparison"`
+	AvailableRuns []TrendRunSummary         `json:"available_runs"`
 	Counts        map[string]map[string]int `json:"counts"`
 	Limitations   []string                  `json:"limitations,omitempty"`
 	Rows          []TrendRow                `json:"rows"`
 }
 
-// DefaultTrendCriteria returns the published tc-1 heuristics.
+// DefaultTrendCriteria returns the published heuristics with the default policy.
 func DefaultTrendCriteria() TrendCriteria {
+	return TrendCriteriaFor(DefaultTrendPolicy())
+}
+
+// TrendCriteriaFor returns the published heuristics with p's baseline age.
+func TrendCriteriaFor(p TrendPolicy) TrendCriteria {
+	p = p.normalized()
+	age := fmt.Sprintf("Unpinned baselines older than %d days are outdated; pinned reference runs never are.", int(p.MaxAge/(24*time.Hour)))
+	if p.MaxAge == 0 {
+		age = "Baselines are never outdated by age (expiry is off)."
+	}
 	return TrendCriteria{
-		MaxBaselineAgeHours:            int(TrendMaxBaselineAge / time.Hour),
+		MaxBaselineAgeHours:            int(p.MaxAge / time.Hour),
 		EfficiencyMinExplainedCommands: TrendMinEfficiencyCommands,
 		EfficiencyRequiredConfidence:   TrendEfficiencyConfidence,
 		EfficiencyMaterialScoreDelta:   TrendMaterialScoreDelta,
@@ -289,11 +431,11 @@ func DefaultTrendCriteria() TrendCriteria {
 		Summary: fmt.Sprintf("Efficiency: both runs assessed (not partial) with at least %d distinct explained commands and %s scan efficiency confidence; a change of %d or more points is labeled. "+
 			"Latency: at least %d operations in both runs; the full-run average must move by at least %.0f ms and %.0f%%, and a p95 from at least %d retained samples on both sides must not move materially the other way. "+
 			"Impact: at least %d operations and complete impact group coverage in both runs; the share of observed operation time must move by at least %.0f percentage points and %.0f%%. "+
-			"Baselines older than %d days are outdated.",
+			"%s",
 			TrendMinEfficiencyCommands, TrendEfficiencyConfidence, TrendMaterialScoreDelta,
 			TrendMinOperations, TrendLatencyMaterialAbsMs, TrendLatencyMaterialRelative*100, minImpactPercentileSamples,
 			TrendMinOperations, TrendImpactMaterialShareAbs*100, TrendImpactMaterialRelative*100,
-			int(TrendMaxBaselineAge/(24*time.Hour))),
+			age),
 		Note: trendCriteriaNote,
 	}
 }
@@ -314,19 +456,23 @@ func TrendWorkloadFromConfig(cfg *config.AppConfig) TrendWorkload {
 	}
 }
 
-// NewTrendRunContext builds this run context from the finished report.
-func NewTrendRunContext(rep InsightsReport, workload TrendWorkload, runID string, now time.Time) TrendRunContext {
+// NewTrendRunContext builds this run context from the finished report. An
+// empty label gets the default (see DefaultTrendRunLabel). recorded_at has a
+// fixed-width millisecond part so runs in the same second sort as strings.
+func NewTrendRunContext(rep InsightsReport, workload TrendWorkload, runID, label string, now time.Time) TrendRunContext {
 	md := rep.Metadata
 	workload.ObservedOperations = rep.Impact.Coverage.ObservedOperations
+	recordedAt := now.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	server := trendServerFromReport(rep)
 	return TrendRunContext{
-		RunID: runID, RecordedAt: now.UTC().Format(time.RFC3339),
+		RunID: runID, RecordedAt: recordedAt, Label: TrendRunLabel(label, server, recordedAt),
 		ShapeIdentityVersion: md.ShapeIdentityVersion, ScoreVersion: EfficiencyVersion,
 		Sampling: TrendSampling{
 			SamplingRate: md.SamplingRate, SlowThresholdMs: md.SlowThresholdMs, GroupLimit: rep.Impact.Coverage.GroupLimit,
 			ExplainEnabled: md.ExplainEnabled, ExplainVerbosity: md.ExplainVerbosity, ExplainEfficiencyMode: md.ExplainEfficiencyMode,
 			ExplainMaxSamples: md.ExplainMaxSamples, CaptureStatus: rep.QueryCapture.Status,
 		},
-		Server:   trendServerFromReport(rep),
+		Server:   server,
 		Workload: workload,
 	}
 }
@@ -376,7 +522,7 @@ func trendServerFromReport(rep InsightsReport) TrendServer {
 
 // CurrentTrendBaselines summarizes every efficiency-view row of rep. The
 // summaries hold no query text, literals, or executable commands.
-func CurrentTrendBaselines(rep InsightsReport, run TrendRunContext) []TrendShapeBaseline {
+func CurrentTrendBaselines(rep InsightsReport, run TrendRunContext) []TrendShapeSnapshot {
 	if rep.EfficiencyView == nil {
 		return nil
 	}
@@ -391,9 +537,9 @@ func CurrentTrendBaselines(rep InsightsReport, run TrendRunContext) []TrendShape
 		}
 	}
 	complete := rep.Impact.Coverage.GroupCoverageComplete
-	out := make([]TrendShapeBaseline, 0, len(rep.EfficiencyView.Rows))
+	out := make([]TrendShapeSnapshot, 0, len(rep.EfficiencyView.Rows))
 	for _, r := range rep.EfficiencyView.Rows {
-		b := TrendShapeBaseline{
+		b := TrendShapeSnapshot{
 			ShapeID: trendText(r.ShapeID, 64), Namespace: trendText(r.Namespace, trendMaxText),
 			Operation: trendText(r.Operation, 32), ShapeSummary: trendText(r.ShapeSummary, trendMaxText),
 		}
@@ -467,136 +613,326 @@ func CurrentTrendBaselines(rep InsightsReport, run TrendRunContext) []TrendShape
 	return out
 }
 
-// MergeTrendBaselines rolls this run into the stored baselines. The workload
-// baseline of every shape seen is replaced. The efficiency baseline is replaced
-// only when this run is assessed, the old one is from another version, or
-// neither is assessed, so a budget-excluded run does not erase evidence.
-func MergeTrendBaselines(prev TrendStoreData, run TrendRunContext, cur []TrendShapeBaseline) TrendStoreData {
-	out := TrendStoreData{SchemaVersion: TrendStoreSchemaVersion}
-	byID := make(map[string]int, len(prev.Shapes)+len(cur))
-	for _, s := range prev.Shapes {
-		byID[s.ShapeID] = len(out.Shapes)
-		out.Shapes = append(out.Shapes, s)
+// MergeTrendBaselines adds this run's snapshots to the history of every shape
+// it saw, replacing any earlier record of the same run id, and prunes with p.
+// Every run keeps its own snapshot, so a budget-excluded run does not erase
+// earlier efficiency evidence; the comparison chooses among them.
+func MergeTrendBaselines(prev TrendStoreData, run TrendRunContext, cur []TrendShapeSnapshot, p TrendPolicy) TrendStoreData {
+	d := removeTrendRun(prev, run.RunID)
+	byID := make(map[string]int, len(d.Shapes)+len(cur))
+	for i, s := range d.Shapes {
+		byID[s.ShapeID] = i
 	}
 	for _, c := range cur {
 		i, ok := byID[c.ShapeID]
 		if !ok {
-			byID[c.ShapeID] = len(out.Shapes)
-			out.Shapes = append(out.Shapes, c)
-			continue
+			i = len(d.Shapes)
+			byID[c.ShapeID] = i
+			d.Shapes = append(d.Shapes, TrendShapeBaseline{ShapeID: c.ShapeID, Namespace: c.Namespace, Operation: c.Operation})
 		}
-		old := &out.Shapes[i]
-		if old.Namespace != c.Namespace || old.Operation != c.Operation {
-			*old = c
-			continue
+		sh := &d.Shapes[i]
+		if sh.Namespace != c.Namespace || sh.Operation != c.Operation {
+			*sh = TrendShapeBaseline{ShapeID: c.ShapeID, Namespace: c.Namespace, Operation: c.Operation}
 		}
-		old.ShapeSummary = c.ShapeSummary
+		sh.ShapeSummary = c.ShapeSummary
+		if c.Efficiency != nil {
+			sh.EfficiencyHistory = append([]TrendEfficiencySnapshot{*c.Efficiency}, sh.EfficiencyHistory...)
+		}
 		if c.Workload != nil {
-			old.Workload = c.Workload
-		}
-		if replaceEfficiencyBaseline(old.Efficiency, c.Efficiency) {
-			old.Efficiency = c.Efficiency
+			sh.WorkloadHistory = append([]TrendWorkloadSnapshot{*c.Workload}, sh.WorkloadHistory...)
 		}
 	}
-	runs := append(append([]TrendRunContext{}, prev.Runs...), run)
-	return pruneTrendData(TrendStoreData{SchemaVersion: TrendStoreSchemaVersion, Runs: runs, Shapes: out.Shapes})
+	d.Runs = append(d.Runs, run)
+	return pruneTrendData(d, p)
 }
 
-func replaceEfficiencyBaseline(old, cur *TrendEfficiencySnapshot) bool {
-	switch {
-	case cur == nil:
-		return false
-	case old == nil, cur.Coverage == EffCoverageAssessed:
-		return true
-	case CanonicalScoreVersion(old.ScoreVersion) != CanonicalScoreVersion(cur.ScoreVersion) || old.ShapeIdentityVersion != cur.ShapeIdentityVersion:
-		return true
-	case old.Coverage == EffCoverageAssessed:
-		return false
-	case cur.Coverage == EffCoveragePartial:
-		return true
+// removeTrendRun returns d without run id and its snapshots. It never
+// modifies d's slices.
+func removeTrendRun(d TrendStoreData, id string) TrendStoreData {
+	out := TrendStoreData{SchemaVersion: TrendStoreSchemaVersion, Runs: make([]TrendRunContext, 0, len(d.Runs)+1), Shapes: make([]TrendShapeBaseline, 0, len(d.Shapes))}
+	for _, r := range d.Runs {
+		if r.RunID != id {
+			out.Runs = append(out.Runs, r)
+		}
 	}
-	return old.Coverage != EffCoveragePartial
+	for _, s := range d.Shapes {
+		s.EfficiencyHistory = filterHistory(s.EfficiencyHistory, func(e TrendEfficiencySnapshot) bool { return e.RunID != id })
+		s.WorkloadHistory = filterHistory(s.WorkloadHistory, func(w TrendWorkloadSnapshot) bool { return w.RunID != id })
+		if len(s.EfficiencyHistory) > 0 || len(s.WorkloadHistory) > 0 {
+			out.Shapes = append(out.Shapes, s)
+		}
+	}
+	return out
 }
 
-// pruneTrendData enforces the shape and run limits: the least recently
-// recorded shapes go first, runs keep only the newest referenced ones, and a
-// snapshot whose run context is gone is dropped.
-func pruneTrendData(d TrendStoreData) TrendStoreData {
+func filterHistory[T any](in []T, keep func(T) bool) []T {
+	out := make([]T, 0, len(in))
+	for _, v := range in {
+		if keep(v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// normalizeHistory keeps one snapshot per kept run, newest first.
+func normalizeHistory[T any](in []T, key func(T) (runID, recordedAt string), kept map[string]bool) []T {
+	out := make([]T, 0, len(in))
+	seen := map[string]bool{}
+	for _, v := range in {
+		id, _ := key(v)
+		if kept[id] && !seen[id] {
+			seen[id] = true
+			out = append(out, v)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		ii, ti := key(out[i])
+		ij, tj := key(out[j])
+		if ti != tj {
+			return ti > tj
+		}
+		return ii > ij
+	})
+	return out
+}
+
+func effKey(e TrendEfficiencySnapshot) (string, string) { return e.RunID, e.RecordedAt }
+func wlKey(w TrendWorkloadSnapshot) (string, string)    { return w.RunID, w.RecordedAt }
+
+func sortRunsNewestFirst(runs []TrendRunContext) {
+	sort.SliceStable(runs, func(i, j int) bool {
+		if runs[i].RecordedAt != runs[j].RecordedAt {
+			return runs[i].RecordedAt > runs[j].RecordedAt
+		}
+		return runs[i].RunID > runs[j].RunID
+	})
+}
+
+func trendSnapshotRunIDs(shapes []TrendShapeBaseline) map[string]bool {
+	ids := map[string]bool{}
+	for _, s := range shapes {
+		for _, e := range s.EfficiencyHistory {
+			ids[e.RunID] = true
+		}
+		for _, w := range s.WorkloadHistory {
+			ids[w.RunID] = true
+		}
+	}
+	return ids
+}
+
+// pruneTrendData enforces the history and shape limits. Runs are kept newest
+// first: every pinned run (up to TrendMaxPinnedRuns) plus the newest
+// p.KeepRuns unpinned runs that still have snapshots. Snapshots of dropped
+// runs go with them. When more than TrendMaxShapeBaselines shapes remain,
+// shapes with a pinned snapshot are kept first, then the most recently
+// recorded ones.
+func pruneTrendData(d TrendStoreData, p TrendPolicy) TrendStoreData {
+	p = p.normalized()
+	runs := append([]TrendRunContext(nil), d.Runs...)
+	sortRunsNewestFirst(runs)
+	referenced := trendSnapshotRunIDs(d.Shapes)
+	kept, pinned := map[string]bool{}, map[string]bool{}
+	keptRuns := make([]TrendRunContext, 0, len(runs))
+	nPinned, nUnpinned := 0, 0
+	for _, r := range runs {
+		if kept[r.RunID] {
+			continue
+		}
+		switch {
+		case r.Pinned && nPinned < TrendMaxPinnedRuns:
+			nPinned++
+			pinned[r.RunID] = true
+		case !referenced[r.RunID] || nUnpinned >= p.KeepRuns:
+			continue
+		default:
+			r.Pinned = false
+			nUnpinned++
+		}
+		kept[r.RunID] = true
+		keptRuns = append(keptRuns, r)
+	}
+
+	shapes := make([]TrendShapeBaseline, 0, len(d.Shapes))
+	seenShape := map[string]bool{}
+	for _, s := range d.Shapes {
+		if seenShape[s.ShapeID] {
+			continue
+		}
+		s.EfficiencyHistory = normalizeHistory(s.EfficiencyHistory, effKey, kept)
+		s.WorkloadHistory = normalizeHistory(s.WorkloadHistory, wlKey, kept)
+		if len(s.EfficiencyHistory) == 0 && len(s.WorkloadHistory) == 0 {
+			continue
+		}
+		seenShape[s.ShapeID] = true
+		shapes = append(shapes, s)
+	}
+	hasPinned := func(s TrendShapeBaseline) bool {
+		for _, e := range s.EfficiencyHistory {
+			if pinned[e.RunID] {
+				return true
+			}
+		}
+		for _, w := range s.WorkloadHistory {
+			if pinned[w.RunID] {
+				return true
+			}
+		}
+		return false
+	}
 	latest := func(s TrendShapeBaseline) string {
 		t := ""
-		if s.Workload != nil && s.Workload.RecordedAt > t {
-			t = s.Workload.RecordedAt
+		if len(s.EfficiencyHistory) > 0 {
+			t = s.EfficiencyHistory[0].RecordedAt
 		}
-		if s.Efficiency != nil && s.Efficiency.RecordedAt > t {
-			t = s.Efficiency.RecordedAt
+		if len(s.WorkloadHistory) > 0 && s.WorkloadHistory[0].RecordedAt > t {
+			t = s.WorkloadHistory[0].RecordedAt
 		}
 		return t
 	}
-	sort.SliceStable(d.Shapes, func(i, j int) bool {
-		li, lj := latest(d.Shapes[i]), latest(d.Shapes[j])
+	sort.SliceStable(shapes, func(i, j int) bool {
+		pi, pj := hasPinned(shapes[i]), hasPinned(shapes[j])
+		if pi != pj {
+			return pi
+		}
+		li, lj := latest(shapes[i]), latest(shapes[j])
 		if li != lj {
 			return li > lj
 		}
-		return d.Shapes[i].ShapeID < d.Shapes[j].ShapeID
+		return shapes[i].ShapeID < shapes[j].ShapeID
 	})
-	if len(d.Shapes) > TrendMaxShapeBaselines {
-		d.Shapes = d.Shapes[:TrendMaxShapeBaselines]
+	if len(shapes) > TrendMaxShapeBaselines {
+		shapes = shapes[:TrendMaxShapeBaselines]
 	}
-	sort.SliceStable(d.Runs, func(i, j int) bool { return d.Runs[i].RecordedAt > d.Runs[j].RecordedAt })
-	referenced := map[string]bool{}
+	referenced = trendSnapshotRunIDs(shapes)
+	finalRuns := keptRuns[:0]
+	for _, r := range keptRuns {
+		if r.Pinned || referenced[r.RunID] {
+			finalRuns = append(finalRuns, r)
+		}
+	}
+	return TrendStoreData{SchemaVersion: TrendStoreSchemaVersion, Runs: finalRuns, Shapes: shapes}
+}
+
+// trendRunSummaries lists the runs of d newest first, without excludeID.
+func trendRunSummaries(d TrendStoreData, excludeID string, now time.Time, p TrendPolicy) []TrendRunSummary {
+	p = p.normalized()
+	shapes := map[string]int{}
 	for _, s := range d.Shapes {
-		if s.Workload != nil {
-			referenced[s.Workload.RunID] = true
+		ids := map[string]bool{}
+		for _, e := range s.EfficiencyHistory {
+			ids[e.RunID] = true
 		}
-		if s.Efficiency != nil {
-			referenced[s.Efficiency.RunID] = true
+		for _, w := range s.WorkloadHistory {
+			ids[w.RunID] = true
 		}
-	}
-	kept := map[string]bool{}
-	runs := make([]TrendRunContext, 0, len(d.Runs))
-	for _, r := range d.Runs {
-		if referenced[r.RunID] && !kept[r.RunID] && len(runs) < TrendMaxRuns {
-			kept[r.RunID] = true
-			runs = append(runs, r)
+		for id := range ids {
+			shapes[id]++
 		}
 	}
-	d.Runs = runs
-	shapes := d.Shapes[:0]
-	for _, s := range d.Shapes {
-		if s.Workload != nil && !kept[s.Workload.RunID] {
-			s.Workload = nil
+	runs := append([]TrendRunContext(nil), d.Runs...)
+	sortRunsNewestFirst(runs)
+	out := make([]TrendRunSummary, 0, len(runs))
+	for _, r := range runs {
+		if r.RunID == excludeID {
+			continue
 		}
-		if s.Efficiency != nil && !kept[s.Efficiency.RunID] {
-			s.Efficiency = nil
-		}
-		if s.Workload != nil || s.Efficiency != nil {
-			shapes = append(shapes, s)
-		}
+		out = append(out, trendRunSummary(r, shapes[r.RunID], now, p))
 	}
-	d.Shapes = shapes
-	return d
+	return out
+}
+
+func trendRunSummary(r TrendRunContext, shapes int, now time.Time, p TrendPolicy) TrendRunSummary {
+	s := TrendRunSummary{
+		RunID: r.RunID, Label: TrendRunLabel(r.Label, r.Server, r.RecordedAt), RecordedAt: r.RecordedAt,
+		ServerVersions: r.Server.Versions, Topology: r.Server.Topology, Pinned: r.Pinned,
+		Source: r.Source, ImportedAt: r.ImportedAt, Shapes: shapes,
+	}
+	if t, err := time.Parse(time.RFC3339, r.RecordedAt); err == nil {
+		age := int64(now.Sub(t) / time.Second)
+		s.AgeSeconds, s.Age = &age, trendAgeLabel(&age)
+		s.Outdated = !r.Pinned && p.MaxAge > 0 && now.Sub(t) > p.MaxAge
+	}
+	return s
 }
 
 // ApplyTrends attaches the comparison of rep with the stored baselines.
-func ApplyTrends(rep *InsightsReport, run TrendRunContext, base TrendStoreData, store TrendStoreStatus, now time.Time) {
-	v := BuildTrendView(*rep, run, base, store, now)
+func ApplyTrends(rep *InsightsReport, run TrendRunContext, base TrendStoreData, store TrendStoreStatus, now time.Time, opts TrendOptions) {
+	v := BuildTrendView(*rep, run, base, store, now, opts)
 	rep.Trends = &v
 }
 
-// BuildTrendView compares every efficiency-view row of rep with base.
-func BuildTrendView(rep InsightsReport, run TrendRunContext, base TrendStoreData, store TrendStoreStatus, now time.Time) TrendView {
+// trendCompareCtx is what every per-shape comparison needs besides the shapes.
+type trendCompareCtx struct {
+	run    TrendRunContext
+	runs   map[string]TrendRunContext
+	now    time.Time
+	policy TrendPolicy
+}
+
+func newTrendCompareCtx(run TrendRunContext, base TrendStoreData, now time.Time, p TrendPolicy) trendCompareCtx {
+	runs := make(map[string]TrendRunContext, len(base.Runs))
+	for _, r := range base.Runs {
+		runs[r.RunID] = r
+	}
+	return trendCompareCtx{run: run, runs: runs, now: now, policy: p.normalized()}
+}
+
+// resolveTrendSelection turns opts into the baseline run to use, falling back
+// to the previous compatible run when no pinned run is stored.
+func resolveTrendSelection(opts TrendOptions, base TrendStoreData, currentID string) TrendSelection {
+	mode := strings.ToLower(strings.TrimSpace(opts.Mode))
+	if mode == "" {
+		mode = opts.Policy.normalized().DefaultComparison
+	}
+	sel := TrendSelection{RequestedMode: mode, Mode: config.TrendComparisonPrevious}
+	runs := append([]TrendRunContext(nil), base.Runs...)
+	sortRunsNewestFirst(runs)
+	switch mode {
+	case TrendCompareRun:
+		sel.Mode, sel.BaselineRunID = TrendCompareRun, opts.BaselineRunID
+		for _, r := range runs {
+			if r.RunID == opts.BaselineRunID && r.RunID != currentID {
+				sel.BaselineLabel = TrendRunLabel(r.Label, r.Server, r.RecordedAt)
+				return sel
+			}
+		}
+		sel.Note = "The requested baseline run is not stored; no shape is compared."
+	case config.TrendComparisonPinned:
+		for _, r := range runs {
+			if r.Pinned && r.RunID != currentID {
+				sel.Mode, sel.BaselineRunID, sel.BaselineLabel = config.TrendComparisonPinned, r.RunID, TrendRunLabel(r.Label, r.Server, r.RecordedAt)
+				sel.Note = "Compared with the newest pinned reference run."
+				return sel
+			}
+		}
+		sel.Note = "No pinned reference run is stored; compared with the previous compatible run instead."
+	default:
+		sel.RequestedMode = config.TrendComparisonPrevious
+		sel.Note = "Compared with the previous compatible run of each shape."
+	}
+	return sel
+}
+
+// BuildTrendView compares every efficiency-view row of rep with the baseline
+// chosen by opts. base may contain this run; its snapshots are never a baseline.
+func BuildTrendView(rep InsightsReport, run TrendRunContext, base TrendStoreData, store TrendStoreStatus, now time.Time, opts TrendOptions) TrendView {
+	ctx := newTrendCompareCtx(run, base, now, opts.Policy)
 	v := TrendView{
 		Version: TrendVersion, Status: "ready", MethodNote: trendMethodNote, CausationNote: trendCausationNote,
-		EvidenceNote: trendEvidenceNote, Criteria: DefaultTrendCriteria(), Store: store, CurrentRun: run,
-		Counts: map[string]map[string]int{"efficiency": {}, "latency": {}, "impact": {}, "comparability": {}},
-		Rows:   []TrendRow{},
+		EvidenceNote: trendEvidenceNote, Criteria: TrendCriteriaFor(ctx.policy), Store: store, CurrentRun: run,
+		Comparison:    resolveTrendSelection(opts, base, run.RunID),
+		AvailableRuns: trendRunSummaries(base, run.RunID, now, ctx.policy),
+		Counts:        map[string]map[string]int{"efficiency": {}, "latency": {}, "impact": {}, "comparability": {}},
+		Rows:          []TrendRow{},
 	}
 	v.Limitations = append(v.Limitations,
 		trendCriteriaNote,
 		fmt.Sprintf("Efficiency evidence is at most %d explained representative commands per shape per run, chosen from retained samples; it is not a statistical sample of the shape's operations.", ExplainMaxSamplesPerShape),
 		"Only full-run sums are kept for latency, so there is no variance estimate; latency labels are a magnitude rule, not a statistical test.",
 		"Data distribution, collection size, cache state, and load from other clients are not recorded; any of them can change these metrics without an annotation.",
-		"Baselines roll forward: each run replaces the latency and impact baseline of every shape it saw, and the efficiency baseline only when the new run has assessed evidence (or the old baseline had none).",
+		fmt.Sprintf("History keeps one snapshot per shape per run for the newest %d unpinned runs plus up to %d pinned reference runs. With the previous-run comparison, latency and impact use the newest compatible earlier snapshot, and efficiency prefers the newest compatible snapshot with assessed evidence, so the two can come from different runs.", ctx.policy.KeepRuns, TrendMaxPinnedRuns),
 		trendServerTopologyNote,
 	)
 	if store.Status == "disabled" {
@@ -610,22 +946,18 @@ func BuildTrendView(rep InsightsReport, run TrendRunContext, base TrendStoreData
 	if store.Reason != "" && store.Status != "ok" && store.Status != "empty" {
 		v.Limitations = append(v.Limitations, fmt.Sprintf("Baseline store %s: %s.", store.Status, store.Reason))
 	}
-	runs := make(map[string]TrendRunContext, len(base.Runs))
-	for _, r := range base.Runs {
-		runs[r.RunID] = r
-	}
 	baseByID := make(map[string]TrendShapeBaseline, len(base.Shapes))
+	others := 0
 	for _, s := range base.Shapes {
-		baseByID[s.ShapeID] = s
+		if trendShapeHasOtherRun(s, run.RunID) {
+			baseByID[s.ShapeID] = s
+			others++
+		}
 	}
 	seen := map[string]bool{}
 	for _, c := range CurrentTrendBaselines(rep, run) {
 		seen[c.ShapeID] = true
-		var b *TrendShapeBaseline
-		if s, ok := baseByID[c.ShapeID]; ok {
-			b = &s
-		}
-		row := compareTrendShape(c, b, run, runs, now)
+		row := compareTrendShape(c, selectForView(baseByID, c.ShapeID, v.Comparison, ctx), ctx, missingReason(v.Comparison))
 		v.Counts["efficiency"][row.Efficiency.State]++
 		v.Counts["latency"][row.Latency.State]++
 		v.Counts["impact"][row.Impact.State]++
@@ -641,10 +973,111 @@ func BuildTrendView(rep InsightsReport, run TrendRunContext, base TrendStoreData
 	if unseen > 0 {
 		v.Limitations = append(v.Limitations, fmt.Sprintf("%d baseline shapes were not seen in this run and are not listed.", unseen))
 	}
-	if len(base.Shapes) == 0 {
+	if others == 0 {
 		v.Status, v.Reason = TrendNoBaseline, "no_stored_baselines"
 	}
 	return v
+}
+
+func trendShapeHasOtherRun(s TrendShapeBaseline, currentID string) bool {
+	for _, e := range s.EfficiencyHistory {
+		if e.RunID != currentID {
+			return true
+		}
+	}
+	for _, w := range s.WorkloadHistory {
+		if w.RunID != currentID {
+			return true
+		}
+	}
+	return false
+}
+
+func selectForView(baseByID map[string]TrendShapeBaseline, shapeID string, sel TrendSelection, ctx trendCompareCtx) *TrendShapeSnapshot {
+	s, ok := baseByID[shapeID]
+	if !ok {
+		return nil
+	}
+	if sel.Mode == config.TrendComparisonPrevious {
+		return selectPreviousBaseline(s, ctx)
+	}
+	return selectRunBaseline(s, sel.BaselineRunID)
+}
+
+func missingReason(sel TrendSelection) string {
+	if sel.Mode == config.TrendComparisonPrevious {
+		return ""
+	}
+	return fmt.Sprintf("not_in_baseline_run: this shape was not recorded in the baseline run %s (%s)", emptyFallback(sel.BaselineLabel, "unknown"), sel.BaselineRunID)
+}
+
+// selectRunBaseline returns the snapshots of shape s recorded by run id.
+func selectRunBaseline(s TrendShapeBaseline, id string) *TrendShapeSnapshot {
+	out := &TrendShapeSnapshot{ShapeID: s.ShapeID, Namespace: s.Namespace, Operation: s.Operation, ShapeSummary: s.ShapeSummary}
+	for i := range s.EfficiencyHistory {
+		if s.EfficiencyHistory[i].RunID == id {
+			e := s.EfficiencyHistory[i]
+			out.Efficiency = &e
+			break
+		}
+	}
+	for i := range s.WorkloadHistory {
+		if s.WorkloadHistory[i].RunID == id {
+			w := s.WorkloadHistory[i]
+			out.Workload = &w
+			break
+		}
+	}
+	return out
+}
+
+// selectPreviousBaseline picks, per metric, the newest earlier snapshot that
+// passes the compatibility gates; efficiency prefers assessed over partial
+// over other coverage. When none passes, the newest earlier snapshot is used
+// so the row reports why it is not comparable.
+func selectPreviousBaseline(s TrendShapeBaseline, ctx trendCompareCtx) *TrendShapeSnapshot {
+	out := &TrendShapeSnapshot{ShapeID: s.ShapeID, Namespace: s.Namespace, Operation: s.Operation, ShapeSummary: s.ShapeSummary}
+	rank := func(cov string) int {
+		switch cov {
+		case EffCoverageAssessed:
+			return 2
+		case EffCoveragePartial:
+			return 1
+		}
+		return 0
+	}
+	best := -1
+	for i := range s.EfficiencyHistory {
+		e := s.EfficiencyHistory[i]
+		if e.RunID == ctx.run.RunID {
+			continue
+		}
+		if out.Efficiency == nil {
+			out.Efficiency = &e
+		}
+		if g := ctx.efficiencyGate(&e); g.ok && rank(e.Coverage) > best {
+			best = rank(e.Coverage)
+			out.Efficiency = &e
+		}
+	}
+	var newest *TrendWorkloadSnapshot
+	for i := range s.WorkloadHistory {
+		w := s.WorkloadHistory[i]
+		if w.RunID == ctx.run.RunID {
+			continue
+		}
+		if newest == nil {
+			newest = &w
+		}
+		if ctx.workloadGate(&w).ok {
+			out.Workload = &w
+			break
+		}
+	}
+	if out.Workload == nil {
+		out.Workload = newest
+	}
+	return out
 }
 
 type trendGate struct {
@@ -654,7 +1087,26 @@ type trendGate struct {
 	age    *int64
 }
 
-func gateSnapshot(recordedAt, baseSI, curSI string, now time.Time) trendGate {
+func (c trendCompareCtx) pinned(runID string) bool {
+	return c.runs[runID].Pinned
+}
+
+func (c trendCompareCtx) efficiencyGate(be *TrendEfficiencySnapshot) trendGate {
+	g := gateSnapshot(be.RecordedAt, be.ShapeIdentityVersion, c.run.ShapeIdentityVersion, c.now, c.policy.MaxAge, c.pinned(be.RunID))
+	baseVersion, curVersion := CanonicalScoreVersion(be.ScoreVersion), CanonicalScoreVersion(c.run.ScoreVersion)
+	if g.ok && baseVersion != curVersion {
+		g = trendGate{state: TrendNotComparable, age: g.age, reason: fmt.Sprintf("score_version_changed: baseline %s, current %s; scores from different versions are never compared", emptyFallback(baseVersion, "unknown"), curVersion)}
+	}
+	return g
+}
+
+func (c trendCompareCtx) workloadGate(bw *TrendWorkloadSnapshot) trendGate {
+	return gateSnapshot(bw.RecordedAt, bw.ShapeIdentityVersion, c.run.ShapeIdentityVersion, c.now, c.policy.MaxAge, c.pinned(bw.RunID))
+}
+
+// gateSnapshot checks shape identity, clock, and age. maxAge 0 or a pinned
+// baseline run disables the age check.
+func gateSnapshot(recordedAt, baseSI, curSI string, now time.Time, maxAge time.Duration, pinned bool) trendGate {
 	t, err := time.Parse(time.RFC3339, recordedAt)
 	if err != nil {
 		return trendGate{state: TrendNotComparable, reason: "baseline_timestamp_invalid"}
@@ -666,21 +1118,24 @@ func gateSnapshot(recordedAt, baseSI, curSI string, now time.Time) trendGate {
 		g.state, g.reason = TrendNotComparable, fmt.Sprintf("shape_identity_version_changed: baseline %s, current %s; shape ids from different identity versions are never matched", emptyFallback(baseSI, "unknown"), emptyFallback(curSI, "unknown"))
 	case now.Sub(t) < -trendFutureTolerance:
 		g.state, g.reason = TrendNotComparable, "baseline_recorded_in_future: the baseline time is after this run (clock change?)"
-	case now.Sub(t) > TrendMaxBaselineAge:
-		g.state, g.reason = TrendNotComparable, fmt.Sprintf("baseline_outdated: recorded %s ago (maximum %d days)", trendAgeText(age), int(TrendMaxBaselineAge/(24*time.Hour)))
+	case !pinned && maxAge > 0 && now.Sub(t) > maxAge:
+		g.state, g.reason = TrendNotComparable, fmt.Sprintf("baseline_outdated: recorded %s ago (maximum %d days; pin the run to keep it as a reference)", trendAgeText(age), int(maxAge/(24*time.Hour)))
 	default:
 		g.ok = true
 	}
 	return g
 }
 
-func compareTrendShape(cur TrendShapeBaseline, base *TrendShapeBaseline, run TrendRunContext, runs map[string]TrendRunContext, now time.Time) TrendRow {
+// compareTrendShape compares cur with base. missing replaces the default
+// reason when base has no snapshot.
+func compareTrendShape(cur TrendShapeSnapshot, base *TrendShapeSnapshot, ctx trendCompareCtx, missing string) TrendRow {
+	run, runs := ctx.run, ctx.runs
 	row := TrendRow{ShapeID: cur.ShapeID, Namespace: cur.Namespace, Operation: cur.Operation, ShapeSummary: cur.ShapeSummary}
 	ce, cw := cur.Efficiency, cur.Workload
 	row.Evidence.Current = trendEvidenceSide(ce, cw)
 	if base == nil || (base.Efficiency == nil && base.Workload == nil) {
 		row.Comparability = TrendMissing
-		row.ComparabilityReasons = []string{"no_baseline: this shape has no stored baseline; this run becomes its baseline"}
+		row.ComparabilityReasons = []string{emptyFallback(missing, "no_baseline: this shape has no stored baseline; this run becomes its baseline")}
 		row.Efficiency = trendNoBaseline("scan efficiency score")
 		row.Latency = trendNoBaseline("full-run average latency (ms)")
 		row.Impact = trendNoBaseline("share of observed operation time")
@@ -703,16 +1158,18 @@ func compareTrendShape(cur TrendShapeBaseline, base *TrendShapeBaseline, run Tre
 	failed, outdated, siMismatch := 0, 0, false
 
 	var eg, wg trendGate
+	runLabel := func(id string) string {
+		if r, ok := runs[id]; ok {
+			return TrendRunLabel(r.Label, r.Server, r.RecordedAt)
+		}
+		return ""
+	}
 	if be != nil {
 		gates++
-		info.EfficiencyRunID, info.EfficiencyRecordedAt = be.RunID, be.RecordedAt
-		baseVersion, curVersion := CanonicalScoreVersion(be.ScoreVersion), CanonicalScoreVersion(run.ScoreVersion)
-		info.ShapeIdentityVersion, info.ScoreVersion = be.ShapeIdentityVersion, baseVersion
-		eg = gateSnapshot(be.RecordedAt, be.ShapeIdentityVersion, run.ShapeIdentityVersion, now)
+		info.EfficiencyRunID, info.EfficiencyRecordedAt, info.EfficiencyRunLabel = be.RunID, be.RecordedAt, runLabel(be.RunID)
+		info.ShapeIdentityVersion, info.ScoreVersion = be.ShapeIdentityVersion, CanonicalScoreVersion(be.ScoreVersion)
+		eg = ctx.efficiencyGate(be)
 		info.EfficiencyAgeSeconds, info.EfficiencyAge = eg.age, trendAgeLabel(eg.age)
-		if eg.ok && baseVersion != curVersion {
-			eg = trendGate{state: TrendNotComparable, age: eg.age, reason: fmt.Sprintf("score_version_changed: baseline %s, current %s; scores from different versions are never compared", emptyFallback(baseVersion, "unknown"), curVersion)}
-		}
 		if !eg.ok {
 			failed++
 			reasons = append(reasons, "efficiency: "+eg.reason)
@@ -724,11 +1181,11 @@ func compareTrendShape(cur TrendShapeBaseline, base *TrendShapeBaseline, run Tre
 	}
 	if bw != nil {
 		gates++
-		info.WorkloadRunID, info.WorkloadRecordedAt = bw.RunID, bw.RecordedAt
+		info.WorkloadRunID, info.WorkloadRecordedAt, info.WorkloadRunLabel = bw.RunID, bw.RecordedAt, runLabel(bw.RunID)
 		if info.ShapeIdentityVersion == "" {
 			info.ShapeIdentityVersion = bw.ShapeIdentityVersion
 		}
-		wg = gateSnapshot(bw.RecordedAt, bw.ShapeIdentityVersion, run.ShapeIdentityVersion, now)
+		wg = ctx.workloadGate(bw)
 		info.WorkloadAgeSeconds, info.WorkloadAge = wg.age, trendAgeLabel(wg.age)
 		if !wg.ok {
 			failed++

@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -19,6 +20,7 @@ import (
 // store reopened from the same file) and runs the after-intervention fixture.
 func trendFixtureAPI(t *testing.T) (map[string]interface{}, *WebServer, string) {
 	t.Helper()
+	steppedTrendClock(t)
 	path := filepath.Join(t.TempDir(), "trend_baselines.json")
 	first, _ := efficiencyFixtureServerWith(t, "ready", fixtureOptions{store: stats.OpenTrendStore(path)})
 	api1 := getInsightsJSON(t, first)
@@ -27,6 +29,16 @@ func trendFixtureAPI(t *testing.T) (map[string]interface{}, *WebServer, string) 
 	}
 	second, _ := efficiencyFixtureServerWith(t, "ready", fixtureOptions{after: true, store: stats.OpenTrendStore(path)})
 	return getInsightsJSON(t, second), second, path
+}
+
+// steppedTrendClock makes each finished run one minute later than the last,
+// so run order does not depend on wall-clock resolution.
+func steppedTrendClock(t *testing.T) {
+	t.Helper()
+	clock := time.Now().Add(-time.Hour)
+	orig := trendClock
+	t.Cleanup(func() { trendClock = orig })
+	trendClock = func() time.Time { clock = clock.Add(time.Minute); return clock }
 }
 
 func trendRows(t *testing.T, api map[string]interface{}) (map[string]interface{}, map[string]map[string]interface{}) {
@@ -116,7 +128,7 @@ func TestTrendsPersistAcrossRestartAndCompareSeparately(t *testing.T) {
 	}
 
 	page := html.UnescapeString(getReportHTML(t, s))
-	if !strings.Contains(page, "Trends vs Baseline (tc-1, status: ready") || !strings.Contains(page, sku["efficiency"].(map[string]interface{})["label"].(string)) ||
+	if !strings.Contains(page, "Trends vs Baseline ("+stats.TrendVersion+", status: ready") || !strings.Contains(page, "Compared with") || !strings.Contains(page, sku["efficiency"].(map[string]interface{})["label"].(string)) ||
 		!strings.Contains(page, "Intervention (plan_changed)") || !strings.Contains(page, "not evidence of cause") {
 		t.Fatalf("HTML report must show the same trend labels and annotations")
 	}

@@ -76,6 +76,7 @@ Recommended baseline for most users:
 Web UI settings tabs:
 - `Metrics & Insights`: insights capture (`insights_enabled`, sampling, slow threshold, retention) and CSV export
 - `Query Analysis (Explain)`: post-run explain (`insights_explain_*`) and query latency targets (`insights_latency_target_*`)
+- `Trends & History`: trend history settings (`trend_*`), the stored run list (rename, pin, delete), export/import, and reset. See README for the settings table.
 
 YAML keys and environment variables:
 
@@ -329,7 +330,10 @@ Practical meaning:
 - Use explain-backed findings first, heuristic findings second.
 
 3. Regression checks across runs
-- Use the Trends view (`trends` in `/api/insights`, tc-1). Each shape is compared with its persisted baseline separately for scan efficiency, full-run average latency, and share of observed operation time. A label is given only when the baseline has the same shape identity and scan efficiency version (baselines recorded as `qe-1` use the same formula and compare with `se-1`), is at most 30 days old, and both runs meet the published evidence minimums (`trends.criteria`); otherwise the state is `insufficient_evidence`, `not_comparable`, or `no_baseline` with reasons. Plan, index, server, sampling, and workload changes are annotated, not treated as causes. The thresholds are heuristics, not significance tests. Shape identity `si-3` renders multi-key sorts in declared order, so baselines recorded with `si-2` or earlier are `not_comparable` (`shape_identity_version_changed`) until a new baseline is recorded.
+- Use the Trends view (`trends` in `/api/insights`, tc-2). The store keeps a history of runs (`trend_history_runs`, default 5 unpinned, plus up to 10 pinned reference runs), each with a label (`trend_run_label`, default `mongo-<server version>` or `run-<UTC time>`). Each shape is compared separately for scan efficiency, full-run average latency, and share of observed operation time. By default (`trend_default_comparison: previous`) the baseline is the previous compatible run: for each shape and metric, the newest earlier snapshot that passes the gates (efficiency prefers assessed evidence), so the efficiency and latency baselines can come from different runs. `trends.comparison` says which mode was used and `trends.rows[].baseline` names the run(s). `pinned` compares every shape with the newest pinned run, falling back to previous with a note when none is pinned.
+- Compare with another run without rerunning: `GET /api/trends/compare?baseline=previous|pinned|<run_id>` returns the same view for the last finished run. With `?runs=<id>,<id>` (up to 8) it returns a matrix (`columns`, one per run, current first; `rows[].cells` with `avg_ms`, `sample_p95_ms`, `score`, `impact_share`, and separate `efficiency`/`latency`/`impact` states). Each pair is gated on its own; a cell that is not comparable has `comparability` and `reasons` (for example `shape_identity_version_changed`, `baseline_outdated`, `not_in_baseline_run`).
+- A label is given only when the baseline has the same shape identity and scan efficiency version (baselines recorded as `qe-1` use the same formula and compare with `se-1`), is not outdated (unpinned runs older than `trend_max_age_days`, default 30, `0` = never; pinned runs never expire), and both runs meet the published evidence minimums (`trends.criteria`); otherwise the state is `insufficient_evidence`, `not_comparable`, or `no_baseline` with reasons. Plan, index, server, sampling, and workload changes are annotated, not treated as causes. The thresholds are heuristics, not significance tests. Shape identity `si-3` renders multi-key sorts in declared order, so baselines recorded with `si-2` or earlier are `not_comparable` (`shape_identity_version_changed`) until a new baseline is recorded.
+- Share runs between machines with export/import (Trends & History tab, `/api/trend-baselines/export` and `/import`). Imports are merged by `run_id`; duplicates are skipped and the imported runs keep their source label. Only redacted trend fields are read.
 
 4. Reporting and incident artifacts
 - Export final summary JSON with `insights` for sharing with DBAs/SREs.
@@ -380,7 +384,8 @@ The Query Assessment table shows each dimension in its own column, with its own 
 ## Limitations
 
 - Sampling is representative, not exhaustive tracing.
-- Trend baselines persist in `trend_baselines.json` (see README) and roll forward each run; efficiency comparisons rest on at most 2 explained commands per shape per run.
+- Trend history persists in `trend_baselines.json` (see README) and is pruned to the newest `trend_history_runs` unpinned runs plus pinned runs; efficiency comparisons rest on at most 2 explained commands per shape per run.
+- Comparing with another run (`/api/trends/compare`) works only for the last finished run in this process; earlier runs can be compared with each other only as baselines of a later run.
 - Explain depends on retained replay metadata and server permissions.
 - Top-N explain means some shapes intentionally remain unattempted.
 - Heuristic guidance is intentionally cautious and not proof of root cause.

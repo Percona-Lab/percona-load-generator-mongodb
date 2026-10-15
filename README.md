@@ -315,14 +315,32 @@ You can override the location with:
 export PLGM_DEFINITIONS_STORE=/path/to/plgm-definitions.json
 ```
 
-Post-run trend baselines (the **Trends** view under Query & Index Analysis) are stored the same way, in `trend_baselines.json` next to `definitions.json`. The file holds bounded, redacted per-shape summaries only (scores, counts, latencies, plan stage names, index names, server version, and sampling/workload settings), never query text, literals, or the connection URI. Override or disable it with:
+Post-run trend history (the **Trends** view under Query & Index Analysis) is stored the same way, in `trend_baselines.json` next to `definitions.json`. Each finished run adds one snapshot per query shape, newest first. A snapshot holds bounded, redacted summaries only (scores, counts, latencies, plan stage names, index names, server version, and sampling/workload settings), never query text, literals, or the connection URI. Override or disable it with:
 
 ```bash
 export PLGM_TREND_BASELINE_STORE=/path/to/plgm-trend-baselines.json
-export PLGM_TREND_BASELINE_STORE=off   # no baselines and no trend comparison
+export PLGM_TREND_BASELINE_STORE=off   # no history and no trend comparison
 ```
 
-Use **Reset baselines** in the Trends view (or `DELETE /api/trend-baselines`) to clear them. An unreadable or unsupported file is moved aside (renamed with a `.corrupt-` or `.unsupported-` suffix), never deleted.
+**History, labels, and pinning.** The store keeps the newest `trend_history_runs` unpinned runs (default 5); older runs and their snapshots are pruned. Every run has a label: `trend_run_label` if set, otherwise `mongo-<server version>`, or `run-<UTC time>` when the version is unknown. Rename a run later in **Trends & History**. Pin a run to keep it as a reference: pinned runs (at most 10) do not count toward `trend_history_runs`, are never pruned, and never expire. Unpinned runs older than `trend_max_age_days` (default 30; `0` = never) stay stored but are reported as `outdated` instead of compared.
+
+**Comparison.** By default each shape is compared with the previous compatible run: for each metric, the newest earlier snapshot that passes the compatibility gates. The Trends view can instead compare every shape with a chosen run or with the newest pinned run, or show a matrix of up to 8 runs (one column per run with average and p95 latency, efficiency score, and impact share, the current run highlighted). Each pair is gated separately; when a pair is not comparable, the cell shows the reason. Efficiency, latency, and impact are never combined.
+
+**Sharing.** Export selected runs (or all) from **Trends & History**, or with `GET /api/trend-baselines/export?runs=<id>,<id>&source=<label>`. Import a file in the same tab (or `POST /api/trend-baselines/import`, multipart field `file` or a raw JSON body). Imports must use the current schema (`tb-2`) and stay within the limits (32 MiB, 64 runs, 500 shapes). Runs are merged by `run_id`: duplicates are skipped, and the result lists what was added, skipped, or not kept (pruned by `trend_history_runs`). Imported runs show their source label. Only the redacted trend fields are read; anything else in the file is ignored and reported. Run ids combine a UTC timestamp, a run counter, and 64 random bits, so they stay unique across machines. Several instances can share one store file (for example on a shared volume). Every write takes a lock file (`<store>.lock`), re-reads the file, merges its change, and replaces the file atomically. A lock older than 30 seconds is treated as stale.
+
+**Size.** Snapshots average about 0.75 KB per shape per run, so a full 500-shape store with 5 runs is about 2 MB, and the maximum of 60 runs (50 unpinned plus 10 pinned) is about 23 MB. Every text field is bounded, so the theoretical worst case would be larger. A hard cap keeps the file at most 32 MiB: past it, the oldest unpinned runs are dropped first (never the newest run or a pinned run), then the least recently seen shapes.
+
+| Setting | config.yaml | Environment | Default | UI (Trends & History) |
+|---|---|---|---|---|
+| Runs to keep (unpinned) | `trend_history_runs` | `PLGM_TREND_HISTORY_RUNS` | `5` (1–50) | Runs to keep |
+| Age expiry in days | `trend_max_age_days` | `PLGM_TREND_MAX_AGE_DAYS` | `30` (`0` = never, max 3650) | Age expiry (days) |
+| Store path | `trend_baseline_store` | `PLGM_TREND_BASELINE_STORE` | user config dir; `off` disables | Store path |
+| Default comparison | `trend_default_comparison` | `PLGM_TREND_DEFAULT_COMPARISON` | `previous` (or `pinned`) | Default comparison |
+| Run label | `trend_run_label` | `PLGM_TREND_RUN_LABEL` | `mongo-<version>` / `run-<time>` | Run label |
+
+Precedence is environment over config.yaml over the default. Values set in the UI apply to the run they start. Non-numeric or negative numeric environment values (and a run count of 0) are ignored. Out-of-range YAML values are clamped to the maximum or replaced with the default, and an unknown comparison mode means `previous`. The UI rejects out-of-range values before the run starts.
+
+Use **Reset baselines** (Trends view or Trends & History, or `DELETE /api/trend-baselines`) to clear all runs; `DELETE /api/trend-baselines/runs/<id>` removes one, and `PATCH` with `{"label": "...", "pinned": true}` renames or pins it. A `tb-1` file from an earlier version is migrated on load: each stored snapshot becomes the first history entry, and the file is rewritten as `tb-2` on the next save. An unreadable or unsupported file is moved aside (renamed with a `.corrupt-` or `.unsupported-` suffix), never deleted.
 
 The last selected query and collection definitions are cached in browser `localStorage` so the Web UI can restore your previous selections after refresh. This cache only stores selected IDs; the actual definition content is stored server-side in the JSON store.
 

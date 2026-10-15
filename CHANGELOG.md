@@ -5,6 +5,38 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v4.9.0 - Multi-Run Trend History, Comparison, and Sharing
+
+**Highlights**
+
+**New: Trend history with labels and pinning**
+- Each query shape keeps one workload and one efficiency snapshot per run, newest first. The store keeps the newest `trend_history_runs` unpinned runs (default 5, 1–50); pruning drops the oldest runs and their snapshots.
+- Runs get a label from `trend_run_label`, or the default `mongo-<server version>` (`run-<UTC time>` when the version is unknown). Labels can be edited after the run.
+- Pinned reference runs (up to 10) do not count toward the limit and are never pruned or expired. Unpinned runs older than `trend_max_age_days` (default 30, `0` = never) are reported as outdated.
+
+**New: Comparison modes and run matrix**
+- By default each shape is compared with the previous compatible run, per metric. `trend_default_comparison: pinned` uses the newest pinned run instead.
+- The Trends view can compare with any stored run, or show a matrix of up to 8 runs: one column per run with average latency, p95, efficiency score, and impact share, with the current run highlighted. Each pair is gated separately, and cells that are not comparable show the reason. Efficiency, latency, and impact stay separate.
+- New endpoint `GET /api/trends/compare?baseline=…|runs=…`.
+
+**New: Export, import, and shared stores**
+- Export selected or all runs as JSON (UI, `GET /api/trend-baselines/export`). Import in the UI or with `POST /api/trend-baselines/import`. Imports validate the schema and limits, merge by `run_id` (duplicates skipped), report what was added, skipped, or not kept, and keep the source label. Fields outside the redacted trend schema are ignored.
+- Several instances can share one `PLGM_TREND_BASELINE_STORE` file: writes take a lock file, re-read and merge, then replace the file atomically. Run ids include 64 random bits, so they stay unique across machines.
+- Run endpoints: `PATCH /api/trend-baselines/runs/<id>` (label, pinned) and `DELETE /api/trend-baselines/runs/<id>`.
+
+**New: Trends & History settings tab**
+- Runs to keep, age expiry, store path (`off` disables), default comparison, and default run label, each with a config.yaml key and a `PLGM_TREND_*` environment variable (environment over YAML over default). The tab also has the run list (rename, pin, delete), export/import, and Reset baselines.
+
+**Compatibility**
+- Store schema `tb-2` and trend version `tc-2`. A `tb-1` file is migrated on load (each snapshot becomes the first history entry) and rewritten on the next save. Unsupported files are moved aside, never deleted.
+- `recorded_at` for new runs now has millisecond precision.
+- The file stays under 32 MiB. Typical size is about 0.75 KB per shape per run; see README for the worst case.
+
+**Testing & Docs**
+- Added unit tests for history merge and pruning with pinning, expiry, migration from `tb-1`, label defaults, the comparison modes and matrix gate reasons, export/import (round trip, duplicates, invalid, oversized, and unsupported files, redaction), concurrent writers and lock handling, and config, env, and UI wiring.
+- Added a multi-run UI fixture and jsdom tests for the Trends & History tab and the matrix view.
+- Documented storage, sharing, and settings in `README.md`, `config.yaml`, and `INSIGHTS.md`.
+
 ## v4.8.0 - Parallel Initial Data Seeding
 
 **Highlights**

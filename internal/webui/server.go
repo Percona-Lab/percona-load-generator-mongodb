@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"embed"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -64,7 +63,9 @@ type WebServer struct {
 	RunID            int64
 	InsightsCache    *stats.InsightsReport
 	TrendStore       *stats.TrendStore
-	insightsBuildMu  sync.Mutex
+	// trendStoreSetting is the trend_baseline_store value TrendStore was opened with.
+	trendStoreSetting string
+	insightsBuildMu   sync.Mutex
 	// explainCancel stops in-flight post-run explains when a new run starts.
 	explainCancel     context.CancelFunc
 	LifecyclePhase    string
@@ -111,12 +112,16 @@ func NewServer(cfg *config.AppConfig) *WebServer {
 	if err != nil {
 		log.Printf("Warning: definition library disabled: %v", err)
 	}
-	return &WebServer{
+	s := &WebServer{
 		AppConfig:       cfg,
-		TrendStore:      stats.OpenDefaultTrendStore(),
+		TrendStore:      openTrendStoreFor(cfg),
 		LifecyclePhase:  "idle",
 		DefinitionStore: defStore,
 	}
+	if cfg != nil {
+		s.trendStoreSetting = cfg.TrendBaselineStore
+	}
+	return s
 }
 
 func (s *WebServer) setLifecyclePhaseLocked(phase, message string) {
@@ -239,6 +244,8 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/report", s.handleReport)
 	mux.HandleFunc("/api/insights", s.handleInsights)
 	mux.HandleFunc("/api/trend-baselines", s.handleTrendBaselines)
+	mux.HandleFunc("/api/trend-baselines/", s.handleTrendBaselineItem)
+	mux.HandleFunc("/api/trends/compare", s.handleTrendCompare)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
 	mux.HandleFunc("/api/query-definitions/", s.handleQueryDefinitionItem)
@@ -834,6 +841,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainRetries = parseInt(r.FormValue("insights_explain_retries"), cfg.InsightsExplainRetries)
 	cfg.InsightsExplainBackoffMS = parseInt(r.FormValue("insights_explain_backoff_ms"), cfg.InsightsExplainBackoffMS)
 	applyLatencyTargetForm(cfg, r.Form)
+	if err := applyTrendForm(cfg, r.Form); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if mode := r.FormValue("sharding_mode"); mode != "" {
 		cfg.ShardingMode = config.NormalizeShardingMode(mode)
 	} else {
@@ -1117,6 +1129,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.CurrentStats = stats.NewCollector()
 		s.CurrentStats.ConfigureInsights(cfg)
 		s.AppConfig = cfg
+		s.useTrendStoreLocked(cfg)
 		s.ActiveCancel = cancel
 		s.LastError = ""
 		s.CurrentIteration = 1
@@ -1295,6 +1308,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.CurrentStats.ConfigureInsights(cfg)
 	s.CurrentStats.SetCollectionsForInsights(collectionsCfg.Collections)
 	s.AppConfig = cfg
+	s.useTrendStoreLocked(cfg)
 	s.ActiveCancel = cancel
 	s.LastError = ""
 	s.CurrentIteration = 1
@@ -2100,9 +2114,14 @@ func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
 	if trendStore == nil {
 		trendStore = stats.DisabledTrendStore()
 	}
-	now := time.Now()
-	run := stats.NewTrendRunContext(rep, stats.TrendWorkloadFromConfig(appCfg), newTrendRunID(now, runID), now)
-	stats.ApplyTrends(&rep, run, trendStore.Snapshot(), trendStore.Status(), now)
+	now := trendClock()
+	policy := stats.TrendPolicyFromConfig(appCfg)
+	label := ""
+	if appCfg != nil {
+		label = appCfg.TrendRunLabel
+	}
+	run := stats.NewTrendRunContext(rep, stats.TrendWorkloadFromConfig(appCfg), newTrendRunID(now, runID), label, now)
+	stats.ApplyTrends(&rep, run, trendStore.Snapshot(), trendStore.Status(), now, stats.TrendOptions{Policy: policy})
 
 	s.mu.Lock()
 	record := !s.IsRunning && s.RunID == runID
@@ -2111,42 +2130,11 @@ func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
 	}
 	s.mu.Unlock()
 	if record && rep.Metadata.Status == "ready" {
-		if err := trendStore.Record(run, stats.CurrentTrendBaselines(rep, run)); err != nil {
+		if err := trendStore.Record(run, stats.CurrentTrendBaselines(rep, run), policy); err != nil {
 			log.Printf("Warning: trend baselines not saved: %v", err)
 		}
 	}
 	return &rep, "ready"
-}
-
-func newTrendRunID(now time.Time, runID int64) string {
-	var b [4]byte
-	_, _ = rand.Read(b[:])
-	return fmt.Sprintf("%s-%d-%s", now.UTC().Format("20060102T150405Z"), runID, hex.EncodeToString(b[:]))
-}
-
-func (s *WebServer) handleTrendBaselines(w http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	store := s.TrendStore
-	s.mu.Unlock()
-	if store == nil {
-		store = stats.DisabledTrendStore()
-	}
-	switch r.Method {
-	case http.MethodGet:
-	case http.MethodDelete:
-		if err := store.Reset(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
-	default:
-		w.Header().Set("Allow", "GET, DELETE")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"store": store.Status(), "criteria": stats.DefaultTrendCriteria()})
 }
 
 func containsStage(v interface{}, stage string) bool {
