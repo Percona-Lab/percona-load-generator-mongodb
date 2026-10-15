@@ -183,7 +183,7 @@ This walkthrough runs the bundled `query_analysis_demo` workload, which mixes in
 2. **Run:** seed 100,000 documents and run for 60 seconds while the Live Metrics and Latency Analysis dashboards update, including the latency percentile timeline, cumulative distribution, and heatmap.
 3. **Analyze:** after the run, PLGM samples explain plans and opens the Query & Index Analysis views: per-shape efficiency, slow queries and index issues with a detail drawer (summary, execution plan, recommendation, diagnostics, query reference), and trends compared with a previous run. The Insights overview, per-iteration, and timeline views follow.
 
-<video src="https://github.com/user-attachments/assets/f133fd5a-baf8-4d6f-89e1-c179b83c4bef" controls width="700"></video>
+https://github.com/user-attachments/assets/f133fd5a-baf8-4d6f-89e1-c179b83c4bef
 
 
 ### 2. UI Features
