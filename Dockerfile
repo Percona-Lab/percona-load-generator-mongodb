@@ -13,7 +13,7 @@ ENV CGO_ENABLED=0
 
 # Build the binary
 # We target main.go 
-RUN go build -o plgm cmd/plgm/main.go
+RUN go build -o plgm ./cmd/plgm
 
 # --- Stage 2: Runner ---
 # We use a tiny Alpine Linux image for the final container

@@ -1,6 +1,6 @@
 # --- Variables ---
 APP_NAME := plgm
-SRC_DIR := cmd/plgm/main.go
+SRC_DIR := ./cmd/plgm
 BIN_DIR := bin
 
 # Get the latest git tag or commit hash.
