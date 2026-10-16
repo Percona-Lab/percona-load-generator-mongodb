@@ -239,6 +239,8 @@ type ExplainSample struct {
 	// earlier sample's, so it ran once and adds no independent evidence.
 	SharedCommand bool                `json:"shared_command,omitempty"`
 	Diagnostics   *ExplainDiagnostics `json:"diagnostics,omitempty"`
+	// Query is the explained command's literal query; it is never serialized.
+	Query *ExecutableQuery `json:"-"`
 }
 
 // ExplainSelection describes how explain samples were chosen for a shape and
@@ -306,6 +308,20 @@ type InsightsMetadata struct {
 	// WorkloadDurationSec is the measured workload window; nil when the start
 	// or end of the window was not recorded.
 	WorkloadDurationSec *float64 `json:"workload_duration_sec,omitempty"`
+
+	// Recording and Replay are set only when the run recorded or replayed a
+	// workload (workload_record_enabled / workload_replay_enabled).
+	Recording *WorkloadRecordingInfo `json:"recording,omitempty"`
+	Replay    *WorkloadReplayInfo    `json:"replay,omitempty"`
+	// GeneratedTraffic is set only for deterministic runs
+	// (workload_deterministic).
+	GeneratedTraffic *GeneratedTrafficInfo `json:"generated_traffic,omitempty"`
+	// OutcomeFile is set only when a replay or deterministic run wrote an
+	// outcome file (workload_record_outcomes).
+	OutcomeFile *WorkloadOutcomeFileInfo `json:"outcome_file,omitempty"`
+	// Target is set only for one target of a multi-target run
+	// (workload_replay_targets).
+	Target *WorkloadTargetInfo `json:"target,omitempty"`
 }
 
 type InsightsSummary struct {
@@ -452,6 +468,10 @@ type InsightsReport struct {
 	PerIteration         []IterationInsight      `json:"per_iteration,omitempty"`
 	TimeSlices           []TimeSliceInsight      `json:"time_slices,omitempty"`
 	Metadata             InsightsMetadata        `json:"metadata"`
+	// TrendQueryValues holds literal sample commands by shape id, set only
+	// when insights_trend_store_query_values is on. Trend rows expose them;
+	// the report itself never serializes this field.
+	TrendQueryValues map[string]TrendQueryValues `json:"-"`
 }
 
 type insightsSettings struct {
@@ -709,7 +729,7 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 	defer c.insightsMu.Unlock()
 
 	if !c.insightsCfg.enabled {
-		return InsightsReport{
+		rep := InsightsReport{
 			Impact:             ImpactView{Status: "disabled", Coverage: ImpactCoverage{TimeBasis: ImpactTimeBasis}, Groups: []WorkloadImpact{}},
 			QueryCapture:       disabledCaptureView("insights_disabled", c.insightsCfg.slowThresholdMs, c.insightsCfg.maxGroups),
 			ExplainCoverage:    NewExplainCoverage("disabled", "insights_disabled"),
@@ -731,6 +751,8 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 				LatencyTargets:       c.insightsCfg.latencyTargets,
 			},
 		}
+		c.workloadRunMetadataLocked(&rep.Metadata)
+		return rep
 	}
 
 	if c.finalInsights != nil {
@@ -761,6 +783,7 @@ func (c *Collector) GetFinalInsights() InsightsReport {
 		sec := roundTo(d.Seconds(), 3)
 		report.Metadata.WorkloadDurationSec = &sec
 	}
+	c.workloadRunMetadataLocked(&report.Metadata)
 	if c.insightsCfg.explainEnabled {
 		report.ExplainCoverage = NewExplainCoverage("pending", "explain_runs_after_the_run_completes")
 	} else {

@@ -34,13 +34,15 @@ export async function loadPage(insights, routes = {}) {
                 window.fetchCalls.push({ url: String(url), method: (init.method || 'GET').toUpperCase() });
                 for (const [prefix, handler] of Object.entries(routes)) {
                     if (String(url).startsWith(prefix)) {
-                        const { status = 200, body = {} } = await handler(String(url), init);
-                        return { ok: status < 400, status, json: async () => structuredClone(body), text: async () => JSON.stringify(body) };
+                        // rawBody (a JSON string) sends exact text, e.g. int64 values.
+                        const { status = 200, body = {}, rawBody } = await handler(String(url), init);
+                        const text = rawBody !== undefined ? rawBody : JSON.stringify(body);
+                        return { ok: status < 400, status, json: async () => (rawBody !== undefined ? JSON.parse(rawBody) : structuredClone(body)), text: async () => text };
                     }
                 }
                 if (String(url).startsWith('/api/insights')) {
                     if (insights instanceof Error) throw insights;
-                    return { ok: true, status: 200, json: async () => structuredClone(insights) };
+                    return { ok: true, status: 200, json: async () => structuredClone(insights), text: async () => JSON.stringify(insights) };
                 }
                 return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
             };

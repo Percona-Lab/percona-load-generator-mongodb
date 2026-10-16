@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -17,6 +18,9 @@ type placeholderOptions struct {
 	hitRate        int
 	existingRecord map[string]interface{}
 	useExisting    bool
+	// sortedKeys visits object keys in sorted order, so the random values
+	// are drawn in the same order every time (deterministic runs).
+	sortedKeys bool
 }
 
 func newPlaceholderOptions(rng *rand.Rand, pool *RecordPool, namespace string, hitRate int) *placeholderOptions {
@@ -135,26 +139,42 @@ func processFilterPlaceholders(v interface{}, po *placeholderOptions, fieldPath 
 	}
 	switch t := v.(type) {
 	case map[string]interface{}:
-		for k, val := range t {
-			path := k
-			if fieldPath != "" {
-				path = fieldPath + "." + k
+		if po.sortedKeys {
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
 			}
-			if s, ok := val.(string); ok && isDatatypePlaceholder(s) {
-				t[k] = po.replacePlaceholder(path, s)
-				continue
+			sort.Strings(keys)
+			for _, k := range keys {
+				processFilterPlaceholder(t, k, po, fieldPath)
 			}
-			if strings.HasPrefix(k, "$") {
-				processFilterPlaceholders(val, po, fieldPath)
-				continue
-			}
-			processFilterPlaceholders(val, po, path)
+			return
+		}
+		for k := range t {
+			processFilterPlaceholder(t, k, po, fieldPath)
 		}
 	case []interface{}:
 		for _, val := range t {
 			processFilterPlaceholders(val, po, fieldPath)
 		}
 	}
+}
+
+func processFilterPlaceholder(t map[string]interface{}, k string, po *placeholderOptions, fieldPath string) {
+	val := t[k]
+	path := k
+	if fieldPath != "" {
+		path = fieldPath + "." + k
+	}
+	if s, ok := val.(string); ok && isDatatypePlaceholder(s) {
+		t[k] = po.replacePlaceholder(path, s)
+		return
+	}
+	if strings.HasPrefix(k, "$") {
+		processFilterPlaceholders(val, po, fieldPath)
+		return
+	}
+	processFilterPlaceholders(val, po, path)
 }
 
 // processRecursiveWithPool resolves placeholder values in-place and reports

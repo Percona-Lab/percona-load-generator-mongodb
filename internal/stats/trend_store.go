@@ -324,6 +324,17 @@ func sanitizeTrendData(d TrendStoreData) (TrendStoreData, string) {
 		if len(eff) == 0 && len(wl) == 0 {
 			continue
 		}
+		if len(sh.QueryValuesHistory) > 0 {
+			vals := make([]TrendQueryValues, 0, len(sh.QueryValuesHistory))
+			for _, v := range sh.QueryValuesHistory {
+				if !validRun(v.RunID, v.RecordedAt) {
+					dropped++
+					continue
+				}
+				vals = append(vals, sanitizeTrendQueryValues(v))
+			}
+			sh.QueryValuesHistory = vals
+		}
 		shapes = append(shapes, sh)
 	}
 	runs := make([]TrendRunContext, 0, len(d.Runs))
@@ -356,6 +367,12 @@ func sanitizeTrendRun(r TrendRunContext) TrendRunContext {
 	w := &r.Workload
 	w.Duration, w.OperationMix = trendText(w.Duration, 32), trendText(w.OperationMix, trendMaxText)
 	w.LoadProfile, w.AccessPattern = trendText(w.LoadProfile, 32), trendText(w.AccessPattern, 32)
+	if !trendHashPattern.MatchString(w.ReplayHeaderHash) {
+		w.ReplayHeaderHash = ""
+	}
+	if !trendHashPattern.MatchString(w.GeneratedTrafficFingerprint) {
+		w.GeneratedTrafficFingerprint = ""
+	}
 	return r
 }
 
@@ -498,13 +515,31 @@ func trendDataStatus(d TrendStoreData) string {
 	return "ok"
 }
 
-// boundTrendSize keeps the encoded data within maxBytes by dropping the
-// oldest unpinned runs (never the newest run), then the least recently
-// recorded shapes. With the default limits this only triggers for unusually
-// large index inventories.
+// boundTrendSize keeps the encoded data within maxBytes. It first removes
+// stored query values, oldest run first (never the newest run's), and marks
+// those runs; then it drops the oldest unpinned runs (never the newest run),
+// then the least recently recorded shapes. Without query values this only
+// triggers for unusually large index inventories.
 func boundTrendSize(d TrendStoreData, maxBytes int) (TrendStoreData, string) {
 	b, _ := json.Marshal(d)
-	runs, shapes := 0, 0
+	runs, shapes, valueRuns := 0, 0, 0
+	if len(b) > maxBytes && TrendDataHasQueryValues(d) {
+		ordered := append([]TrendRunContext(nil), d.Runs...)
+		sortRunsNewestFirst(ordered)
+		withValues := map[string]bool{}
+		for _, sh := range d.Shapes {
+			for _, v := range sh.QueryValuesHistory {
+				withValues[v.RunID] = true
+			}
+		}
+		for i := len(ordered) - 1; i > 0 && len(b) > maxBytes; i-- {
+			if withValues[ordered[i].RunID] {
+				d = stripTrendRunValues(d, ordered[i].RunID)
+				valueRuns++
+				b, _ = json.Marshal(d)
+			}
+		}
+	}
 	for len(b) > maxBytes {
 		ordered := append([]TrendRunContext(nil), d.Runs...)
 		sortRunsNewestFirst(ordered)
@@ -528,8 +563,11 @@ func boundTrendSize(d TrendStoreData, maxBytes int) (TrendStoreData, string) {
 		}
 		b, _ = json.Marshal(d)
 	}
-	if runs == 0 && shapes == 0 {
+	if runs == 0 && shapes == 0 && valueRuns == 0 {
 		return d, ""
+	}
+	if valueRuns > 0 {
+		return d, fmt.Sprintf("store size limit of %d bytes reached: removed the stored query values of %d oldest runs, dropped %d oldest unpinned runs and %d least recently recorded shapes", maxBytes, valueRuns, runs, shapes)
 	}
 	return d, fmt.Sprintf("store size limit of %d bytes reached: dropped %d oldest unpinned runs and %d least recently recorded shapes", maxBytes, runs, shapes)
 }

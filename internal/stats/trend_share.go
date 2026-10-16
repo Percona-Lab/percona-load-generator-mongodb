@@ -12,16 +12,20 @@ import (
 )
 
 // TrendExport is a shareable file with selected runs and their snapshots. It
-// holds the same redacted fields as the store: no query text, literals, or
-// connection URI.
+// holds the same fields as the store and never the connection URI. Query
+// text and literals are included only for runs recorded with
+// insights_trend_store_query_values on, and then ContainsQueryValues is set.
 type TrendExport struct {
-	Format        string               `json:"format"`
-	SchemaVersion string               `json:"schema_version"`
-	ExportedAt    string               `json:"exported_at"`
-	Source        string               `json:"source,omitempty"`
-	Runs          []TrendRunContext    `json:"runs"`
-	Shapes        []TrendShapeBaseline `json:"shapes"`
+	Format              string               `json:"format"`
+	SchemaVersion       string               `json:"schema_version"`
+	ExportedAt          string               `json:"exported_at"`
+	Source              string               `json:"source,omitempty"`
+	ContainsQueryValues bool                 `json:"contains_query_values,omitempty"`
+	Runs                []TrendRunContext    `json:"runs"`
+	Shapes              []TrendShapeBaseline `json:"shapes"`
 }
+
+const trendImportValuesWarning = "this file contains literal query values (insights_trend_store_query_values); they were imported with the runs and are shown in trend details, exports, Download Summary, and the HTML report"
 
 // TrendImportRun is one run of an import file that was not added.
 type TrendImportRun struct {
@@ -78,10 +82,12 @@ func BuildTrendExport(d TrendStoreData, ids []string, source string, now time.Ti
 	for _, sh := range d.Shapes {
 		sh.EfficiencyHistory = filterHistory(sh.EfficiencyHistory, func(e TrendEfficiencySnapshot) bool { return keep(e.RunID) })
 		sh.WorkloadHistory = filterHistory(sh.WorkloadHistory, func(w TrendWorkloadSnapshot) bool { return keep(w.RunID) })
+		sh.QueryValuesHistory = filterHistory(sh.QueryValuesHistory, func(v TrendQueryValues) bool { return keep(v.RunID) })
 		if len(sh.EfficiencyHistory) > 0 || len(sh.WorkloadHistory) > 0 {
 			out.Shapes = append(out.Shapes, sh)
 		}
 	}
+	out.ContainsQueryValues = TrendDataHasQueryValues(TrendStoreData{Shapes: out.Shapes})
 	return out, nil
 }
 
@@ -100,8 +106,9 @@ func ParseTrendImport(b []byte) (TrendExport, []string, error) {
 		SchemaVersion string            `json:"schema_version"`
 		Runs          []json.RawMessage `json:"runs"`
 		Shapes        []struct {
-			EfficiencyHistory []json.RawMessage `json:"efficiency_history"`
-			WorkloadHistory   []json.RawMessage `json:"workload_history"`
+			EfficiencyHistory  []json.RawMessage `json:"efficiency_history"`
+			WorkloadHistory    []json.RawMessage `json:"workload_history"`
+			QueryValuesHistory []json.RawMessage `json:"query_values_history"`
 		} `json:"shapes"`
 	}
 	if err := json.Unmarshal(b, &head); err != nil {
@@ -120,7 +127,7 @@ func ParseTrendImport(b []byte) (TrendExport, []string, error) {
 		return TrendExport{}, nil, &TrendImportError{fmt.Sprintf("file has %d shapes; the limit is %d", len(head.Shapes), TrendMaxShapeBaselines)}
 	}
 	for _, sh := range head.Shapes {
-		if len(sh.EfficiencyHistory) > TrendMaxRuns || len(sh.WorkloadHistory) > TrendMaxRuns {
+		if len(sh.EfficiencyHistory) > TrendMaxRuns || len(sh.WorkloadHistory) > TrendMaxRuns || len(sh.QueryValuesHistory) > TrendMaxRuns {
 			return TrendExport{}, nil, &TrendImportError{fmt.Sprintf("a shape has more than %d snapshots", TrendMaxRuns)}
 		}
 	}
@@ -143,6 +150,10 @@ func ParseTrendImport(b []byte) (TrendExport, []string, error) {
 	x.Source = trendText(config.SanitizeTrendRunLabel(x.Source), trendMaxSource)
 	if len(x.Runs) == 0 {
 		return TrendExport{}, warnings, &TrendImportError{"file has no valid runs"}
+	}
+	x.ContainsQueryValues = TrendDataHasQueryValues(d)
+	if x.ContainsQueryValues {
+		warnings = append(warnings, trendImportValuesWarning)
 	}
 	return x, warnings, nil
 }
@@ -200,12 +211,13 @@ func (s *TrendStore) Import(b []byte, fileName string, p TrendPolicy, now time.T
 		for _, sh := range x.Shapes {
 			eff := filterHistory(sh.EfficiencyHistory, func(e TrendEfficiencySnapshot) bool { return addedIDs[e.RunID] })
 			wl := filterHistory(sh.WorkloadHistory, func(w TrendWorkloadSnapshot) bool { return addedIDs[w.RunID] })
+			vals := filterHistory(sh.QueryValuesHistory, func(v TrendQueryValues) bool { return addedIDs[v.RunID] })
 			if len(eff) == 0 && len(wl) == 0 {
 				continue
 			}
 			i, ok := byID[sh.ShapeID]
 			if !ok {
-				sh.EfficiencyHistory, sh.WorkloadHistory = eff, wl
+				sh.EfficiencyHistory, sh.WorkloadHistory, sh.QueryValuesHistory = eff, wl, vals
 				byID[sh.ShapeID] = len(d.Shapes)
 				d.Shapes = append(d.Shapes, sh)
 				continue
@@ -217,6 +229,9 @@ func (s *TrendStore) Import(b []byte, fileName string, p TrendPolicy, now time.T
 			}
 			local.EfficiencyHistory = append(append([]TrendEfficiencySnapshot(nil), local.EfficiencyHistory...), eff...)
 			local.WorkloadHistory = append(append([]TrendWorkloadSnapshot(nil), local.WorkloadHistory...), wl...)
+			if len(vals) > 0 {
+				local.QueryValuesHistory = append(append([]TrendQueryValues(nil), local.QueryValuesHistory...), vals...)
+			}
 		}
 		if conflicts > 0 {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("%d shape snapshots were skipped: the same shape id is stored for a different namespace or operation", conflicts))

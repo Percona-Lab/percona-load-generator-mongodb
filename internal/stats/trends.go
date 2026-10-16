@@ -98,6 +98,12 @@ type TrendWorkload struct {
 	AccessPattern      string `json:"access_pattern,omitempty"`
 	ThinkTimeMs        int    `json:"think_time_ms,omitempty"`
 	ObservedOperations uint64 `json:"observed_operations"`
+	// ReplayHeaderHash identifies the recording a run replayed; empty when
+	// the run generated its operations.
+	ReplayHeaderHash string `json:"replay_header_hash,omitempty"`
+	// GeneratedTrafficFingerprint is the traffic fingerprint of a complete
+	// deterministic run (workload_deterministic); empty otherwise.
+	GeneratedTrafficFingerprint string `json:"generated_traffic_fingerprint,omitempty"`
 }
 
 // TrendRunContext is the run-level context (settings, server, workload) stored
@@ -116,6 +122,11 @@ type TrendRunContext struct {
 	Sampling             TrendSampling `json:"sampling"`
 	Server               TrendServer   `json:"server"`
 	Workload             TrendWorkload `json:"workload"`
+	// QueryValuesStored is set when the run was recorded with
+	// insights_trend_store_query_values on; QueryValuesDropped when its values
+	// were later removed to keep the store within its size limit.
+	QueryValuesStored  bool `json:"query_values_stored,omitempty"`
+	QueryValuesDropped bool `json:"query_values_dropped,omitempty"`
 }
 
 // TrendPolicy holds the history settings: how many unpinned runs to keep and
@@ -233,17 +244,20 @@ type TrendShapeSnapshot struct {
 	ShapeSummary string                   `json:"shape_summary,omitempty"`
 	Efficiency   *TrendEfficiencySnapshot `json:"efficiency,omitempty"`
 	Workload     *TrendWorkloadSnapshot   `json:"workload,omitempty"`
+	QueryValues  *TrendQueryValues        `json:"query_values,omitempty"`
 }
 
 // TrendShapeBaseline is one persisted shape with at most one snapshot per
-// kept run in each history, newest first.
+// kept run in each history, newest first. QueryValuesHistory exists only for
+// runs recorded with insights_trend_store_query_values on.
 type TrendShapeBaseline struct {
-	ShapeID           string                    `json:"shape_id"`
-	Namespace         string                    `json:"namespace"`
-	Operation         string                    `json:"operation"`
-	ShapeSummary      string                    `json:"shape_summary,omitempty"`
-	EfficiencyHistory []TrendEfficiencySnapshot `json:"efficiency_history,omitempty"`
-	WorkloadHistory   []TrendWorkloadSnapshot   `json:"workload_history,omitempty"`
+	ShapeID            string                    `json:"shape_id"`
+	Namespace          string                    `json:"namespace"`
+	Operation          string                    `json:"operation"`
+	ShapeSummary       string                    `json:"shape_summary,omitempty"`
+	EfficiencyHistory  []TrendEfficiencySnapshot `json:"efficiency_history,omitempty"`
+	WorkloadHistory    []TrendWorkloadSnapshot   `json:"workload_history,omitempty"`
+	QueryValuesHistory []TrendQueryValues        `json:"query_values_history,omitempty"`
 }
 
 // TrendStoreData is the persisted baseline file.
@@ -267,6 +281,7 @@ type TrendRunSummary struct {
 	Outdated       bool     `json:"outdated"`
 	AgeSeconds     *int64   `json:"age_seconds,omitempty"`
 	Age            string   `json:"age,omitempty"`
+	QueryValues    bool     `json:"query_values_stored,omitempty"`
 }
 
 // TrendSelection says which baseline the view compares with.
@@ -384,6 +399,9 @@ type TrendRow struct {
 	Evidence             TrendEvidence      `json:"evidence"`
 	Interventions        []TrendAnnotation  `json:"interventions,omitempty"`
 	WorkloadChanges      []TrendAnnotation  `json:"workload_changes,omitempty"`
+	// QueryValues is present only when this run or its baseline run was
+	// recorded with query values; it never changes the labels above.
+	QueryValues *TrendValuesComparison `json:"query_values,omitempty"`
 }
 
 // TrendView is the report-level trend comparison.
@@ -402,6 +420,8 @@ type TrendView struct {
 	Counts        map[string]map[string]int `json:"counts"`
 	Limitations   []string                  `json:"limitations,omitempty"`
 	Rows          []TrendRow                `json:"rows"`
+	// QueryValuesNotice is set when any row carries literal query values.
+	QueryValuesNotice string `json:"query_values_notice,omitempty"`
 }
 
 // DefaultTrendCriteria returns the published heuristics with the default policy.
@@ -462,6 +482,12 @@ func TrendWorkloadFromConfig(cfg *config.AppConfig) TrendWorkload {
 func NewTrendRunContext(rep InsightsReport, workload TrendWorkload, runID, label string, now time.Time) TrendRunContext {
 	md := rep.Metadata
 	workload.ObservedOperations = rep.Impact.Coverage.ObservedOperations
+	if md.Replay != nil && md.Replay.Status == "complete" {
+		workload.ReplayHeaderHash = trendText(md.Replay.HeaderHash, 64)
+	}
+	if g := md.GeneratedTraffic; g != nil && g.Status == "complete" {
+		workload.GeneratedTrafficFingerprint = trendText(g.Fingerprint, 64)
+	}
 	recordedAt := now.UTC().Format("2006-01-02T15:04:05.000Z07:00")
 	server := trendServerFromReport(rep)
 	return TrendRunContext{
@@ -608,6 +634,11 @@ func CurrentTrendBaselines(rep InsightsReport, run TrendRunContext) []TrendShape
 			}
 			b.Workload = w
 		}
+		if v, ok := rep.TrendQueryValues[r.ShapeID]; ok && run.QueryValuesStored {
+			v.RunID, v.RecordedAt = run.RunID, run.RecordedAt
+			v.Samples = append([]TrendQueryValueSample(nil), v.Samples...)
+			b.QueryValues = &v
+		}
 		out = append(out, b)
 	}
 	return out
@@ -641,6 +672,9 @@ func MergeTrendBaselines(prev TrendStoreData, run TrendRunContext, cur []TrendSh
 		if c.Workload != nil {
 			sh.WorkloadHistory = append([]TrendWorkloadSnapshot{*c.Workload}, sh.WorkloadHistory...)
 		}
+		if c.QueryValues != nil && (c.Efficiency != nil || c.Workload != nil) {
+			sh.QueryValuesHistory = append([]TrendQueryValues{*c.QueryValues}, sh.QueryValuesHistory...)
+		}
 	}
 	d.Runs = append(d.Runs, run)
 	return pruneTrendData(d, p)
@@ -658,6 +692,7 @@ func removeTrendRun(d TrendStoreData, id string) TrendStoreData {
 	for _, s := range d.Shapes {
 		s.EfficiencyHistory = filterHistory(s.EfficiencyHistory, func(e TrendEfficiencySnapshot) bool { return e.RunID != id })
 		s.WorkloadHistory = filterHistory(s.WorkloadHistory, func(w TrendWorkloadSnapshot) bool { return w.RunID != id })
+		s.QueryValuesHistory = filterHistory(s.QueryValuesHistory, func(v TrendQueryValues) bool { return v.RunID != id })
 		if len(s.EfficiencyHistory) > 0 || len(s.WorkloadHistory) > 0 {
 			out.Shapes = append(out.Shapes, s)
 		}
@@ -765,6 +800,9 @@ func pruneTrendData(d TrendStoreData, p TrendPolicy) TrendStoreData {
 		if len(s.EfficiencyHistory) == 0 && len(s.WorkloadHistory) == 0 {
 			continue
 		}
+		if len(s.QueryValuesHistory) > 0 {
+			s.QueryValuesHistory = normalizeHistory(s.QueryValuesHistory, valuesKey, kept)
+		}
 		seenShape[s.ShapeID] = true
 		shapes = append(shapes, s)
 	}
@@ -847,7 +885,7 @@ func trendRunSummary(r TrendRunContext, shapes int, now time.Time, p TrendPolicy
 	s := TrendRunSummary{
 		RunID: r.RunID, Label: TrendRunLabel(r.Label, r.Server, r.RecordedAt), RecordedAt: r.RecordedAt,
 		ServerVersions: r.Server.Versions, Topology: r.Server.Topology, Pinned: r.Pinned,
-		Source: r.Source, ImportedAt: r.ImportedAt, Shapes: shapes,
+		Source: r.Source, ImportedAt: r.ImportedAt, Shapes: shapes, QueryValues: r.QueryValuesStored && !r.QueryValuesDropped,
 	}
 	if t, err := time.Parse(time.RFC3339, r.RecordedAt); err == nil {
 		age := int64(now.Sub(t) / time.Second)
@@ -962,6 +1000,16 @@ func BuildTrendView(rep InsightsReport, run TrendRunContext, base TrendStoreData
 		v.Counts["latency"][row.Latency.State]++
 		v.Counts["impact"][row.Impact.State]++
 		v.Counts["comparability"][row.Comparability]++
+		if qv := row.QueryValues; qv != nil {
+			if v.Counts["query_values"] == nil {
+				v.Counts["query_values"] = map[string]int{}
+				v.Limitations = append(v.Limitations, trendValuesMethodNote, TrendValuesNote)
+			}
+			v.Counts["query_values"][qv.State]++
+			if qv.Current != nil || qv.Baseline != nil {
+				v.QueryValuesNotice = TrendQueryValuesNotice
+			}
+		}
 		v.Rows = append(v.Rows, row)
 	}
 	unseen := 0
@@ -1028,6 +1076,9 @@ func selectRunBaseline(s TrendShapeBaseline, id string) *TrendShapeSnapshot {
 			break
 		}
 	}
+	if out.Efficiency != nil || out.Workload != nil {
+		out.QueryValues = trendValuesForRun(s, id)
+	}
 	return out
 }
 
@@ -1076,6 +1127,12 @@ func selectPreviousBaseline(s TrendShapeBaseline, ctx trendCompareCtx) *TrendSha
 	}
 	if out.Workload == nil {
 		out.Workload = newest
+	}
+	switch {
+	case out.Workload != nil:
+		out.QueryValues = trendValuesForRun(s, out.Workload.RunID)
+	case out.Efficiency != nil:
+		out.QueryValues = trendValuesForRun(s, out.Efficiency.RunID)
 	}
 	return out
 }
@@ -1127,8 +1184,15 @@ func gateSnapshot(recordedAt, baseSI, curSI string, now time.Time, maxAge time.D
 }
 
 // compareTrendShape compares cur with base. missing replaces the default
-// reason when base has no snapshot.
+// reason when base has no snapshot. The query values annotation is added
+// after the metric comparison and never feeds back into it.
 func compareTrendShape(cur TrendShapeSnapshot, base *TrendShapeSnapshot, ctx trendCompareCtx, missing string) TrendRow {
+	row := compareTrendMetrics(cur, base, ctx, missing)
+	row.QueryValues = trendValuesRow(cur, base, ctx)
+	return row
+}
+
+func compareTrendMetrics(cur TrendShapeSnapshot, base *TrendShapeSnapshot, ctx trendCompareCtx, missing string) TrendRow {
 	run, runs := ctx.run, ctx.runs
 	row := TrendRow{ShapeID: cur.ShapeID, Namespace: cur.Namespace, Operation: cur.Operation, ShapeSummary: cur.ShapeSummary}
 	ce, cw := cur.Efficiency, cur.Workload
@@ -1482,8 +1546,21 @@ func trendWorkloadChanges(bw, cw *TrendWorkloadSnapshot, wlRun *TrendRunContext,
 		if d := workloadDiff(wlRun.Workload, run.Workload); d != "" {
 			out = append(out, TrendAnnotation{Kind: "workload_config_changed", Detail: d})
 		}
+		if h := run.Workload.ReplayHeaderHash; h != "" && h == wlRun.Workload.ReplayHeaderHash {
+			out = append(out, TrendAnnotation{Kind: "same_recorded_workload", Detail: fmt.Sprintf("both runs replayed the same recorded workload (header hash %s): the same operations with the same values were sent; cache state and concurrent interleaving can still differ", trendShortHash(h))})
+		}
+		if f := run.Workload.GeneratedTrafficFingerprint; f != "" && f == wlRun.Workload.GeneratedTrafficFingerprint {
+			out = append(out, TrendAnnotation{Kind: "same_generated_traffic", Detail: fmt.Sprintf("both runs generated the same deterministic traffic (fingerprint %s): every worker sent the same commands with the same values in the same order; cache state, concurrent interleaving, and server-generated values can still differ", trendShortHash(f))})
+		}
 	}
 	return out
+}
+
+func trendShortHash(h string) string {
+	if len(h) > 12 {
+		return h[:12]
+	}
+	return h
 }
 
 func samplingDiff(a, b TrendSampling) string {

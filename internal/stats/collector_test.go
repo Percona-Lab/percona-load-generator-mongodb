@@ -15,6 +15,20 @@ import (
 	"time"
 )
 
+func TestIntervalLinesCarryTheOutputLabelOnlyWhenSet(t *testing.T) {
+	plain := NewCollector()
+	labeled := NewCollector()
+	labeled.OutputLabel = "m9%d"
+	plainOut := captureStdout(t, plain.printInterval)
+	labeledOut := captureStdout(t, labeled.printInterval)
+	if !strings.HasPrefix(plainOut, " 00:00   |") {
+		t.Fatalf("unlabeled interval line changed: %q", plainOut)
+	}
+	if labeledOut != "[m9%d]"+plainOut {
+		t.Fatalf("labeled interval line = %q, want the label before %q", labeledOut, plainOut)
+	}
+}
+
 func TestConcurrencySnapshot(t *testing.T) {
 	c := NewCollector()
 	if target, active := c.ConcurrencySnapshot(); target != 0 || active != 0 {

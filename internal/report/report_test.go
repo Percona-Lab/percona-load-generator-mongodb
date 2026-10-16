@@ -61,6 +61,67 @@ func TestRenderProducesSelfContainedHTML(t *testing.T) {
 	}
 }
 
+func TestRenderGeneratedTrafficSectionOnlyWhenPresent(t *testing.T) {
+	plain, err := RenderBytes(sampleData())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(plain), "generated-traffic") {
+		t.Fatal("a run without deterministic traffic must not render a fingerprint section")
+	}
+	d := sampleData()
+	d.GeneratedTrafficItems = []KV{{Key: "Fingerprint", Value: "abc123"}, {Key: "Status", Value: "complete"}}
+	html, err := RenderBytes(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(html)
+	if !strings.Contains(s, `id="generated-traffic"`) || !strings.Contains(s, "abc123") || !strings.Contains(s, "Cross-worker interleaving") {
+		t.Fatal("fingerprint section missing")
+	}
+}
+
+func TestRenderMultiTargetSection(t *testing.T) {
+	plain, err := RenderBytes(sampleData())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(plain), "multi-target") {
+		t.Fatal("a single-target run must not render a multi-target section")
+	}
+	d := sampleData()
+	d.MultiTargetItems = []KV{{Key: "m9 (target 2 of 2)", Value: "complete; lag max 3.0 ms"}}
+	d.MultiTargetNotes = []string{"latencies may be affected"}
+	html, err := RenderBytes(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := string(html); !strings.Contains(s, `id="multi-target"`) || !strings.Contains(s, "lag max 3.0 ms") || !strings.Contains(s, "latencies may be affected") {
+		t.Fatal("multi-target section missing")
+	}
+}
+
+func TestRenderTrendQueryValuesSource(t *testing.T) {
+	for _, tc := range []struct {
+		row  TrendRow
+		want string
+	}{
+		{TrendRow{QueryValues: "same_values: x"}, "Query values (literal, recorded with insights_trend_store_query_values on)"},
+		{TrendRow{QueryValues: "same_values: x", QueryValuesFromTraffic: true}, "Query values (same deterministic traffic fingerprint; annotation only)"},
+		{TrendRow{QueryValues: "same_values: x", QueryValuesFromRecording: true}, "Query values (both runs replayed the same recording; annotation only)"},
+	} {
+		d := sampleData()
+		d.Trends = &TrendSection{Status: "ok", Rows: []TrendRow{tc.row}}
+		html, err := RenderBytes(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(html), tc.want) {
+			t.Fatalf("missing %q", tc.want)
+		}
+	}
+}
+
 func TestRenderWithoutOptionalSections(t *testing.T) {
 	d := ReportData{
 		Title:           "Minimal",

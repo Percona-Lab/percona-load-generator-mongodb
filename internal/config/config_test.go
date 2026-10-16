@@ -366,6 +366,39 @@ func TestExplainEnabledByDefault(t *testing.T) {
 	}
 }
 
+func TestTrendStoreQueryValuesOffByDefault(t *testing.T) {
+	dir := t.TempDir()
+	load := func(t *testing.T, yaml string, webUI bool) bool {
+		t.Helper()
+		path := filepath.Join(dir, "missing.yaml")
+		if yaml != "" {
+			path = filepath.Join(dir, "cfg.yaml")
+			if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		cfg, err := LoadAppConfig(path, webUI)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.InsightsTrendStoreQueryValues
+	}
+	if load(t, "", false) || load(t, "", true) || load(t, "insights_enabled: true\n", false) {
+		t.Fatal("storing query values in trends must be off unless enabled")
+	}
+	if !load(t, "insights_trend_store_query_values: true\n", false) {
+		t.Fatal("the config file must turn it on")
+	}
+	t.Setenv("PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES", "false")
+	if load(t, "insights_trend_store_query_values: true\n", true) {
+		t.Fatal("the environment override must turn it off")
+	}
+	t.Setenv("PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES", "true")
+	if !load(t, "", false) {
+		t.Fatal("the environment override must turn it on")
+	}
+}
+
 func TestExplainEfficiencyModeDefaultsOverrideAndNormalization(t *testing.T) {
 	cfg := &AppConfig{}
 	applyBaseDefaults(cfg)

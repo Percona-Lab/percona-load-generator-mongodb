@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/brianvoe/gofakeit/v6 v6.28.0
+	github.com/klauspost/compress v1.16.7
 	go.mongodb.org/mongo-driver/v2 v2.4.0
 	golang.org/x/term v0.38.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -11,7 +12,6 @@ require (
 
 require (
 	github.com/golang/snappy v1.0.0 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect

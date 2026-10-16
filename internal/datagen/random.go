@@ -1,6 +1,7 @@
 package datagen
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"strings"
@@ -169,20 +170,26 @@ func RandomValueWithFaker(def config.CollectionField, faker *gofakeit.Faker) int
 
 	// --- Dates & Times ---
 	case "date", "datetime":
-		return time.Now().Add(-time.Duration(rng.Intn(365*24)) * time.Hour)
+		return referenceNow().Add(-time.Duration(rng.Intn(365*24)) * time.Hour)
 	case "timestamp":
-		return bson.Timestamp{T: uint32(time.Now().Unix()), I: uint32(rng.Intn(100))}
+		return bson.Timestamp{T: uint32(referenceNow().Unix()), I: uint32(rng.Intn(100))}
 
 	// --- Identifiers ---
 	case "objectid":
+		if Seeded() {
+			var id bson.ObjectID
+			binary.BigEndian.PutUint32(id[0:4], uint32(SeededReferenceTime.Unix()))
+			binary.BigEndian.PutUint64(id[4:12], rng.Uint64())
+			return id
+		}
 		return bson.NewObjectID()
 
 	// --- Complex Structures (Recursion uses the SAME faker instance) ---
 	case "object", "document":
 		if len(def.Fields) > 0 {
 			doc := make(bson.D, 0, len(def.Fields))
-			for key, fieldDef := range def.Fields {
-				val := RandomValueWithFaker(fieldDef, faker)
+			for _, key := range FieldNames(def.Fields) {
+				val := RandomValueWithFaker(def.Fields[key], faker)
 				doc = append(doc, bson.E{Key: key, Value: val})
 			}
 			return doc

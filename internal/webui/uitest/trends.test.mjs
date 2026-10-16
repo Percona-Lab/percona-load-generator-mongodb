@@ -72,32 +72,71 @@ test('only rows meeting the evidence criteria carry improved or regressed badges
     }
 });
 
-test('details expand with reasons, separate evidence counts, and intervention annotations', async () => {
+test('details modal shows reasons, separate evidence counts, and intervention annotations', async () => {
     const data = fixture('trends');
     const { doc } = await loadPage(data);
     openTrends(doc);
+    const modal = doc.getElementById('shapeDetailModal');
+    const detail = doc.getElementById('shapeDetailBody');
     const sku = data.trends.rows.find(r => r.shape_summary === 'find on fields: sku');
-    const btn = () => rows(doc).find(tr => tr.dataset.shapeId === sku.shape_id).querySelector('button');
+    const rowFor = id => rows(doc).find(tr => tr.dataset.shapeId === id);
+    const btn = () => rowFor(sku.shape_id).querySelector('button');
     btn().click();
-    const detail = doc.querySelector(`tr.trend-detail[data-detail-for="${sku.shape_id}"]`);
-    assert.ok(detail, 'detail row opens under the shape');
+    assert.equal(modal.style.display, 'flex');
+    assert.equal(doc.querySelectorAll('#trendRows tbody tr').length, rows(doc).length, 'no inline detail rows');
     assert.equal(btn().getAttribute('aria-expanded'), 'true');
-    const text = detail.textContent;
+    assert.ok(rowFor(sku.shape_id).classList.contains('selected'));
+    assert.equal(doc.getElementById('shapeDetailTitle').textContent, `${sku.namespace} • ${sku.operation} • ${sku.shape_summary}`);
+    assert.equal(detail.querySelector('.trend-eff .insight-badge').textContent, BADGE[sku.efficiency.state]);
+    assert.ok(doc.getElementById('trendDetailBaseline').textContent.startsWith(sku.comparability));
+    const text = doc.getElementById('trendDetailReasons').textContent;
     assert.ok(text.includes('Intervention (plan_changed): winning plan COLLSCAN → FETCH <- IXSCAN'));
     assert.ok(text.includes('Intervention (index_inventory_changed)'));
     assert.ok(text.includes('Workload change (workload_config_changed): concurrency 4 → 8'));
     assert.ok(text.includes('Evidence, baseline: 200 operations (full run), 200 retained latency samples, 2 distinct explained commands'));
     assert.ok(text.includes('Latency: retained-sample p95'));
 
+    doc.getElementById('shapeDetailX').click();
+    assert.equal(modal.style.display, 'none');
+    assert.equal(btn().getAttribute('aria-expanded'), 'false');
+    assert.equal(doc.activeElement, btn(), 'focus returns to Details');
+
     const region = data.trends.rows.find(r => r.shape_summary === 'find on fields: region');
-    rows(doc).find(tr => tr.dataset.shapeId === region.shape_id).querySelector('button').click();
-    assert.equal(doc.querySelectorAll('tr.trend-detail').length, 1, 'one detail row at a time');
-    const rtext = doc.querySelector('tr.trend-detail').textContent;
+    rowFor(region.shape_id).querySelector('td').click();
+    assert.equal(modal.style.display, 'flex', 'a row click opens the modal');
+    const rtext = detail.textContent;
     assert.ok(rtext.includes('Scan efficiency (insufficient_evidence): baseline run has partial evidence'));
     assert.ok(rtext.includes('do not add explain evidence'));
+    assert.ok(!rtext.includes('Intervention (plan_changed)'), 'only the clicked shape is shown');
+    doc.getElementById('shapeDetailCloseBtn').click();
+    assert.equal(modal.style.display, 'none');
+    assert.equal(doc.activeElement, rowFor(region.shape_id), 'focus returns to the row');
+});
 
-    rows(doc).find(tr => tr.dataset.shapeId === region.shape_id).querySelector('button').click();
-    assert.equal(doc.querySelectorAll('tr.trend-detail').length, 0);
+test('trend hint is shown and the modal closes on Escape and overlay click; selected text does not open it', async () => {
+    const data = fixture('trends');
+    const { w, doc, errors } = await loadPage(data);
+    openTrends(doc);
+    assert.equal(doc.getElementById('trendRowHint').textContent.trim(), '👉 Click any row (or Details) to open the full details for that query shape.');
+    const modal = doc.getElementById('shapeDetailModal');
+    const tr = () => rows(doc)[0];
+
+    tr().querySelector('button').click();
+    doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(modal.style.display, 'none', 'Escape closes');
+    tr().querySelector('button').click();
+    modal.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    assert.equal(modal.style.display, 'none', 'overlay click closes');
+    assert.equal(doc.activeElement, tr().querySelector('button'));
+
+    const range = doc.createRange();
+    range.selectNodeContents(tr().querySelector('td'));
+    w.getSelection().removeAllRanges();
+    w.getSelection().addRange(range);
+    assert.ok(String(w.getSelection()).length > 0);
+    tr().querySelector('td').click();
+    assert.notEqual(modal.style.display, 'flex', 'selecting text must not open details');
+    assert.deepEqual(errors, []);
 });
 
 test('filters select labeled, insufficient, and not comparable rows', async () => {

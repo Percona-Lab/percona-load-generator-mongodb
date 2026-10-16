@@ -112,6 +112,17 @@ trend_default_comparison: "previous"
 # Label for runs started with this config; empty = mongo-<server version>,
 # or run-<UTC time> when the version is unknown. At most 64 bytes.
 # trend_run_label: ""
+# Store query values. On: each run also stores the exact commands of each shape's
+# explained samples (plus up to 8 retained samples), so Trends can check whether
+# ordinary generated runs used the same query values; this never changes the
+# improved/regressed labels. To compare instances with identical operations, use
+# Record & Replay instead (replays of one recording compare as the same values
+# without stored literals; plgm compare-replays compares them operation by operation).
+# The baseline file, exports, Download Summary, and HTML report then contain real
+# query values (up to 16 KiB per sample, 1 MiB per run).
+# Off (default): only redacted shapes and metrics are stored.
+# Env: PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES
+insights_trend_store_query_values: false
 
 # ==============================================================================
 # Sharding Strategy
@@ -291,11 +302,143 @@ record_pool_max_size: 10000
 # Sample up to this many existing documents per collection at workload start (0 disables).
 record_pool_bootstrap_sample: 500
 
-# Seed random generation. Seed document generation remains serial even with multiple
-# seed writers; reproducibility is best-effort (ObjectIds/time-based fields may vary).
-# Leave 0 (default) for time-based, non-deterministic generation.
-# Can be overridden via env: PLGM_RANDOM_SEED
+# --- Reproducible Workload (Record & Replay) ---
+# Run the exact same operations, with the same values, on two instances: record on
+# one, replay on the other. Off by default. Record and replay cannot both be on for
+# the same run, and neither works with the raw injector. For a full upgrade-test
+# workflow (record or import, replay on several targets, compare outcomes), see the
+# README section "Comparing Two Instances (Upgrade Testing)".
+#
+# Random seed. Set (non-zero): seeds data and query generation, so the same seed,
+# documents count, and collection definitions seed identical documents on any
+# instance; use it on both sides of a replay. 0 (default): values are time-based and
+# differ every run. Env: PLGM_RANDOM_SEED
 random_seed: 0
+# Record workload. On: writes every operation sent, with its exact values, to the
+# recording file so it can be replayed on another instance. The file contains real
+# query values, and recording adds about 2 µs per operation. Every iteration is
+# recorded into the one file, and a replay runs them in order. Off (default): nothing
+# is recorded. Env: PLGM_WORKLOAD_RECORD_ENABLED
+workload_record_enabled: false
+# Recording file. Set: NDJSON file, written with mode 0600; an existing file that is
+# not a recording is never overwritten. Empty (default): plgm_workload_record.ndjson
+# in the working directory when recording is on. Env: PLGM_WORKLOAD_RECORD_PATH
+# workload_record_path: ""
+# Max recording size in bytes. Set: when the uncompressed size reaches this many
+# bytes the recording stops and is marked truncated; the run continues. 0: unlimited;
+# watch the free disk space. Empty (default): 536870912 (512 MiB).
+# Env: PLGM_WORKLOAD_RECORD_MAX_BYTES
+# workload_record_max_bytes: 536870912
+# When the writer falls behind. block: workers wait for the writer, so every
+# operation is recorded; throughput may drop, and the total and longest wait are
+# reported. fail (default): the recording stops and is marked failed; the run
+# continues at full speed. Env: PLGM_WORKLOAD_RECORD_BACKPRESSURE
+workload_record_backpressure: "fail"
+# Recording compression. zstd / gzip: compresses the file (typically 10-15x
+# smaller; zstd is faster) at some extra writer CPU; replay and upload detect it.
+# The size cap counts uncompressed bytes. none (default): plain NDJSON.
+# Env: PLGM_WORKLOAD_RECORD_COMPRESSION
+workload_record_compression: "none"
+# Replay workload. On: no operations are generated; the recorded operations run on
+# the recorded worker count until the file ends. Duration, load profile, access
+# pattern, and think time are ignored. Iterations is ignored too: the replay runs
+# once and replays every recorded iteration in order. Off (default): operations are
+# generated as usual. Env: PLGM_WORKLOAD_REPLAY_ENABLED
+workload_replay_enabled: false
+# Recording to replay. Set: the recording to replay (in the Web UI an uploaded file
+# is used instead and deleted after the run). Empty (default): nothing to replay;
+# required when replay is on. Env: PLGM_WORKLOAD_REPLAY_PATH
+# workload_replay_path: ""
+# Replay mode. timed: sends each operation at its recorded offset from the start and
+# reports how far behind it fell (lag). per_worker (default): each worker sends its
+# recorded operations in order, as fast as possible. Env: PLGM_WORKLOAD_REPLAY_MODE
+workload_replay_mode: "per_worker"
+# Allow mismatch. On: replays even when the collection/query definitions or
+# namespaces differ from the recording, or the recording did not complete; results
+# may not be comparable. Off (default): such a replay fails before any operation is
+# sent. Env: PLGM_WORKLOAD_REPLAY_ALLOW_MISMATCH
+workload_replay_allow_mismatch: false
+# Deterministic generated traffic. On: every operation is generated from
+# (random_seed, iteration, worker, operation number), so two runs with the same
+# settings send the same commands with the same values, without a recording file.
+# Each worker sends exactly operations_per_worker operations; failures and retries
+# do not shift later operations. Needs a non-zero random_seed, drop_collections on
+# and skip_seed off, and a fixed worker count; duration becomes a safety timeout
+# (the run is marked incomplete if it is hit). The insert cache and bootstrap are
+# not used. The run reports a traffic fingerprint (hashes only). Cross-worker
+# interleaving, server-generated values, and results on different data can still
+# differ. Off (default): operations are generated as usual until duration ends.
+# Env: PLGM_WORKLOAD_DETERMINISTIC
+workload_deterministic: false
+# Operations per worker. Set: each worker sends exactly this many operations per
+# iteration; required when workload_deterministic is on. 0 (default): no budget;
+# workers run until duration ends. Env: PLGM_OPERATIONS_PER_WORKER
+operations_per_worker: 0
+# Record outcomes. On: keeps what every operation returned: client latency, ok or
+# the error code and code name (never the message), and a result summary
+# (find/aggregate documents returned; inserted; matched/modified/upserted;
+# deleted; transaction commit/abort). A recording stores it on each operation
+# line; a replay writes workload_replay_outcomes_path; a deterministic run writes
+# workload_deterministic_outcomes_path or, when recording, the recording. The
+# commands sent, stats, insights, and trends do not change. Needs a recording, a
+# replay, or a deterministic run. Off (default): no outcomes; recordings are
+# unchanged. Env: PLGM_WORKLOAD_RECORD_OUTCOMES
+workload_record_outcomes: false
+# Result checksums. On: adds an order-sensitive sha256 of every find/aggregate
+# result (each returned document as canonical Extended JSON with keys sorted) to
+# its outcome. Costs about 5 us of worker CPU and a copy per returned document,
+# hashed after the latency is measured. Needs workload_record_outcomes on.
+# Off (default): document counts only. Env: PLGM_WORKLOAD_RECORD_RESULT_CHECKSUMS
+workload_record_result_checksums: false
+# Replay outcome file (NDJSON, mode 0600). Set: a replay writes one outcome per
+# replayed operation, keyed by the recording's sequence numbers; required when
+# workload_record_outcomes is on during a replay. An existing file that is not an
+# outcome file is never overwritten. Empty (default): no outcome file.
+# Env: PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH
+workload_replay_outcomes_path: ""
+# Deterministic outcome file (NDJSON, mode 0600). Set: a deterministic run writes
+# one outcome per operation, keyed by (iteration, worker, operation number) and
+# stamped with the traffic fingerprint. Empty (default): no outcome file.
+# Env: PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH
+workload_deterministic_outcomes_path: ""
+# Replay operations. reads_only: replays finds and read-only aggregates and skips
+# every write (inserts, updates, deletes, transactions with a write, aggregates
+# with $out or $merge), so the target keeps its starting data; skipped writes are
+# counted and reported, and the commands hash is not compared. all (default):
+# replays every recorded operation, including writes. Env: PLGM_WORKLOAD_REPLAY_OPS
+workload_replay_ops: "all"
+# Starting-data fingerprint. counts / dbhash: a recording stores each collection's
+# document count and index list (plus the dbHash collection hash with dbhash)
+# before the first operation; every replay of it compares them with its target
+# first and fails on a difference (warns with workload_replay_allow_mismatch).
+# dbhash needs the dbHash privilege, does not run through mongos, and matches only
+# byte-identical copies (a snapshot or mongodump restore), not separately seeded
+# ones. A replay always checks a recording that has a fingerprint. off (default):
+# nothing is stored or checked. Env: PLGM_WORKLOAD_DATA_FINGERPRINT
+workload_data_fingerprint: "off"
+# Multi-target replay. Listed (2-8 targets): the replay (or deterministic run)
+# runs once on every listed target, and only on those: uri is not used. Each
+# target gets its own client, workers, stats, outcome file (the label goes before
+# the extension, e.g. outcomes.m8.ndjson), insights, and trend run, and is
+# compared with the first target. Needs workload_replay_enabled or
+# workload_deterministic, and workload_record_outcomes with an outcome file.
+# username, password, and TLS settings apply to every target; put other
+# per-target options in its URI. Empty (default): a single run on uri.
+# Env: PLGM_WORKLOAD_REPLAY_TARGETS="m7=mongodb://h7:27017;m8=mongodb://h8:27017"
+# CLI: --replay-target m7=mongodb://h7:27017 --replay-target m8=mongodb://h8:27017
+# workload_replay_targets:
+#   - label: m7
+#     uri: "mongodb://h7:27017"
+#   - label: m8
+#     uri: "mongodb://h8:27017"
+workload_replay_targets: []
+# Targets mode. concurrent: every target is prepared first, one at a time, then
+# all run at once from this host; they share its CPU, memory, and network, so
+# latencies may be affected, and the report shows each target's client-side lag
+# behind the recorded timeline. sequential (default): targets run one after
+# another and do not compete for this host. Env: PLGM_WORKLOAD_REPLAY_TARGETS_MODE
+# CLI: --replay-targets-mode
+workload_replay_targets_mode: "sequential"
 
 # --- Global Pool Overrides ---
 # These override connection_params if set here, providing runtime flexibility.

@@ -1,0 +1,4 @@
+{"find":"users","filter":{"age":{"$gte":30}},"limit":5}
+
+{"insert":"users","documents":[{"_id":7,"age":40}],"$db":"other"}
+{"hello":1}

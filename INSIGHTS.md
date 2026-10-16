@@ -76,7 +76,9 @@ Recommended baseline for most users:
 Web UI settings tabs:
 - `Metrics & Insights`: insights capture (`insights_enabled`, sampling, slow threshold, retention) and CSV export
 - `Query Analysis (Explain)`: post-run explain (`insights_explain_*`) and query latency targets (`insights_latency_target_*`)
-- `Trends & History`: trend history settings (`trend_*`), the stored run list (rename, pin, delete), export/import, and reset. See README for the settings table.
+- `Trends & History`: trend history settings (`trend_*`, `insights_trend_store_query_values`), the stored run list (rename, pin, delete), export/import, and reset. See README for the settings table.
+- `Record & Replay`: Reproducible Workload settings, grouped as Seed & Deterministic Traffic, Record, Replay, Multi-Target Replay & Starting Data, Outcome Capture, and Import Captured Traffic: `random_seed`, `workload_record_*`, `workload_replay_*`. See README "Record and Replay". `workload_record_backpressure`: `block` makes workers wait for the writer so every operation is recorded (throughput may drop; the waits are reported); `fail` (default) stops the recording instead. `workload_record_compression`: `zstd`/`gzip` compress the file, `none` (default) does not. `workload_record_max_bytes: 0` is unlimited. Recordings may span several iterations. Run metadata `recording` in `/api/insights` reports the policy, sizes, compression ratio, iterations, and waits; it never holds literal values. Deterministic Generated Traffic: `workload_deterministic` (default off) with `operations_per_worker` generates each operation from (seed, iteration, worker, operation number); run metadata `generated_traffic` holds the traffic fingerprint, status (`complete`/`incomplete` with reason), counts, and per-worker hashes, never values. See README "Deterministic Generated Traffic". Outcome Capture: `workload_record_outcomes` (default off) keeps each operation's client latency, ok or error code and name (never the message), and result summary; `workload_record_result_checksums` (default off, needs outcomes) adds an order-sensitive sha256 of find/aggregate results; `workload_replay_outcomes_path` / `workload_deterministic_outcomes_path` (default empty) name the 0600 NDJSON outcome files. Run metadata `outcome_file` reports the path, count, status, and hashes only; outcomes never reach stats, insights, trends, or Download Summary. See README "Operation Outcomes". Multi-Target Replay & Starting Data: `workload_replay_ops` (`all` default; `reads_only` skips and counts writes, so the target keeps its starting data); `workload_data_fingerprint` (`off` default; `counts` stores each collection's document count and index list in the recording, `dbhash` adds the dbHash collection hashes, which match only byte-identical copies such as a snapshot or mongodump restore; every replay of such a recording checks its target first and fails on a difference, or warns with allow mismatch); `workload_replay_targets` (empty default; 2–8 `{label, uri}` targets, only those are used, `uri` is not) and `workload_replay_targets_mode` (`sequential` default; `concurrent` runs all targets at once from one host, so latencies may be affected and each target's client-side lag is reported). Each target gets its own collector, outcome file, insights, and trend run; run metadata `target` (label, index, reference, mode) and `replay.ops_filter` / `ops_skipped` / `data_fingerprint` (match and differences: counts and index names only) carry no URIs or values. See README "Multi-Target Replay".
+- `Query Analysis > Replay Comparison` (and `plgm compare-replays a b`): compares two outcome files of the same operations (same recording header hash, or same traffic fingerprint for deterministic runs; others are refused unless a mismatch is allowed, with a warning). Per shape and overall: operation counts, latency avg/p50/p95/p99 per side with the change, result count/checksum differences, errors on one side by code, missing operations, and the first N differing operations side by side (command and literal values only when a recording is given; the report is then marked). Result and error differences are facts; latency verdicts reuse the Trends thresholds and are heuristics. Plan changes come from two chosen trend runs and are annotations only. Reports stay in server memory (newest 10) and download as HTML or JSON. See README "Compare Replays".
 
 YAML keys and environment variables:
 
@@ -97,6 +99,7 @@ YAML keys and environment variables:
 | `insights_explain_retries` | `PLGM_INSIGHTS_EXPLAIN_RETRIES` | Retries for explain timeout/failure |
 | `insights_explain_backoff_ms` | `PLGM_INSIGHTS_EXPLAIN_BACKOFF_MS` | Retry backoff between explain attempts |
 | `insights_latency_target_avg_ms`, `_p95_ms`, `_p99_ms` | `PLGM_INSIGHTS_LATENCY_TARGET_AVG_MS`, `_P95_MS`, `_P99_MS` | Query latency targets in ms (default 0, no target). A shape is `above_target` if a measured statistic exceeds its target and `within_target` only if every set target was measured and met; otherwise `not_assessed`. |
+| `insights_trend_store_query_values` | `PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES` | On: each run also stores the exact commands of each shape's explained samples (plus up to 8 retained samples), so Trends can check whether ordinary generated runs used the same query values; this never changes the improved/regressed labels. To compare instances with identical operations, use Record & Replay instead (two replays of one recording compare as `same_values` with source `same_recording`, without stored literals) and compare their outcome files with `plgm compare-replays` or Query Analysis > Replay Comparison. The baseline file, exports, Download Summary, and HTML report then contain real query values (up to 16 KiB per sample, 1 MiB per run). Off (default): only redacted shapes and metrics are stored. |
 
 `insights_explain_severity_mode` accepted values:
 - `high_only` (default): explain only `high` + `critical`
@@ -320,6 +323,7 @@ Practical meaning:
 - Export contains the same filtering outcomes, explain statuses, and recommendations.
 - Export includes the same query-reference metadata shown in the UI.
 - Password redaction and existing summary protections remain unchanged.
+- Literal query values appear only for trend runs stored with `insights_trend_store_query_values` on (marked as such). Recordings, outcome files, and replay comparison reports are never embedded; Download Summary carries only their metadata and hashes (`recording`, `replay`, `generated_traffic`, `outcome_file`).
 
 ## Practical Use Cases
 
@@ -340,6 +344,10 @@ Practical meaning:
 
 5. Explain budget control
 - Keep explain scoped with threshold + severity mode + top-N limits.
+
+6. Comparing two instances (upgrade testing)
+- Trends compare shapes across runs heuristically; they cannot tell whether two runs sent the same operations. For an exact A-vs-B comparison, send identical operations to both instances with Record & Replay, Deterministic Generated Traffic, or imported traffic, capture per-operation outcomes, and compare the outcome files with `plgm compare-replays` or Query Analysis > Replay Comparison (README "Comparing Two Instances (Upgrade Testing)").
+- In Trends, each row carries a values annotation (`same_values`, `overlapping`, `different_values`, `not_recorded`). Two replays of the same recording (source `same_recording`) or two runs with the same generated-traffic fingerprint (source `same_generated_traffic`) are `same_values` without stored literals; ordinary generated runs need `insights_trend_store_query_values` on. The annotation never changes improved/regressed labels or comparability.
 
 ## Troubleshooting
 
@@ -389,3 +397,5 @@ The Query Assessment table shows each dimension in its own column, with its own 
 - Explain depends on retained replay metadata and server permissions.
 - Top-N explain means some shapes intentionally remain unattempted.
 - Heuristic guidance is intentionally cautious and not proof of root cause.
+- With `insights_trend_store_query_values` on, trend baselines, exports, Download Summary, and the HTML report contain literal query values (up to 16 KiB per sample, 1 MiB per run). The values comparison uses only the kept samples (explained plus up to 8 retained per shape), so it can miss values that ran but were not sampled.
+- Replay comparison latency verdicts reuse the trend thresholds and are heuristics; result and error differences are facts, but writes change data, so they can also come from different starting data (use `workload_data_fingerprint` and `workload_replay_ops: reads_only`).

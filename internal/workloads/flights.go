@@ -53,7 +53,10 @@ func randomPassengers(totalSeats int, seatsAvailable int, rng *rand.Rand) []map[
 // GenerateDefaultDocument produces a realistic, internally-consistent flight
 // document using the collection definition.
 func GenerateDefaultDocument(col config.CollectionDefinition) map[string]interface{} {
-	faker := datagen.NewFaker()
+	return generateDefaultDocument(col, datagen.NewFaker())
+}
+
+func generateDefaultDocument(col config.CollectionDefinition, faker *gofakeit.Faker) map[string]interface{} {
 	rng := faker.Rand
 	doc := make(map[string]interface{})
 
@@ -62,7 +65,8 @@ func GenerateDefaultDocument(col config.CollectionDefinition) map[string]interfa
 		var seatsAvailable int
 		hasSeatsAvailable := false
 
-		for fname, fdef := range col.Fields {
+		for _, fname := range datagen.FieldNames(col.Fields) {
+			fdef := col.Fields[fname]
 			switch fname {
 			case "equipment":
 				equip, capacity := datagen.RandomEquipment(faker)

@@ -5,6 +5,61 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v5.0.0 - Reproducible Workloads: Record, Replay, and Compare Instances
+
+This release makes PLGM an upgrade- and migration-testing tool. You can send the exact same operations, with the same values, to two or more MongoDB instances, then compare what each one returned and how fast, operation by operation. Every new feature is opt-in and off by default; with the defaults, runs, recordings, and stored trends are unchanged.
+
+**Highlights**
+
+**New: Record & Replay**
+- `workload_record_enabled` writes every operation a run sends, with its exact values, to an NDJSON recording (`workload_record_path`, mode 0600; an existing file that is not a recording is never overwritten). Recording costs about 2 µs per operation.
+- `workload_replay_enabled` runs a recording instead of generating operations: `per_worker` (recorded order, as fast as possible) or `timed` (recorded offsets, with lag reported). Replays check the recording header and commands hash, and fail on mismatched definitions unless `workload_replay_allow_mismatch` is on.
+- `workload_record_max_bytes` caps the size (default 512 MiB, `0` = unlimited; the recording is marked truncated and the run continues). `workload_record_backpressure` chooses whether a slow writer fails the recording (default) or blocks workers. `workload_record_compression` writes `zstd` or `gzip` files (typically 10–15× smaller), detected automatically on replay and upload.
+- Recordings can span several iterations; a replay runs them in order in one pass.
+- `workload_replay_ops: reads_only` replays only finds and read-only aggregates, so the target keeps its starting data.
+- `random_seed` now produces identical seeded documents on any instance: fixed field order, fixed reference time, seeded ObjectIds, and seeded `_id`s when collections are dropped.
+
+**New: Deterministic generated traffic**
+- `workload_deterministic` with `operations_per_worker` generates every operation from the seed, iteration, worker, and operation number. Two runs with the same settings send the same commands with the same values, without a recording file. Failures and retries do not shift later operations.
+- Each run reports a traffic fingerprint (hashes only) on the dashboard, in Download Summary, and in the HTML report. Duration becomes a safety timeout, and runs that hit it are marked incomplete.
+
+**New: Operation outcomes and replay comparison**
+- `workload_record_outcomes` keeps what every operation returned: client latency, ok or error code and name (never the message), and a result summary (documents returned, inserted, matched/modified/upserted, deleted, transaction commit/abort). `workload_record_result_checksums` adds an order-sensitive sha256 of each find and aggregate result.
+- Recordings store outcomes inline. Replays and deterministic runs write them to `workload_replay_outcomes_path` / `workload_deterministic_outcomes_path`.
+- `plgm compare-replays a b` and **Query Analysis > Replay Comparison** in the Web UI match two executions operation by operation. Results are reported per shape and overall: latency deltas, count and checksum mismatches, errors that occur on only one side, missing operations, and the top differing operations, with commands shown when a recording is available. Optional plans per shape come from two trend runs. Exports are JSON and HTML.
+
+**New: Multi-target replay**
+- `workload_replay_targets` (2–8 `label=uri` entries, also `--replay-target` on the CLI) runs one replay or deterministic run on every target, `sequential` (default) or `concurrent` (`workload_replay_targets_mode`). Each target gets its own client, workers, stats, outcome file, insights, and trend run, and is compared automatically with the first target.
+- `workload_data_fingerprint` (`counts` or `dbhash`) stores each collection's document count and indexes in the recording and checks them on every target before the first operation.
+
+**New: Import captured traffic**
+- `plgm import-traffic` and the Web UI convert mongod JSON logs (4.4+), `system.profile` exports, and raw command documents (plain, gzip, or zstd) into a normal recording. Each captured connection becomes a worker, and the original order and timing are kept.
+- find, aggregate, insert, update, and delete are converted. Unsupported entries are skipped and counted, and operations that cannot be replayed exactly (server-generated values, dropped options, transactions) are flagged.
+
+**New: Query values in trends**
+- `insights_trend_store_query_values` (default off) stores the exact commands of each shape's explained and retained samples, so Trends can show whether two runs used the same query values. Runs replayed from the same recording or generated with the same deterministic fingerprint compare as "same values" without storing any literals. Improved/regressed labels never change.
+
+**Web UI**
+- New **Record & Replay** settings tab with browser-style sub-tabs: Seed & Determinism, Record, Replay, Multi-Target, Outcomes, and Import Traffic. Each setting is shown on one row, with the control on the left and an explanation on the right of what happens when it is on and when it is off, plus its config key and environment variable. Validation errors open the tab that holds the setting they name.
+- Shape details in Efficiency and Trends open in one shared detail dialog.
+- The Launch Workload button floats at the bottom-right without the full-width bar behind it.
+- Dashboard cards for the traffic fingerprint and multi-target results; run reports include recording, replay, and per-target sections.
+
+**Compatibility**
+- New file formats: `plgm-workload-record/1` (recordings), `plgm-workload-outcomes/1` (outcome files), and `plgm-replay-compare/1` (comparison reports).
+- Recordings, outcome files, comparison reports, and trend stores with query values enabled contain real query values. Handle them like production data.
+- When `workload_replay_targets` is set, the MongoDB URI is not used. Username, password, and TLS settings apply to every target.
+- Record & Replay settings moved from the Workload Configuration tab to the new Record & Replay tab.
+
+**Fixes**
+- Fixed a data race when several targets shared one set of collection definitions.
+
+**Testing & Docs**
+- Added unit, golden-file, and scale tests for the recording format, compression, backpressure, outcomes, comparison, traffic import, and deterministic generation. Golden tests confirm that the default settings produce unchanged output.
+- Added integration tests for recording and replay, deterministic runs and outcomes, and multi-target replay on several mongod instances.
+- Added jsdom UI tests for every new setting and its explanation, Replay Comparison, multi-target, traffic import, trend values, and the Record & Replay sub-tabs.
+- Documented the features in `README.md`, including "Comparing Two Instances (Upgrade Testing)", "Record and Replay", "Multi-Target Replay", and "Import Captured Traffic". Also updated `INSIGHTS.md`, `TESTING.md`, `config.yaml`, and `plgm --help`.
+
 ## v4.9.0 - Multi-Run Trend History, Comparison, and Sharing
 
 **Highlights**

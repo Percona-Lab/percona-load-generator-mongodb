@@ -115,10 +115,64 @@ type AppConfig struct {
 	TrendBaselineStore     string `yaml:"trend_baseline_store"`
 	TrendDefaultComparison string `yaml:"trend_default_comparison"`
 	TrendRunLabel          string `yaml:"trend_run_label"`
+	// InsightsTrendStoreQueryValues stores the literal commands of each
+	// shape's samples with its trend snapshot. Off by default: trend
+	// baselines then hold no query values.
+	InsightsTrendStoreQueryValues bool `yaml:"insights_trend_store_query_values"`
 
 	ShardingMode                     string `yaml:"sharding_mode"`
 	ShardingSkipGenericWithoutConfig bool   `yaml:"sharding_skip_generic_without_config"`
+
+	// Workload recording writes every operation a run sends, with its
+	// literal values, to WorkloadRecordPath (NDJSON, mode 0600). Off by
+	// default. See ValidateWorkloadRecordReplay. MaxBytes 0 is unlimited;
+	// LoadAppConfig starts from DefaultWorkloadRecordMaxBytes.
+	WorkloadRecordEnabled      bool   `yaml:"workload_record_enabled"`
+	WorkloadRecordPath         string `yaml:"workload_record_path"`
+	WorkloadRecordMaxBytes     int64  `yaml:"workload_record_max_bytes"`
+	WorkloadRecordBackpressure string `yaml:"workload_record_backpressure"`
+	WorkloadRecordCompression  string `yaml:"workload_record_compression"`
+
+	// Workload replay executes the operations of a recording instead of
+	// generating them. Off by default.
+	WorkloadReplayEnabled       bool   `yaml:"workload_replay_enabled"`
+	WorkloadReplayPath          string `yaml:"workload_replay_path"`
+	WorkloadReplayMode          string `yaml:"workload_replay_mode"`
+	WorkloadReplayAllowMismatch bool   `yaml:"workload_replay_allow_mismatch"`
+
+	// WorkloadDeterministic makes generated traffic a function of the seed:
+	// each worker sends OperationsPerWorker operations per iteration, each
+	// derived from (seed, iteration, worker, sequence). Off by default. See
+	// ValidateWorkloadDeterministic.
+	WorkloadDeterministic bool `yaml:"workload_deterministic"`
+	OperationsPerWorker   int  `yaml:"operations_per_worker"`
+
+	// Outcome capture stores what every recorded, replayed, or
+	// deterministic operation returned (latency, error code, result
+	// counts, optional result checksum), so two executions can be compared.
+	// Off by default. See ValidateWorkloadOutcomes.
+	WorkloadRecordOutcomes            bool   `yaml:"workload_record_outcomes"`
+	WorkloadRecordResultChecksums     bool   `yaml:"workload_record_result_checksums"`
+	WorkloadReplayOutcomesPath        string `yaml:"workload_replay_outcomes_path"`
+	WorkloadDeterministicOutcomesPath string `yaml:"workload_deterministic_outcomes_path"`
+
+	// WorkloadReplayTargets runs one replay (or deterministic run) per
+	// target instead of one against URI, then compares every target with
+	// the first. Empty by default. See ValidateWorkloadTargets.
+	WorkloadReplayTargets     []ReplayTarget `yaml:"workload_replay_targets"`
+	WorkloadReplayTargetsMode string         `yaml:"workload_replay_targets_mode"`
+	// WorkloadReplayOps is "all" (default) or "reads_only": a replay that
+	// skips every write, so the targets keep their starting data.
+	WorkloadReplayOps string `yaml:"workload_replay_ops"`
+	// WorkloadDataFingerprint is "off" (default), "counts" (document count
+	// and index list per collection), or "dbhash" (counts plus dbHash). A
+	// recording stores it in its header; a replay compares every target
+	// with it before sending any operation.
+	WorkloadDataFingerprint string `yaml:"workload_data_fingerprint"`
 }
+
+// BuildVersion is the PLGM version, set by main.
+var BuildVersion = "dev"
 
 type WebUIConfig struct {
 	Enabled bool `yaml:"enabled"`
@@ -169,6 +223,7 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 		RecordPoolMaxSize:         10000,
 		RecordPoolBootstrapSample: 500,
 		InsightsExplainEnabled:    true,
+		WorkloadRecordMaxBytes:    DefaultWorkloadRecordMaxBytes,
 	}
 	configLoaded := false
 
@@ -206,6 +261,18 @@ func LoadAppConfig(path string, isWebUI bool) (*AppConfig, error) {
 		return nil, err
 	}
 	if err := ValidateConnectionParams(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateWorkloadRecordReplay(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateWorkloadDeterministic(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateWorkloadOutcomes(cfg); err != nil {
+		return nil, err
+	}
+	if err := ValidateWorkloadTargets(cfg); err != nil {
 		return nil, err
 	}
 
@@ -325,6 +392,7 @@ func applyBaseDefaults(cfg *AppConfig) {
 	}
 	cfg.ShardingMode = NormalizeShardingMode(cfg.ShardingMode)
 	NormalizeTrendSettings(cfg)
+	NormalizeWorkloadRecordReplay(cfg)
 
 	// Web UI Port
 	if cfg.WebUI.Port <= 0 {
@@ -844,6 +912,84 @@ func applyEnvOverrides(cfg *AppConfig) map[string]bool {
 	}
 	if v := os.Getenv("PLGM_TREND_RUN_LABEL"); v != "" {
 		cfg.TrendRunLabel = v
+	}
+	if v := os.Getenv("PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.InsightsTrendStoreQueryValues = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadRecordEnabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_PATH"); v != "" {
+		cfg.WorkloadRecordPath = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_MAX_BYTES"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			cfg.WorkloadRecordMaxBytes = n
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_BACKPRESSURE"); v != "" {
+		cfg.WorkloadRecordBackpressure = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_COMPRESSION"); v != "" {
+		cfg.WorkloadRecordCompression = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadReplayEnabled = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_PATH"); v != "" {
+		cfg.WorkloadReplayPath = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_MODE"); v != "" {
+		cfg.WorkloadReplayMode = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_ALLOW_MISMATCH"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadReplayAllowMismatch = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_DETERMINISTIC"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadDeterministic = b
+		}
+	}
+	if v := os.Getenv("PLGM_OPERATIONS_PER_WORKER"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.OperationsPerWorker = n
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_OUTCOMES"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadRecordOutcomes = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_RECORD_RESULT_CHECKSUMS"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.WorkloadRecordResultChecksums = b
+		}
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH"); v != "" {
+		cfg.WorkloadReplayOutcomesPath = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH"); v != "" {
+		cfg.WorkloadDeterministicOutcomesPath = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_TARGETS"); v != "" {
+		cfg.WorkloadReplayTargets = ParseReplayTargets(v)
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_TARGETS_MODE"); v != "" {
+		cfg.WorkloadReplayTargetsMode = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_REPLAY_OPS"); v != "" {
+		cfg.WorkloadReplayOps = v
+	}
+	if v := os.Getenv("PLGM_WORKLOAD_DATA_FINGERPRINT"); v != "" {
+		cfg.WorkloadDataFingerprint = v
 	}
 	if v := os.Getenv("PLGM_SHARDING_MODE"); v != "" {
 		cfg.ShardingMode = v

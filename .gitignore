@@ -4,6 +4,7 @@ demo.tape
 AGENTS.md
 PROJECT_HISTORY_ARCHIVE.md 
 PROJECT_STATUS.md
+query_shape_updates.md
 # Binaries
 # Ignore all binaries in the bin folder
 bin/

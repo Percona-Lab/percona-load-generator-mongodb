@@ -17,6 +17,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/logger"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/multitarget"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/webui"
 	"golang.org/x/term"
@@ -25,10 +26,18 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "compare-replays" {
+		config.BuildVersion = version
+		os.Exit(runCompareReplays(os.Args[2:], os.Stdout, os.Stderr))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "import-traffic" {
+		config.BuildVersion = version
+		os.Exit(runImportTraffic(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	configFlag := flag.String("config", "config.yaml", "Path to the configuration file")
 	versionFlag := flag.Bool("version", false, "Print version information and exit")
 	webuiFlag := flag.Bool("webui", false, "Start the interactive Web UI")
-	webuiPort := flag.Int("webui-port", 8080, "Port for the Web UI")
+	webuiPort := flag.Int("webui-port", 9999, "Port for the Web UI")
 	webuiTLS := flag.Bool("webui-tls", false, "Serve the Web UI over HTTPS (default: HTTP on loopback, no cert warnings)")
 	webuiCert := flag.String("webui-cert", "", "Path to a TLS certificate file for the Web UI (implies --webui-tls)")
 	webuiKey := flag.String("webui-key", "", "Path to the TLS private key file for the Web UI (implies --webui-tls)")
@@ -38,6 +47,9 @@ func main() {
 	injectorBatch := flag.Int("raw-injector-batch", 1000, "Bulk batch size (ops per network round trip)")
 	injectorMaxDocs := flag.Int64("raw-injector-max-docs", 10000000, "Maximum number of documents to operate on")
 	injectorDrop := flag.Bool("raw-injector-drop", false, "Drop the collection before starting")
+	var replayTargets replayTargetFlags
+	flag.Var(&replayTargets, "replay-target", "Multi-target replay: label=uri of one target (repeat for 2-8 targets; replaces workload_replay_targets)")
+	replayTargetsMode := flag.String("replay-targets-mode", "", "Multi-target replay: sequential (default) or concurrent")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\nplgm: Percona Load Generator for MongoDB Clusters\n")
@@ -46,7 +58,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Examples:\n")
 		fmt.Fprintf(os.Stderr, "  %s                    # Run with default 'config.yaml'\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s my_test.yaml       # Run with specific config file\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s --help             # Show this help message\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --help             # Show this help message\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s compare-replays A B # Compare two replay/deterministic outcome files (see compare-replays --help)\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s import-traffic LOG  # Convert mongod logs / system.profile exports into a recording (see import-traffic --help)\n\n", os.Args[0])
 
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flag.PrintDefaults()
@@ -63,7 +77,7 @@ func main() {
 
 		fmt.Fprintf(os.Stderr, "\n [Web UI]\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui", "Flag: Start the interactive Web UI")
-		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-port", "Flag: Port for the Web UI (default: 8080)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-port", "Flag: Port for the Web UI (default: 9999)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-tls", "Flag: Serve Web UI over HTTPS (default: HTTP on loopback)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-cert", "Flag: TLS certificate file for the Web UI (implies --webui-tls)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "--webui-key", "Flag: TLS private key file for the Web UI (implies --webui-tls)")
@@ -88,6 +102,28 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_PPROF_ENABLED", "Enable pprof server on localhost:6060 (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_USE_TRANSACTIONS", "Enable transactional workloads (true/false)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_MAX_TRANSACTION_OPS", "Maximum number of operations to group into a single transaction block")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_RANDOM_SEED", "Seed for reproducible data and operations (0 = random)")
+
+		fmt.Fprintf(os.Stderr, "\n [Workload Record & Replay] (Off by default)\n")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_ENABLED", "Record every sent operation to an NDJSON file (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_PATH", "Recording file (default: plgm_workload_record.ndjson; holds literal values)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_MAX_BYTES", "Size cap, uncompressed; 0 = unlimited (default: 536870912)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_BACKPRESSURE", "fail (default: stop recording) or block (workers wait for the writer)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_COMPRESSION", "none (default), zstd, or gzip")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_OUTCOMES", "Store each op's latency, error code, and result summary (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_RECORD_RESULT_CHECKSUMS", "Add an order-sensitive result checksum to find/aggregate outcomes (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_ENABLED", "Replay a recording instead of generating operations (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_PATH", "Recording file to replay")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_MODE", "per_worker (default) or timed (keep recorded offsets)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_ALLOW_MISMATCH", "Replay even if definitions differ from the recording (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH", "Replay outcome file (needs outcomes on)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_TARGETS", "Multi-target: label=uri;label=uri (2-8 targets; uri is then not used)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_TARGETS_MODE", "sequential (default) or concurrent")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_OPS", "all (default) or reads_only (skip and count writes)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DATA_FINGERPRINT", "off (default), counts, or dbhash: starting-data check")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DETERMINISTIC", "Same seed = same generated operations, no recording (true/false)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_OPERATIONS_PER_WORKER", "Fixed op budget per worker (required when deterministic)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH", "Deterministic outcome file (needs outcomes on)")
 
 		fmt.Fprintf(os.Stderr, "\n [Raw Injector Mode] (High Performance Hardware Test)\n")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_INJECTOR", "Enable Raw Injector mode (true/false)")
@@ -122,6 +158,7 @@ func main() {
 	}
 
 	flag.Parse()
+	config.BuildVersion = version
 
 	if *versionFlag {
 		fmt.Printf("plgm v%s\n", version)
@@ -194,6 +231,13 @@ func main() {
 	// in a CLI run would cost per-operation work for nothing.
 	appCfg.InsightsExplainEnabled = false
 
+	if len(replayTargets) > 0 || *replayTargetsMode != "" {
+		if err := applyReplayTargetFlags(appCfg, replayTargets, *replayTargetsMode); err != nil {
+			log.Fatal(err)
+		}
+	}
+	disableTargetCompression(appCfg)
+
 	if !strings.Contains(appCfg.URI, "compressors=") {
 		if strings.Contains(appCfg.URI, "?") {
 			appCfg.URI += "&compressors=none"
@@ -203,8 +247,12 @@ func main() {
 		logger.Info("Performance: Automatically disabled driver compression (compressors=none)")
 	}
 
-	u, _ := url.Parse(appCfg.URI)
-	if u.User == nil && appCfg.ConnectionParams.Username == "" {
+	credURI := appCfg.URI
+	if len(appCfg.WorkloadReplayTargets) > 0 {
+		credURI = appCfg.WorkloadReplayTargets[0].URI
+	}
+	u, _ := url.Parse(credURI)
+	if u != nil && u.User == nil && appCfg.ConnectionParams.Username == "" {
 		fmt.Print("Enter MongoDB Username: ")
 		var inputUser string
 		fmt.Scanln(&inputUser)
@@ -310,6 +358,10 @@ func main() {
 	dbName := collectionsCfg.Collections[0].DatabaseName
 	stats.PrintConfiguration(appCfg, collectionsCfg.Collections, version)
 
+	if multitarget.Enabled(appCfg) {
+		os.Exit(runMultiTarget(ctx, appCfg, dbName, collectionsCfg.Collections, queriesCfg.Queries, os.Stdout, nil))
+	}
+
 	conn, err := db.Connect(ctx, appCfg, dbName)
 	if err != nil {
 		log.Fatal(err)
@@ -344,14 +396,18 @@ func main() {
 	log.Printf("[Lifecycle] Phase=running: execution timers now track query workload only")
 
 	intervalDuration, _ := time.ParseDuration(appCfg.IntervalDelay)
-	for i := 1; i <= appCfg.Iterations; i++ {
+	iterations := config.RunIterations(appCfg)
+	runCtx, finishRecording := mongo.WithWorkloadRecordingSession(ctx)
+	defer finishRecording()
+	for i := 1; i <= iterations; i++ {
 		iterStart := time.Now()
-		log.Printf("Starting Standard Workload iteration %d of %d", i, appCfg.Iterations)
-		if err := mongo.RunWorkload(ctx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {
+		log.Printf("Starting Standard Workload iteration %d of %d", i, iterations)
+		if err := mongo.RunWorkload(runCtx, conn.Database, collectionsCfg.Collections, queriesCfg.Queries, appCfg); err != nil {
+			finishRecording()
 			log.Fatal(err)
 		}
 		log.Printf("[Lifecycle] Iteration %d execution duration: %s", i, time.Since(iterStart).Round(10*time.Millisecond))
-		if i < appCfg.Iterations && intervalDuration > 0 {
+		if i < iterations && intervalDuration > 0 {
 			log.Printf("Waiting %s before next iteration...", appCfg.IntervalDelay)
 			time.Sleep(intervalDuration)
 		}

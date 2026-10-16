@@ -2,7 +2,9 @@ package mongo
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"sort"
 	"strings"
 	"sync"
@@ -51,6 +53,12 @@ func insertRandomDocuments(ctx context.Context, col config.CollectionDefinition,
 	workers = min(workers, 1+(count-1)/batchSize)
 	logger.Info("Seeding %d documents into '%s.%s' with %d writer(s)...", count, col.DatabaseName, col.Name, workers)
 
+	// With a seed and freshly dropped collections the _ids are derived from
+	// the seed too, so two seeded runs start from identical documents.
+	// Without a drop a repeated seed would collide with the earlier _ids.
+	seededIDs := cfg.RandomSeed != 0 && cfg.DropCollections
+	ns := col.DatabaseName + "." + col.Name
+
 	modu := max(1, count/10)
 	nextLogTarget := modu
 	totalInserted := 0
@@ -95,7 +103,13 @@ generate:
 			if workCtx.Err() != nil {
 				break generate
 			}
-			batch = append(batch, workloads.GenerateDocument(col, cfg))
+			doc := workloads.GenerateDocument(col, cfg)
+			if seededIDs {
+				if _, ok := doc["_id"]; !ok {
+					doc["_id"] = seededDocumentID(cfg.RandomSeed, ns, generated+i)
+				}
+			}
+			batch = append(batch, doc)
 		}
 		select {
 		case batches <- batch:
@@ -112,6 +126,21 @@ generate:
 
 	logger.Debug("Document generation and seeding complete")
 	return nil
+}
+
+// seededDocumentID is the _id of the index-th seeded document of ns: the
+// seeded reference time, a hash of the seed and namespace, and the index.
+func seededDocumentID(seed int64, ns string, index int) bson.ObjectID {
+	h := fnv.New32a()
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], uint64(seed))
+	h.Write(b[:])
+	h.Write([]byte(ns))
+	var id bson.ObjectID
+	binary.BigEndian.PutUint32(id[0:4], uint32(datagen.SeededReferenceTime.Unix()))
+	binary.BigEndian.PutUint32(id[4:8], h.Sum32())
+	binary.BigEndian.PutUint32(id[8:12], uint32(index))
+	return id
 }
 
 // CreateCollectionsFromConfig creates collections and applies sharding if configured.

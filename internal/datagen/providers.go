@@ -2,6 +2,7 @@ package datagen
 
 import (
 	"fmt"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -41,6 +42,37 @@ func NextSeed() int64 {
 		return atomic.LoadInt64(&seedBase) + atomic.AddInt64(&seedCounter, 1)
 	}
 	return time.Now().UnixNano()
+}
+
+// Seeded reports whether a random seed is configured.
+func Seeded() bool {
+	return atomic.LoadInt32(&seedConfigured) == 1
+}
+
+// SeededReferenceTime replaces the clock for generated dates when a seed is
+// configured, so seeded documents do not depend on when they are generated.
+var SeededReferenceTime = time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// referenceNow is the time generated dates are relative to.
+func referenceNow() time.Time {
+	if Seeded() {
+		return SeededReferenceTime
+	}
+	return time.Now()
+}
+
+// FieldNames returns the names of fields: sorted when a seed is configured,
+// so seeded generation consumes the RNG in a fixed order, and in map order
+// otherwise.
+func FieldNames(fields map[string]config.CollectionField) []string {
+	names := make([]string, 0, len(fields))
+	for name := range fields {
+		names = append(names, name)
+	}
+	if Seeded() {
+		sort.Strings(names)
+	}
+	return names
 }
 
 // NewFaker creates a Faker honoring the configured seed (if any).

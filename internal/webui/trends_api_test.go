@@ -399,6 +399,23 @@ func TestHandleStartAppliesTrendSettingsAndStore(t *testing.T) {
 		}
 	})
 
+	t.Run("query_values_checkbox", func(t *testing.T) {
+		for value, want := range map[string]bool{"on": true, "true": true, "": false} {
+			s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1, InsightsTrendStoreQueryValues: true})
+			fields := map[string]string{}
+			if value != "" {
+				fields["insights_trend_store_query_values"] = value
+			}
+			rec, got := startWith(t, s, fields)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("start: %d %s", rec.Code, rec.Body.String())
+			}
+			if cfg := <-got; cfg.InsightsTrendStoreQueryValues != want {
+				t.Fatalf("insights_trend_store_query_values=%q: got %v, want %v", value, cfg.InsightsTrendStoreQueryValues, want)
+			}
+		}
+	})
+
 	t.Run("invalid_value_aborts", func(t *testing.T) {
 		s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
 		rec, _ := startWith(t, s, map[string]string{"trend_history_runs": "99"})

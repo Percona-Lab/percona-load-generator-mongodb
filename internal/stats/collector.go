@@ -266,6 +266,9 @@ type Collector struct {
 	lastHeatmapCapUnix int64
 
 	CurrentIteration int
+	// OutputLabel, when set before Monitor starts, prefixes the CLI interval
+	// lines so concurrent multi-target tables can be told apart.
+	OutputLabel string
 
 	startTime  time.Time
 	prevFind   uint64
@@ -288,6 +291,11 @@ type Collector struct {
 	impact            impactState
 	capture           captureState
 	explainCapture    atomic.Bool
+	recording         *WorkloadRecordingInfo
+	replay            *WorkloadReplayInfo
+	generatedTraffic  *GeneratedTrafficInfo
+	outcomeFile       *WorkloadOutcomeFileInfo
+	target            *WorkloadTargetInfo
 
 	acc accuracyCounters
 
@@ -703,8 +711,8 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 		fmt.Println()
 		fmt.Println(logger.GreenString("> Starting Workload..."))
 		header := fmt.Sprintf(monitorLayout, "TIME", "TOTAL OPS", "SELECT", "INSERT", "UPSERT", "UPDATE", "DELETE", "AGG", "TRANS")
-		fmt.Print(logger.BoldString("%s", header))
-		fmt.Println(logger.CyanString(" -----------------------------------------------------------------------------------------"))
+		fmt.Print(c.outputPrefix(), logger.BoldString("%s", header))
+		fmt.Println(c.outputPrefix() + logger.CyanString(" -----------------------------------------------------------------------------------------"))
 	} else {
 		fmt.Println()
 		fmt.Println(logger.CyanString("[Web UI Active] Workload started. CLI output is disabled. Please view live progress in the browser dashboard."))
@@ -804,6 +812,13 @@ func (c *Collector) Monitor(done <-chan struct{}, refreshRateSec int, concurrenc
 	}
 }
 
+func (c *Collector) outputPrefix() string {
+	if c.OutputLabel == "" {
+		return ""
+	}
+	return "[" + c.OutputLabel + "]"
+}
+
 func (c *Collector) printInterval() {
 	cF := atomic.LoadUint64(&c.FindOps)
 	cI := atomic.LoadUint64(&c.InsertOps)
@@ -831,6 +846,7 @@ func (c *Collector) printInterval() {
 
 	totalOpsFormatted := logger.BoldString("%9s", formatInt(int64(totalDelta)))
 
+	fmt.Print(c.outputPrefix())
 	fmt.Printf(monitorLayout,
 		elapsedStr,
 		totalOpsFormatted,

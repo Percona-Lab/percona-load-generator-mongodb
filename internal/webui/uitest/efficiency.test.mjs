@@ -93,15 +93,17 @@ test('efficiency and latency filters are independent; sort by impact uses impact
     assert.ok(doc.querySelector('#efficiencyRows caption').textContent.includes('workload impact'));
 });
 
-test('detail panel shows query, checks, metrics, each dimension, data source, and ordered candidates', async () => {
+test('details modal shows query, checks, metrics, each dimension, data source, and ordered candidates', async () => {
     const data = fixture('ready');
     const view = data.efficiency_view;
     const { doc } = await loadPage(data);
     const fast = view.rows.find(r => r.shape_summary === 'find on fields: sku');
     const btn = tableRows(doc).find(r => r.dataset.shapeId === fast.shape_id).querySelector('button');
     btn.click();
-    const detail = doc.getElementById('efficiencyDetail');
-    assert.equal(detail.style.display, 'block');
+    const modal = doc.getElementById('shapeDetailModal');
+    const detail = doc.getElementById('shapeDetailBody');
+    assert.equal(modal.style.display, 'flex');
+    assert.equal(doc.getElementById('shapeDetailTitle').textContent, `${fast.namespace} • ${fast.operation} • ${fast.shape_summary}`);
     const text = detail.textContent;
     assert.equal(doc.getElementById('efficiencyDetailQuery').textContent, fast.query);
     assert.ok(!text.includes('secret-'), 'no literal values');
@@ -118,8 +120,12 @@ test('detail panel shows query, checks, metrics, each dimension, data source, an
     assert.ok(text.includes(`tradeoffs: ${rec.tradeoffs}`));
     assert.equal(tableRows(doc).find(r => r.dataset.shapeId === fast.shape_id).querySelector('button').getAttribute('aria-expanded'), 'true');
 
+    const openShape = shapeId => {
+        doc.getElementById('shapeDetailX').click();
+        tableRows(doc).find(r => r.dataset.shapeId === shapeId).querySelector('button').click();
+    };
     const slow = view.rows.find(r => r.shape_summary === 'find on fields: email');
-    tableRows(doc).find(r => r.dataset.shapeId === slow.shape_id).querySelector('button').click();
+    openShape(slow.shape_id);
     assert.ok(detail.textContent.includes('Scan efficiency 100'));
     const overhead = doc.getElementById('efficiencyDetailOverhead').textContent;
     assert.ok(overhead.includes('In-memory sort') && overhead.includes('median sample: SORT stage'), `sort reported as overhead beside a 100 score: ${overhead}`);
@@ -135,40 +141,112 @@ test('detail panel shows query, checks, metrics, each dimension, data source, an
     assert.ok(latency.includes('Above target (avg 900.1 ms > 500 ms)') && latency.includes('p95 target 50 ms: not_measured'), latency);
 
     const lookup = view.rows.find(r => r.operation === 'aggregate');
-    tableRows(doc).find(r => r.dataset.shapeId === lookup.shape_id).querySelector('button').click();
+    openShape(lookup.shape_id);
     assert.ok(detail.textContent.includes('Scan efficiency ≤ 100'));
     assert.ok(doc.getElementById('efficiencyDetailOther').textContent.includes(`$lookup: ${lookup.other_measurements.lookup.label}`));
     assert.equal(lookup.other_measurements.lookup.status, 'measured');
 
     const excluded = view.rows.find(r => r.coverage === 'budget_excluded');
-    tableRows(doc).find(r => r.dataset.shapeId === excluded.shape_id).querySelector('button').click();
+    openShape(excluded.shape_id);
     assert.ok(detail.textContent.includes('Scan efficiency Unassessed') && detail.textContent.includes('not_selected_budget'));
     assert.ok(doc.getElementById('efficiencyDetailOverhead').textContent.includes('Not assessed (no explain)'), 'no explain must not read as no overhead');
 
-    detail.querySelector('button').click();
-    assert.equal(detail.style.display, 'none');
+    doc.getElementById('shapeDetailCloseBtn').click();
+    assert.equal(modal.style.display, 'none');
+    assert.equal(detail.innerHTML, '');
 });
 
-test('clicking a row opens its detail panel and the table explains this', async () => {
+test('clicking a row opens the details modal and the table explains this', async () => {
     const data = fixture('ready');
     const view = data.efficiency_view;
-    const { doc, errors } = await loadPage(data);
-    assert.ok(/click any row/i.test(doc.getElementById('efficiencyRowHint').textContent));
-    const detail = doc.getElementById('efficiencyDetail');
-    assert.equal(detail.style.display, 'none');
+    const { w, doc, errors } = await loadPage(data);
+    assert.equal(doc.getElementById('efficiencyRowHint').textContent.trim(), '👉 Click any row (or Details) to open the full details for that query shape.');
+    assert.equal(doc.getElementById('efficiencyDetail'), null, 'below-table panel is gone');
+    const modal = doc.getElementById('shapeDetailModal');
+    assert.equal(modal.style.display, '');
 
     const target = view.rows.find(r => r.shape_summary === 'find on fields: sku');
-    tableRows(doc).find(r => r.dataset.shapeId === target.shape_id).querySelector('.eff-col-shape').click();
-    assert.equal(detail.style.display, 'block');
+    const rowFor = id => tableRows(doc).find(r => r.dataset.shapeId === id);
+    rowFor(target.shape_id).querySelector('.eff-col-shape').click();
+    assert.equal(modal.style.display, 'flex');
     assert.equal(doc.getElementById('efficiencyDetailQuery').textContent, target.query);
-    const row = tableRows(doc).find(r => r.dataset.shapeId === target.shape_id);
-    assert.ok(row.classList.contains('selected'));
-    assert.equal(row.querySelector('button').getAttribute('aria-expanded'), 'true');
+    assert.ok(rowFor(target.shape_id).classList.contains('selected'));
+    assert.equal(rowFor(target.shape_id).querySelector('button').getAttribute('aria-expanded'), 'true');
+    assert.equal(doc.activeElement, doc.getElementById('shapeDetailX'), 'focus moves into the modal');
+
+    w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(modal.style.display, 'none');
+    assert.ok(!rowFor(target.shape_id).classList.contains('selected'));
+    assert.equal(rowFor(target.shape_id).querySelector('button').getAttribute('aria-expanded'), 'false');
+    assert.equal(doc.activeElement, rowFor(target.shape_id), 'focus returns to the clicked row');
 
     const other = view.rows.find(r => r.shape_summary === 'find on fields: email');
-    tableRows(doc).find(r => r.dataset.shapeId === other.shape_id).click();
+    rowFor(other.shape_id).click();
     assert.equal(doc.getElementById('efficiencyDetailQuery').textContent, other.query);
     assert.deepEqual(errors, []);
+});
+
+test('details modal closes by ×, footer Close, Escape, and overlay click; focus is trapped and returned', async () => {
+    const data = fixture('ready');
+    const { w, doc, errors } = await loadPage(data);
+    const modal = doc.getElementById('shapeDetailModal');
+    const box = modal.querySelector('.modal-box');
+    assert.equal(box.getAttribute('role'), 'dialog');
+    assert.equal(box.getAttribute('aria-modal'), 'true');
+    assert.equal(box.getAttribute('aria-labelledby'), 'shapeDetailTitle');
+    assert.equal(doc.getElementById('shapeDetailX').getAttribute('aria-label'), 'Close');
+    const id = data.efficiency_view.rows[0].shape_id;
+    const btn = () => tableRows(doc).find(r => r.dataset.shapeId === id).querySelector('button');
+
+    const closers = {
+        '×': () => doc.getElementById('shapeDetailX').click(),
+        'footer Close': () => doc.getElementById('shapeDetailCloseBtn').click(),
+        Escape: () => doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+        overlay: () => modal.dispatchEvent(new w.MouseEvent('click', { bubbles: true })),
+    };
+    for (const [name, close] of Object.entries(closers)) {
+        btn().click();
+        assert.equal(modal.style.display, 'flex', name);
+        assert.equal(btn().getAttribute('aria-expanded'), 'true', name);
+        close();
+        assert.equal(modal.style.display, 'none', `${name} closes the modal`);
+        assert.equal(doc.activeElement, btn(), `${name}: focus returns to Details`);
+    }
+
+    btn().click();
+    box.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    assert.equal(modal.style.display, 'flex', 'clicks inside the box do not close it');
+    const footer = doc.getElementById('shapeDetailCloseBtn');
+    footer.focus();
+    box.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    assert.equal(doc.activeElement, doc.getElementById('shapeDetailX'), 'Tab from the last control wraps to the first');
+    doc.getElementById('shapeDetailX').focus();
+    box.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
+    assert.equal(doc.activeElement, footer, 'Shift+Tab from the first control wraps to the last');
+    assert.deepEqual(errors, []);
+});
+
+test('a row click while text is selected, or on an inner control, does not open the modal', async () => {
+    const data = fixture('ready');
+    const { w, doc } = await loadPage(data);
+    const modal = doc.getElementById('shapeDetailModal');
+    const tr = tableRows(doc)[0];
+    const range = doc.createRange();
+    range.selectNodeContents(tr.querySelector('.eff-col-shape'));
+    w.getSelection().removeAllRanges();
+    w.getSelection().addRange(range);
+    assert.ok(String(w.getSelection()).length > 0);
+    tr.querySelector('.eff-col-shape').click();
+    assert.notEqual(modal.style.display, 'flex', 'selecting text must not open details');
+    w.getSelection().removeAllRanges();
+
+    const inner = doc.createElement('a');
+    inner.href = '#';
+    tr.querySelector('.eff-col-shape').appendChild(inner);
+    inner.click();
+    assert.notEqual(modal.style.display, 'flex', 'inner links keep their own behavior');
+    tr.querySelector('.eff-col-shape').click();
+    assert.equal(modal.style.display, 'flex');
 });
 
 test('recommendations paginate with a total count instead of a silent cutoff', async () => {

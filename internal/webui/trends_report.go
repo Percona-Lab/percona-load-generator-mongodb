@@ -38,14 +38,65 @@ func reportTrendSection(v *stats.TrendView) *report.TrendSection {
 		sec.Counts = append(sec.Counts, report.KV{Key: "By " + metric, Value: trendCountsText(v.Counts[metric])})
 	}
 	for _, r := range v.Rows {
-		sec.Rows = append(sec.Rows, report.TrendRow{
+		row := report.TrendRow{
 			ShapeID: r.ShapeID, Namespace: r.Namespace, Operation: r.Operation, Shape: r.ShapeSummary,
 			Comparability: r.Comparability, BaselineAge: trendBaselineAgeText(r.Baseline),
 			Efficiency: r.Efficiency.Label, Latency: r.Latency.Label, Impact: r.Impact.Label,
 			Details: trendRowDetails(r),
-		})
+		}
+		if qv := r.QueryValues; qv != nil {
+			row.QueryValues = qv.State + ": " + qv.Label
+			row.QueryValueDetails = trendValueDetails(qv)
+			row.QueryValuesFromTraffic = qv.Source == stats.TrendValuesSourceGeneratedTraffic
+			row.QueryValuesFromRecording = qv.Source == stats.TrendValuesSourceRecording
+		}
+		sec.Rows = append(sec.Rows, row)
 	}
+	sec.QueryValuesNotice = v.QueryValuesNotice
 	return sec
+}
+
+// trendValueDetails lists each stored sample command of both runs; matching
+// commands are marked.
+func trendValueDetails(qv *stats.TrendValuesComparison) []string {
+	out := []string{qv.Note}
+	inOther := func(v *stats.TrendQueryValues) map[string]bool {
+		m := map[string]bool{}
+		if v != nil {
+			for _, s := range v.Samples {
+				m[s.ValuesHash] = true
+			}
+		}
+		return m
+	}
+	side := func(name string, v, other *stats.TrendQueryValues, reason string) {
+		if v == nil || len(v.Samples) == 0 {
+			out = append(out, name+": "+emptyFallback(reason, "values not recorded for this run"))
+			return
+		}
+		match := inOther(other)
+		for _, s := range v.Samples {
+			kind := "retained, not explained"
+			if s.Explained {
+				kind = "explained"
+			}
+			cmd := s.Command
+			if s.Truncated {
+				cmd = fmt.Sprintf("(command of %d bytes not stored; values hash %s)", s.CommandBytes, s.ValuesHash)
+			}
+			mark := ""
+			if match[s.ValuesHash] {
+				mark = " [matches the other run]"
+			}
+			out = append(out, fmt.Sprintf("%s, %s (%s), %.2f ms%s: %s", name, s.Role, kind, s.ClientLatencyMs, mark, cmd))
+		}
+		if v.Truncated {
+			out = append(out, fmt.Sprintf("%s: truncated, %d samples left out (%s)", name, v.OmittedSamples, emptyFallback(v.TruncationNote, "limits reached")))
+		}
+	}
+	side("Current", qv.Current, qv.Baseline, qv.CurrentReason)
+	side("Baseline", qv.Baseline, qv.Current, qv.BaselineReason)
+	return out
 }
 
 func trendCountsText(m map[string]int) string {

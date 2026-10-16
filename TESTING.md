@@ -59,6 +59,15 @@ Tests for the load-modeling / analysis features live next to their packages:
 | Web API endpoints | `internal/webui` | `/api/infer-schema`, `/api/report` |
 | Efficiency view (API, HTML report, export) | `internal/stats`, `internal/webui` | `efficiency_view_test.go`; DOM tests in `internal/webui/uitest` |
 | Parallel initial seeding | `internal/mongo`, `internal/config`, `internal/webui` | `TestInsertRandomDocuments*`, `TestSeedConcurrencyConfig`, `TestHandleStartSeedConcurrency` |
+| Query values in trends (`insights_trend_store_query_values`) | `internal/stats`, `internal/webui` | `trend_values_test.go` (canonical Extended JSON, caps, hashes, classification, labels unchanged, off = old output); DOM tests in `uitest/trend_values.test.mjs` |
+| Workload record and replay, seeded determinism | `internal/workloadrec`, `internal/mongo`, `internal/config`, `internal/webui` | `workloadrec_test.go`, `workload_record*_test.go`, `workload_replay_test.go`, `seeded_data_test.go`; DOM tests in `uitest/workload_record.test.mjs` |
+| Recording at scale (block backpressure, compression, iterations) | `internal/workloadrec`, `internal/mongo` | `scale_test.go`, `workload_record_scale_test.go`; benchmarks `go test ./internal/workloadrec -run x -bench Recorder` |
+| Deterministic generated traffic | `internal/mongo`, `internal/config` | `workload_deterministic_test.go`, `generated_ops_golden_test.go` (off path vs `testdata/generated_ops_seeded.golden`); DOM tests in `uitest/deterministic_traffic.test.mjs` |
+| Operation outcomes | `internal/workloadrec`, `internal/mongo`, `internal/config` | `outcome_test.go`, `workload_outcome_test.go` |
+| Replay comparison | `internal/replaycompare`, `internal/webui`, `cmd/plgm` | `compare_test.go`, `replay_compare_test.go`; DOM tests in `uitest/replay_compare.test.mjs` |
+| Traffic import | `internal/trafficimport`, `internal/mongo`, `internal/webui`, `cmd/plgm` | fixtures in `internal/trafficimport/testdata`; `traffic_import_test.go`, `import_traffic_test.go`; DOM tests in `uitest/traffic_import.test.mjs` |
+| Settings explanations (On/Off text) | `internal/webui` | DOM tests in `uitest/settings_explanations.test.mjs` |
+| Multi-target replay, reads-only replay, starting-data fingerprint | `internal/multitarget`, `internal/mongo`, `internal/config`, `internal/workloadrec`, `internal/webui`, `cmd/plgm` | Sequential/concurrent plans with fakes under `-race`; `TestConcurrent*Target*`, `TestReplayReadsOnly*`, `TestDataFingerprint*`; DOM tests in `uitest/multi_target.test.mjs` |
 
 Timing-sensitive tests (pacing) assert lower bounds / ranges rather than
 exact durations to avoid flakiness.
@@ -78,6 +87,8 @@ Current integration smoke test:
 - `internal/webui/TestExplainIntegration_*` (explain fidelity; verifies update/delete explains leave data unchanged)
 - `internal/webui/TestListIndexesReadsDeployedDefinitions` (deployed-index inventory)
 - `internal/webui/TestExplainIntegration_CompoundSortMatchesDeclaredOrder` (two sort precedences over tied values: returned order, captured pipeline, and explain sort pattern match the declared order; shape IDs are distinct and stable across two runs)
+- `internal/mongo/TestWorkloadRecordReplayIntegration`, `TestWorkloadDeterministicIntegration`, `TestWorkloadOutcomesIntegration` (see below)
+- `internal/multitarget/TestMultiTargetReplayIntegration` (needs three `mongod` instances; see below)
 
 Set `PLGM_IT_REQUIRE_MONGO=true` to make an unavailable MongoDB a failure rather than a skip.
 
@@ -98,7 +109,7 @@ go test -tags=integration ./internal/mongo -run TestRunWorkloadIntegration_OneSh
 Run all integration tests available for your endpoint:
 
 ```bash
-go test -tags=integration ./internal/mongo ./internal/webui -v
+go test -tags=integration ./internal/mongo ./internal/webui ./internal/multitarget -v
 ```
 
 Stop MongoDB when done:
@@ -117,6 +128,61 @@ go test -tags=integration ./internal/mongo -run TestRunWorkloadIntegration_OneSh
 ```
 
 If your MongoDB requires authentication, include credentials in `PLGM_IT_MONGO_URI`.
+
+### Workload Record & Replay Integration Test
+
+`TestWorkloadRecordReplayIntegration` seeds a database with `random_seed`,
+records a generated run (fast insert, fast find, and standard paths), drops and
+reseeds the database from the same seed (the "second instance"), replays the
+recording there, and asserts identical seeded `_id`s, a matching commands hash,
+and identical per-shape operation counts. It creates and drops its own
+`plgm_it_record_replay_*` database; transactions are not covered (they need a
+replica set).
+
+```bash
+PLGM_IT_MONGO_URI='mongodb://127.0.0.1:30777' \
+go test -tags=integration ./internal/mongo -run TestWorkloadRecordReplayIntegration -v -count=1
+```
+
+### Deterministic Traffic and Outcome Integration Tests
+
+`TestWorkloadDeterministicIntegration` runs the same deterministic workload
+twice, each time on a database freshly seeded from the same seed, and asserts
+equal complete traffic fingerprints and per-shape operation counts.
+`TestWorkloadOutcomesIntegration` runs one deterministic worker twice on freshly
+seeded copies, recording outcomes with result checksums, replays the recording
+on a third copy, and asserts every result matches per operation; a second replay
+on the already-changed data must report duplicate-key errors by code and name,
+without the message text. Both create and drop their own databases.
+
+```bash
+PLGM_IT_MONGO_URI='mongodb://127.0.0.1:30777' \
+go test -tags=integration ./internal/mongo -run 'TestWorkloadDeterministicIntegration|TestWorkloadOutcomesIntegration' -v -count=1
+```
+
+### Multi-Target Replay Integration Test
+
+`TestMultiTargetReplayIntegration` (`internal/multitarget`) records a workload
+on instance A (`PLGM_IT_MONGO_URI`) with a `counts` starting-data fingerprint,
+then replays it on instances B and C, sequentially and concurrently, from the
+same seeded data, and runs a concurrent deterministic workload on B and C. It
+asserts that every target completes, that its starting data matches the
+recording, that the concurrent replay reports client-side lag, that the
+deterministic traffic fingerprints are equal, and that the comparison of C with
+B has no differing operations. Every target uses the same database name, so B
+and C must be separate `mongod` instances; the test skips unless
+`PLGM_IT_MONGO_URI_B` and `PLGM_IT_MONGO_URI_C` are set (the CI job runs one
+service and skips it). It drops its `plgm_it_multi_target_*` database on all
+three.
+
+```bash
+for p in 30801 30802 30803; do mkdir -p /tmp/plgm-it-$p; \
+  mongod --port $p --bind_ip 127.0.0.1 --dbpath /tmp/plgm-it-$p --logpath /tmp/plgm-it-$p/log --fork; done
+PLGM_IT_MONGO_URI='mongodb://127.0.0.1:30801' \
+PLGM_IT_MONGO_URI_B='mongodb://127.0.0.1:30802' \
+PLGM_IT_MONGO_URI_C='mongodb://127.0.0.1:30803' \
+go test -tags=integration -race ./internal/multitarget -run TestMultiTargetReplayIntegration -v -count=1
+```
 
 ### Mongos Mixed Sharding Integration Test (CI/profiled env)
 

@@ -237,7 +237,9 @@ func toFloat64(v interface{}) float64 {
 	}
 }
 
-func bootstrapRecordPool(ctx context.Context, db *mongo.Database, collections []config.CollectionDefinition, pool *RecordPool, sampleSize int) {
+// bootstrapRecordPool samples existing documents into pool. sortByID reads
+// them in _id order, so a seeded run starts from the same pool every time.
+func bootstrapRecordPool(ctx context.Context, db *mongo.Database, collections []config.CollectionDefinition, pool *RecordPool, sampleSize int, sortByID bool) {
 	if pool == nil || db == nil || sampleSize <= 0 {
 		return
 	}
@@ -245,7 +247,11 @@ func bootstrapRecordPool(ctx context.Context, db *mongo.Database, collections []
 		namespace := collectionNamespace(db, col)
 		coll := getCollectionHandle(db, col)
 		sampleCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		cursor, err := coll.Find(sampleCtx, bson.M{}, options.Find().SetLimit(int64(sampleSize)))
+		opts := options.Find().SetLimit(int64(sampleSize))
+		if sortByID {
+			opts.SetSort(bson.D{{Key: "_id", Value: 1}})
+		}
+		cursor, err := coll.Find(sampleCtx, bson.M{}, opts)
 		cancel()
 		if err != nil {
 			continue

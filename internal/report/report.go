@@ -160,22 +160,33 @@ type TrendRow struct {
 	Latency       string
 	Impact        string
 	Details       []string
+	// QueryValues is the query values annotation; empty unless this run or
+	// its baseline run stored literal values. QueryValueDetails hold them.
+	QueryValues       string
+	QueryValueDetails []string
+	// QueryValuesFromTraffic is set when QueryValues comes from equal
+	// deterministic traffic fingerprints rather than stored literals.
+	QueryValuesFromTraffic bool
+	// QueryValuesFromRecording is set when both runs replayed the same
+	// recording.
+	QueryValuesFromRecording bool
 }
 
 // TrendSection is the baseline comparison with its criteria and disclosures.
 type TrendSection struct {
-	Version         string
-	Status          string
-	Reason          string
-	MethodNote      string
-	CausationNote   string
-	EvidenceNote    string
-	CriteriaSummary string
-	CriteriaNote    string
-	Store           []KV
-	Counts          []KV
-	Limitations     []string
-	Rows            []TrendRow
+	QueryValuesNotice string
+	Version           string
+	Status            string
+	Reason            string
+	MethodNote        string
+	CausationNote     string
+	EvidenceNote      string
+	CriteriaSummary   string
+	CriteriaNote      string
+	Store             []KV
+	Counts            []KV
+	Limitations       []string
+	Rows              []TrendRow
 }
 
 // ReportData is the complete, render-ready model for a run report.
@@ -190,6 +201,14 @@ type ReportData struct {
 	LoadProfileItems   []KV
 	PacingItems        []KV
 	AccessPatternItems []KV
+	// GeneratedTrafficItems is the traffic fingerprint of a deterministic
+	// run (hashes only); empty for any other run.
+	GeneratedTrafficItems []KV
+	// MultiTargetItems lists the targets of a multi-target replay (labels,
+	// status, client-side lag); MultiTargetNotes says how they shared the
+	// PLGM host. Empty for a single-target run.
+	MultiTargetItems []KV
+	MultiTargetNotes []string
 
 	Latency []LatencyRow
 	Heatmap []HeatmapPoint

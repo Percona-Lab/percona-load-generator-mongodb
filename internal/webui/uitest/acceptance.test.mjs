@@ -31,7 +31,8 @@ test('every acceptance scenario renders with its rating, coverage, and evidence'
     const rows = tableRows(doc);
     assert.equal(rows.length, Object.keys(EXPECTED).length);
     assert.deepEqual(rows.map(r => r.dataset.shapeId), view.rows.map(r => r.shape_id));
-    const detail = doc.getElementById('efficiencyDetail');
+    const modal = doc.getElementById('shapeDetailModal');
+    const detail = doc.getElementById('shapeDetailBody');
     for (const [summary, want] of Object.entries(EXPECTED)) {
         const r = view.rows.find(x => x.shape_summary === summary);
         assert.ok(r, summary);
@@ -44,7 +45,7 @@ test('every acceptance scenario renders with its rating, coverage, and evidence'
         if (want.coverage === 'partial') assert.ok(c[COL.score].startsWith('≤ ') && c[COL.band] !== 'efficient', summary);
 
         tr.querySelector('button').click();
-        assert.equal(detail.style.display, 'block');
+        assert.equal(modal.style.display, 'flex');
         const text = detail.textContent;
         assert.ok(text.includes(`Scan efficiency ${r.score_label}`), `${summary}: detail shows ${r.score_label}`);
         if (want.observation) {
@@ -56,6 +57,8 @@ test('every acceptance scenario renders with its rating, coverage, and evidence'
             const rec = data.recommendations.find(x => x.rank === rank);
             for (const key of rec.candidate_keys || []) assert.ok(text.includes(key), `${summary}: candidate ${key}`);
         }
+        doc.getElementById('shapeDetailX').click();
+        assert.equal(modal.style.display, 'none');
     }
     assert.deepEqual(errors, []);
 });

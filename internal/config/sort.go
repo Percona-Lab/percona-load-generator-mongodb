@@ -32,6 +32,10 @@ func isSortPosition(owner, key string) bool {
 	return key == "$sort" || (key == "sortBy" && sortByOwners[owner])
 }
 
+// IsSortPosition reports whether the value of key inside owner is a sort
+// specification, which is held as an ordered bson.D.
+func IsSortPosition(owner, key string) bool { return isSortPosition(owner, key) }
+
 // decodeOrderedJSON decodes JSON like encoding/json into interface{} (numbers
 // as float64, objects as maps), except that objects at sort positions become
 // bson.D in written order. Duplicate keys in a sort object are an error.

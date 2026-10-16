@@ -1,0 +1,94 @@
+{
+  "failed": {
+    "error": "no operations could be converted",
+    "report": {
+      "bytes": 0,
+      "compression": "none",
+      "connections": 0,
+      "converted": 0,
+      "entries": 1,
+      "file_bytes": 0,
+      "files": [
+        "empty.log"
+      ],
+      "flagged": {},
+      "namespaces": [],
+      "non_operations": 1,
+      "note": "mongod logs and system.profile hold only operations slower than slowms (default 100 ms), and only the share sampled by slowOpSampleRate, unless profiling level 2 or slowms 0 was set while capturing; the import replays only what was captured. Offsets are start times estimated as the logged time minus the logged duration.",
+      "ops_by_type": {},
+      "skipped": 0,
+      "skipped_by_reason": {},
+      "sources": [],
+      "span_ms": 0,
+      "status": "empty",
+      "warnings": [],
+      "workers": 0
+    }
+  },
+  "import": {
+    "created_at": "normalized",
+    "download_url": "/api/import-traffic/fixture-import-1/recording",
+    "file_name": "plgm_imported_traffic_fixture-import-1.ndjson",
+    "id": "fixture-import-1",
+    "report": {
+      "bytes": 4828,
+      "compression": "none",
+      "connections": 2,
+      "converted": 8,
+      "dropped_options": {
+        "arrayFilters": 1
+      },
+      "entries": 15,
+      "file_bytes": 4828,
+      "files": [
+        "mongod.log"
+      ],
+      "first_timestamp": "2026-10-16T10:00:00.9Z",
+      "flagged": {
+        "dropped_options": 1,
+        "failed_on_source": 1,
+        "in_transaction": 1,
+        "server_generated_values": 2,
+        "split_statement": 2
+      },
+      "header_hash": "normalized",
+      "last_timestamp": "2026-10-16T10:00:06.989Z",
+      "namespaces": [
+        "shop.orders"
+      ],
+      "non_operations": 1,
+      "note": "mongod logs and system.profile hold only operations slower than slowms (default 100 ms), and only the share sampled by slowOpSampleRate, unless profiling level 2 or slowms 0 was set while capturing; the import replays only what was captured. Offsets are start times estimated as the logged time minus the logged duration.",
+      "ops_by_type": {
+        "aggregate": 1,
+        "deleteOne": 1,
+        "find": 2,
+        "insertMany": 1,
+        "updateMany": 1,
+        "updateOne": 2
+      },
+      "skipped": 7,
+      "skipped_by_reason": {
+        "duplicate_write_statement": 1,
+        "getmore": 1,
+        "system_namespace": 1,
+        "truncated": 1,
+        "unparseable": 1,
+        "unsupported_command": 2
+      },
+      "sources": [
+        "mongod_log"
+      ],
+      "span_ms": 6089,
+      "status": "complete",
+      "unsupported_commands": {
+        "count": 1,
+        "update (replacement document)": 1
+      },
+      "warnings": [
+        "mongod.log line 15: not a JSON document"
+      ],
+      "workers": 2
+    },
+    "server_path": "/tmp/plgm-imported-traffic-fixture.ndjson"
+  }
+}

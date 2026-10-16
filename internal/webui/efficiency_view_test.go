@@ -37,9 +37,17 @@ func counters(docs, keys, returned int64) *stats.ExplainMetrics {
 
 // fixtureOptions vary the stubbed run. after models a later run in which an
 // index on sku was added and the status shape examines more documents.
+// values turns on insights_trend_store_query_values; changed names a find
+// field whose literals differ from the other runs, partial one whose even
+// literals differ.
 type fixtureOptions struct {
-	after bool
-	store *stats.TrendStore
+	after   bool
+	store   *stats.TrendStore
+	values  bool
+	changed string
+	partial string
+	// replayHash marks the run as a complete replay of that recording.
+	replayHash string
 }
 
 // efficiencyEvidence returns stubbed explain output per shape key.
@@ -163,7 +171,11 @@ func efficiencyFixtureServerWith(t *testing.T, mode string, opt fixtureOptions) 
 	})
 	find := func(field string, ms float64, n int) {
 		for i := 0; i < n; i++ {
-			q := &stats.ExecutableQuery{Database: "shop", Filter: map[string]interface{}{field: fmt.Sprintf("secret-%s-%d", field, i)}}
+			prefix := "secret"
+			if field == opt.changed || (field == opt.partial && i%2 == 0) {
+				prefix = "secret-changed"
+			}
+			q := &stats.ExecutableQuery{Database: "shop", Filter: map[string]interface{}{field: fmt.Sprintf("%s-%s-%d", prefix, field, i)}}
 			c.RecordOperationEvent("find", "shop", "orders", "find|"+field, "find on fields: "+field, []string{field}, time.Duration((ms+float64(i%3)*0.1)*float64(time.Millisecond)), true, 1, q, "by "+field, "unit_test", "w", "q.json", "q-"+field, "", "", 0)
 		}
 	}
@@ -192,7 +204,10 @@ func efficiencyFixtureServerWith(t *testing.T, mode string, opt fixtureOptions) 
 			c.RecordOperationEvent("insert", "shop", "orders", "insert", "insert", nil, time.Millisecond, true, 1, nil, "insert", "unit_test", "w", "q.json", "q-insert", "", "", 0)
 		}
 	}
-	s := NewServer(&config.AppConfig{Duration: "1s", Concurrency: concurrency})
+	if opt.replayHash != "" {
+		c.SetWorkloadReplay(&stats.WorkloadReplayInfo{FileName: "rec.ndjson", Status: "complete", HeaderHash: opt.replayHash})
+	}
+	s := NewServer(&config.AppConfig{Duration: "1s", Concurrency: concurrency, InsightsTrendStoreQueryValues: opt.values})
 	s.TrendStore = opt.store
 	s.CurrentStats = c
 	return s, calls

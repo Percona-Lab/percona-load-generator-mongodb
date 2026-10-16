@@ -20,10 +20,10 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/datagen"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloadrec"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // Define BSON Types locally
@@ -70,6 +70,21 @@ type workloadConfig struct {
 	// measured latency window.
 	thinkTime   time.Duration
 	thinkJitter time.Duration
+
+	// recorder appends every sent operation to a workload recording; nil
+	// when recording is off.
+	recorder *workloadrec.Recorder
+
+	// det is set for deterministic generation (workload_deterministic).
+	det *deterministicRun
+
+	// outcomes makes the execute functions capture each operation's
+	// outcome (workload_record_outcomes), with result checksums when
+	// checksums is set; outcomeFile receives them in replay and
+	// deterministic runs.
+	outcomes    bool
+	checksums   bool
+	outcomeFile *workloadrec.OutcomeWriter
 }
 
 // applyPacing pauses a worker between operations by thinkTime plus a uniform
@@ -102,6 +117,7 @@ var (
 	ensureGenericShardingFn = ensureGenericSharding
 	runAllQueriesOnceFn     = runAllQueriesOnce
 	runContinuousWorkloadFn = runContinuousWorkload
+	runWorkloadReplayFn     = runWorkloadReplay
 	getPrimaryFilterFieldFn = getPrimaryFilterField
 	executeQueryOnceFn      = executeQueryOnce
 )
@@ -178,6 +194,14 @@ func identifyPatchKey(col config.CollectionDefinition) string {
 }
 
 func prepareGenericBatchPool(col config.CollectionDefinition, cfg *config.AppConfig, batchSize int, poolSize int) ([]PreBuiltBatch, string, error) {
+	gen := func() map[string]interface{} { return workloads.GenerateDocument(col, cfg) }
+	marshal := func(m map[string]interface{}) ([]byte, error) { return bson.Marshal(m) }
+	return prepareGenericBatchPoolWith(col, batchSize, poolSize, gen, marshal)
+}
+
+// prepareGenericBatchPoolWith builds the prebuilt insert batches from the
+// documents gen returns, encoded by marshal.
+func prepareGenericBatchPoolWith(col config.CollectionDefinition, batchSize int, poolSize int, gen func() map[string]interface{}, marshal func(map[string]interface{}) ([]byte, error)) ([]PreBuiltBatch, string, error) {
 	patchKey := identifyPatchKey(col)
 	if patchKey == "" {
 		return nil, "", fmt.Errorf("collection '%s' has no suitable integer key for optimization", col.Name)
@@ -194,9 +218,9 @@ func prepareGenericBatchPool(col config.CollectionDefinition, cfg *config.AppCon
 		offsets := make([]int, batchSize)
 
 		for i := 0; i < batchSize; i++ {
-			docMap := workloads.GenerateDocument(col, cfg)
+			docMap := gen()
 			docMap[patchKey] = magic
-			rawDoc, err := bson.Marshal(docMap)
+			rawDoc, err := marshal(docMap)
 			if err != nil {
 				return nil, "", err
 			}
@@ -283,6 +307,13 @@ func getPrimaryFilterField(ctx context.Context, db *mongo.Database, col config.C
 }
 
 func generateFallbackQuery(ctx context.Context, db *mongo.Database, opType string, col config.CollectionDefinition, rng *rand.Rand, filterField string, cfg *config.AppConfig) (config.QueryDefinition, bool) {
+	return generateFallbackQueryWith(opType, col, rng, filterField, cfg, workloads.GenerateFallbackUpdate)
+}
+
+// fallbackUpdateFn generates the update of a fallback update query.
+type fallbackUpdateFn func(col config.CollectionDefinition, cfg *config.AppConfig, rng *rand.Rand) map[string]interface{}
+
+func generateFallbackQueryWith(opType string, col config.CollectionDefinition, rng *rand.Rand, filterField string, cfg *config.AppConfig, genUpdate fallbackUpdateFn) (config.QueryDefinition, bool) {
 	collectionName := col.Name
 	fieldType := "int"
 	if filterField == "_id" {
@@ -302,7 +333,7 @@ func generateFallbackQuery(ctx context.Context, db *mongo.Database, opType strin
 		Label:           fmt.Sprintf("fallback %s query on %s", opType, filterField),
 	}
 	if opType == "updateOne" || opType == "updateMany" {
-		updatePayload := workloads.GenerateFallbackUpdate(col, cfg, rng)
+		updatePayload := genUpdate(col, cfg, rng)
 		base.Filter = filter
 		base.Update = updatePayload
 		return base, true
@@ -315,10 +346,14 @@ func generateFallbackQuery(ctx context.Context, db *mongo.Database, opType strin
 }
 
 func selectRandomQueryByType(ctx context.Context, db *mongo.Database, opType string, queryMap map[string][]config.QueryDefinition, col config.CollectionDefinition, debug bool, rng *rand.Rand, filterField string, cfg *config.AppConfig) (config.QueryDefinition, bool) {
+	return selectQueryByTypeWith(opType, queryMap, col, rng, filterField, cfg, workloads.GenerateFallbackUpdate)
+}
+
+func selectQueryByTypeWith(opType string, queryMap map[string][]config.QueryDefinition, col config.CollectionDefinition, rng *rand.Rand, filterField string, cfg *config.AppConfig, genUpdate fallbackUpdateFn) (config.QueryDefinition, bool) {
 	candidates, ok := queryMap[opType]
 	if !ok || len(candidates) == 0 {
 		if opType == "find" || opType == "updateOne" || opType == "updateMany" || opType == "deleteOne" || opType == "deleteMany" {
-			return generateFallbackQuery(ctx, db, opType, col, rng, filterField, cfg)
+			return generateFallbackQueryWith(opType, col, rng, filterField, cfg, genUpdate)
 		}
 		return config.QueryDefinition{}, false
 	}
@@ -331,7 +366,7 @@ func selectRandomQueryByType(ctx context.Context, db *mongo.Database, opType str
 	}
 	if len(matched) == 0 {
 		if opType == "find" || opType == "updateOne" || opType == "updateMany" || opType == "deleteOne" || opType == "deleteMany" {
-			return generateFallbackQuery(ctx, db, opType, col, rng, filterField, cfg)
+			return generateFallbackQueryWith(opType, col, rng, filterField, cfg, genUpdate)
 		}
 		return config.QueryDefinition{}, false
 	}
@@ -400,14 +435,32 @@ func getCollectionHandle(db *mongo.Database, col config.CollectionDefinition) *m
 	return db.Client().Database(col.DatabaseName).Collection(col.Name)
 }
 
-func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.Rand) {
+// runTransaction runs one transaction. With replayOps it sends those
+// operations on every attempt; otherwise it generates them (again on every
+// retry of the callback). A recording keeps the operations of the last
+// attempt. A non-nil out receives whether it committed or aborted.
+func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.Rand, replayOps []txInnerOp, out *workloadrec.Outcome) bool {
 	session, err := wCfg.database.Client().StartSession()
 	if err != nil {
-		return
+		return false
 	}
 	defer session.EndSession(ctx)
+	recording := wCfg.recorder.Active()
+	recorded := bson.A{}
+	if recording {
+		for i := range replayOps {
+			recorded = append(recorded, txInnerCommand(wCfg.database, &replayOps[i]))
+		}
+	}
 	start := time.Now()
 	_, err = session.WithTransaction(ctx, func(sessCtx context.Context) (interface{}, error) {
+		if replayOps != nil {
+			for i := range replayOps {
+				executeTxInnerOp(sessCtx, wCfg, &replayOps[i])
+			}
+			return nil, nil
+		}
+		recorded = recorded[:0]
 		numOps := rng.Intn(wCfg.appConfig.MaxTransactionOps) + 1
 		for i := 0; i < numOps; i++ {
 			currentCol := wCfg.collections[rng.Intn(len(wCfg.collections))]
@@ -431,49 +484,41 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 			if !run {
 				continue
 			}
-			coll := getCollectionHandle(wCfg.database, currentCol)
 			filter := cloneMap(q.Filter)
 			ns := collectionNamespace(wCfg.database, currentCol)
 			processRecursiveWithPool(filter, rng, wCfg.recordPool, ns, wCfg.appConfig.ExistingRecordHitRate)
+			op := txInnerOp{opType: innerOp, col: currentCol, filter: filter, update: q.Update, upsert: q.Upsert, filterMap: filter}
 			switch innerOp {
-			case "find":
-				cursor, err := coll.Find(sessCtx, filter, options.Find().SetLimit(1))
-				if err == nil {
-					for cursor.Next(sessCtx) {
-					}
-					_ = cursor.Close(sessCtx)
-				}
-			case "updateOne":
-				opts := options.UpdateOne().SetUpsert(q.Upsert)
-				coll.UpdateOne(sessCtx, filter, q.Update, opts)
-			case "updateMany":
-				opts := options.UpdateMany().SetUpsert(q.Upsert)
-				coll.UpdateMany(sessCtx, filter, q.Update, opts)
-			case "deleteOne":
-				if _, err := coll.DeleteOne(sessCtx, filter); err == nil {
-					wCfg.recordPool.RemoveMatching(ns, filter)
-				}
-			case "deleteMany":
-				if _, err := coll.DeleteMany(sessCtx, filter); err == nil {
-					wCfg.recordPool.RemoveMatching(ns, filter)
-				}
 			case "insert":
-				if _, err := coll.InsertOne(sessCtx, q.Filter); err == nil {
-					registerInsertedDocument(wCfg.recordPool, wCfg.database, currentCol, q.Filter)
+				op.doc, op.poolDoc = q.Filter, q.Filter
+				if recording {
+					op.doc = withDocumentID(q.Filter)
 				}
 			case "insertMany":
-				if _, err := coll.InsertMany(sessCtx, insertManyDocs); err == nil {
-					registerInsertedDocuments(wCfg.recordPool, wCfg.database, currentCol, insertManyDocs)
+				op.docs, op.poolDocs = insertManyDocs, insertManyDocs
+				if recording {
+					op.docs = withDocumentIDs(insertManyDocs)
 				}
+			}
+			executeTxInnerOp(sessCtx, wCfg, &op)
+			if recording {
+				recorded = append(recorded, txInnerCommand(wCfg.database, &op))
 			}
 		}
 		return nil, nil
 	})
-	if err == nil {
-		dur := time.Since(start)
-		wCfg.collector.Track("transaction", dur)
-		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", "transaction|batch", "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, "transaction batch", "runtime_transaction", "transaction_workload", "runtime", "transaction_batch", "", "", -1)
+	dur := time.Since(start)
+	if out != nil {
+		transactionOutcome(out, dur, err)
 	}
+	if recording {
+		recordOp(wCfg, workloadrec.Entry{Worker: id, NS: wCfg.database.Name() + ".(multiple)", Op: "transaction", OK: err == nil, Command: bson.D{{Key: "ops", Value: recorded}}, Outcome: out}, start)
+	}
+	if err == nil {
+		wCfg.collector.Track("transaction", dur)
+		wCfg.collector.RecordOperationEvent("transaction", wCfg.database.Name(), "(multiple)", transactionShapeKey, "transaction batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, "transaction batch", "runtime_transaction", "transaction_workload", "runtime", "transaction_batch", "", "", -1)
+	}
+	return err == nil
 }
 
 func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg workloadConfig, rng *rand.Rand) {
@@ -549,13 +594,22 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 
 		if opType == "transaction" {
 			if wCfg.appConfig.UseTransactions {
-				runTransaction(ctx, id, wCfg, rng)
+				var out *workloadrec.Outcome
+				if wCfg.recorder.Active() {
+					out = wCfg.newOutcome()
+				}
+				runTransaction(ctx, id, wCfg, rng, nil, out)
 				continue
 			}
 			opType = "find"
 		}
 
 		start := time.Now()
+		recording := wCfg.recorder.Active()
+		var out *workloadrec.Outcome
+		if recording {
+			out = wCfg.newOutcome()
+		}
 
 		if isOptimized && currentCol.Name == wCfg.collections[0].Name && (opType == "insert" || opType == "insertMany") {
 			batch := fastBatchPool[rng.Intn(len(fastBatchPool))]
@@ -563,23 +617,20 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				binary.LittleEndian.PutUint64(batch.CmdRaw[offset:], uint64(seq))
 				seq++
 			}
-
-			fastCtx, cancel := context.WithTimeout(dbOpCtx, 30*time.Second)
-			err := wCfg.database.RunCommand(fastCtx, bson.Raw(batch.CmdRaw)).Err()
-			cancel()
-
-			if err != nil {
-				if wCfg.debug {
-					log.Printf("[Worker %d] FastInsert error: %v", id, err)
+			sent := batch.CmdRaw
+			if recording && patchKey != "_id" && !hasField(currentCol, "_id") {
+				if withIDs, err := withBatchIDs(batch.CmdRaw); err == nil {
+					sent = withIDs
+				} else {
+					wCfg.recorder.Fail("encode_error: " + err.Error())
+					recording = false
 				}
-				dur := time.Since(start)
-				wCfg.collector.Add("insert", 1, dur)
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, false, wCfg.collector.CurrentIteration, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
-			} else {
+			}
+			ok := executeFastInsert(dbOpCtx, wCfg, id, currentCol, sent, wCfg.appConfig.InsertBatchSize, start, func() {
 				registerFastBatchIDs(wCfg.recordPool, wCfg.database, currentCol, patchKey, batch.CmdRaw, batch.Offsets)
-				dur := time.Since(start)
-				wCfg.collector.Add("insert", int64(wCfg.appConfig.InsertBatchSize), dur/time.Duration(wCfg.appConfig.InsertBatchSize))
-				wCfg.collector.RecordOperationEvent("insert", currentCol.DatabaseName, currentCol.Name, "insert|fast_batch", "fast insert batch", nil, dur, true, wCfg.collector.CurrentIteration, nil, "fast insert batch", "optimized_path", "generated_workload", "runtime", "fast_insert_batch", "", "", -1)
+			}, out)
+			if recording {
+				recordOp(wCfg, workloadrec.Entry{Worker: id, NS: collectionNamespace(wCfg.database, currentCol), Op: "insertMany", Path: workloadrec.PathFastInsertBatch, OK: ok, Command: bson.Raw(sent), Outcome: out}, start)
 			}
 			continue
 		}
@@ -619,47 +670,9 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 				targetSeq := rng.Int63n(10000000)
 				ids = append(ids, int64(targetW)*100000000+targetSeq)
 			}
-			wCfg.collector.RecordTargeting(pooledIDs > 0)
-
-			rawIDs := buildRawInt64Array(ids)
-			cmd := bson.D{
-				{Key: "find", Value: currentCol.Name},
-				{Key: "filter", Value: bson.D{{Key: patchKey, Value: bson.D{{Key: "$in", Value: bson.RawValue{Type: TypeArray, Value: rawIDs}}}}}},
-				{Key: "limit", Value: batchSize},
-			}
-
-			var fastFindRes struct {
-				Cursor struct {
-					FirstBatch []bson.Raw `bson:"firstBatch"`
-				} `bson:"cursor"`
-			}
-			fastCtx, cancel := context.WithTimeout(dbOpCtx, 30*time.Second)
-			err := wCfg.database.RunCommand(fastCtx, cmd).Decode(&fastFindRes)
-			cancel()
-			if err == nil {
-				wCfg.collector.RecordFindResult(int64(len(fastFindRes.Cursor.FirstBatch)))
-			}
-
-			fastShapeKey := fmt.Sprintf("find|fast_in_patch_key|limit:%d", batchSize)
-			var fastQuery *stats.ExecutableQuery
-			if wCfg.collector.CapturesExecutableQueries() {
-				fastQuery = &stats.ExecutableQuery{
-					Database: wCfg.database.Name(),
-					Filter:   map[string]interface{}{patchKey: map[string]interface{}{"$in": append([]int64(nil), ids...)}},
-					Limit:    int64(batchSize),
-				}
-			}
-			if err != nil {
-				if wCfg.debug {
-					log.Printf("[Worker %d] FastFind error: %v", id, err)
-				}
-				dur := time.Since(start)
-				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, fastShapeKey, fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, false, wCfg.collector.CurrentIteration, fastQuery, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
-			} else {
-				dur := time.Since(start)
-				wCfg.collector.Add("find", 1, dur)
-				wCfg.collector.RecordOperationEvent("find", currentCol.DatabaseName, currentCol.Name, fastShapeKey, fmt.Sprintf("fast find on %s", patchKey), []string{patchKey}, dur, true, wCfg.collector.CurrentIteration, fastQuery, fmt.Sprintf("fast find on %s", patchKey), "optimized_path", "generated_workload", "runtime", "fast_find_patch_key", fmt.Sprintf("{%s:{\"$in\":\"<batch>\"}}", patchKey), "", -1)
+			ok := executeFastFind(dbOpCtx, wCfg, id, currentCol, patchKey, ids, batchSize, pooledIDs > 0, start, out)
+			if recording {
+				recordOp(wCfg, workloadrec.Entry{Worker: id, NS: ns, Op: "find", Path: workloadrec.PathFastFind, OK: ok, Existing: pooledIDs > 0, Command: fastFindRecord(currentCol, patchKey, ids, batchSize), Outcome: out}, start)
 			}
 			continue
 		}
@@ -686,7 +699,6 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			continue
 		}
 
-		coll := getCollectionHandle(wCfg.database, currentCol)
 		ns := collectionNamespace(wCfg.database, currentCol)
 		hitRate := wCfg.appConfig.ExistingRecordHitRate
 
@@ -703,98 +715,42 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 			filter = cloneMap(q.Filter)
 			usedExisting = processRecursiveWithPool(filter, rng, wCfg.recordPool, ns, hitRate)
 		}
-		switch opType {
-		case "find", "updateOne", "updateMany", "deleteOne", "deleteMany", "aggregate":
-			wCfg.collector.RecordTargeting(usedExisting)
-		}
 
-		success := true
 		findLimit := q.Limit
 		if findLimit <= 0 {
 			findLimit = wCfg.findLimit
 		}
+		batch := wCfg.findBatchSize
+		if batch <= 0 {
+			batch = 10
+		}
+		req := opRequest{
+			opType: opType, col: currentCol, filter: filter, pipeline: pipeline, update: q.Update, projection: q.Projection,
+			upsert: q.Upsert, findLimit: findLimit, findBatch: batch, usedExisting: usedExisting,
+			q: q, filterMap: filter, pipelineIn: pipeline,
+		}
 		switch opType {
-		case "find":
-			limit := findLimit
-			batch := wCfg.findBatchSize
-			if batch <= 0 {
-				batch = 10
-			}
-			cursor, err := coll.Find(dbOpCtx, filter,
-				options.Find().SetLimit(limit),
-				options.Find().SetBatchSize(batch),
-				options.Find().SetProjection(q.Projection),
-			)
-			if err == nil {
-				returned := int64(0)
-				for cursor.Next(dbOpCtx) {
-					returned++
-				}
-				_ = cursor.Close(dbOpCtx)
-				wCfg.collector.RecordFindResult(returned)
-			} else {
-				success = false
-			}
-		case "aggregate":
-			cursor, err := coll.Aggregate(dbOpCtx, pipeline)
-			if err == nil {
-				for cursor.Next(dbOpCtx) {
-				}
-				_ = cursor.Close(dbOpCtx)
-			} else {
-				success = false
-			}
-		case "updateOne":
-			opts := options.UpdateOne().SetUpsert(q.Upsert)
-			if res, err := coll.UpdateOne(dbOpCtx, filter, q.Update, opts); err != nil {
-				success = false
-			} else {
-				wCfg.collector.RecordUpdateResult(res.MatchedCount, res.ModifiedCount)
-			}
-		case "updateMany":
-			opts := options.UpdateMany().SetUpsert(q.Upsert)
-			if res, err := coll.UpdateMany(dbOpCtx, filter, q.Update, opts); err != nil {
-				success = false
-			} else {
-				wCfg.collector.RecordUpdateResult(res.MatchedCount, res.ModifiedCount)
-			}
-		case "deleteOne":
-			if res, err := coll.DeleteOne(dbOpCtx, filter); err != nil {
-				success = false
-			} else {
-				wCfg.recordPool.RemoveMatching(ns, filter)
-				wCfg.collector.RecordDeleteResult(res.DeletedCount)
-			}
-		case "deleteMany":
-			if res, err := coll.DeleteMany(dbOpCtx, filter); err != nil {
-				success = false
-			} else {
-				wCfg.recordPool.RemoveMatching(ns, filter)
-				wCfg.collector.RecordDeleteResult(res.DeletedCount)
-			}
 		case "insert":
-			if _, err := coll.InsertOne(dbOpCtx, q.Filter); err != nil {
-				success = false
-			} else {
-				registerInsertedDocument(wCfg.recordPool, wCfg.database, currentCol, q.Filter)
+			req.doc, req.poolDoc = q.Filter, q.Filter
+			if recording {
+				req.doc = withDocumentID(q.Filter)
 			}
 		case "insertMany":
-			if _, err := coll.InsertMany(dbOpCtx, insertManyDocs); err != nil {
-				success = false
-			} else {
-				registerInsertedDocuments(wCfg.recordPool, wCfg.database, currentCol, insertManyDocs)
+			req.docs, req.poolDocs = insertManyDocs, insertManyDocs
+			if recording {
+				req.docs = withDocumentIDs(insertManyDocs)
 			}
 		}
-		dur := time.Since(start)
-		wCfg.collector.Track(opType, dur)
-		shapeKey, shapeSummary, fields := buildOperationShape(opType, filter, pipeline, shapeOptions{projection: q.Projection, limit: findLimit, upsert: q.Upsert})
-		queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex := buildQueryReferenceFromDefinition(q, opType, filter, pipeline)
-		var execQuery *stats.ExecutableQuery
-		if wCfg.collector.CapturesExecutableQueries() {
-			execQuery = buildExecutableQuery(opType, currentCol.DatabaseName, q, filter, pipeline, findLimit)
+		ok, opID := executeStandard(dbOpCtx, wCfg, &req, start, out)
+		if recording {
+			recordOp(wCfg, workloadrec.Entry{Worker: id, NS: ns, Op: opType, OK: ok, Existing: usedExisting, Query: recordQueryRef(q, opID), Shape: recordShapeRef(opID), Command: standardCommand(&req), Outcome: out}, start)
 		}
-		wCfg.collector.RecordOperationEvent(opType, currentCol.DatabaseName, currentCol.Name, shapeKey, shapeSummary, fields, dur, success, wCfg.collector.CurrentIteration, execQuery, queryLabel, querySource, workloadName, queryFile, queryDefID, querySummary, pipelineSummary, queryDefIndex)
 	}
+}
+
+func hasField(col config.CollectionDefinition, name string) bool {
+	_, ok := col.Fields[name]
+	return ok
 }
 
 // buildExecutableQuery returns the query exactly as the worker sent it, for
@@ -1277,6 +1233,22 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 	collector.ConfigureInsights(cfg)
 	collector.SetCollectionsForInsights(collections)
 
+	if err := config.ValidateWorkloadRecordReplay(cfg); err != nil {
+		return err
+	}
+	if err := config.ValidateWorkloadDeterministic(cfg); err != nil {
+		return err
+	}
+	if err := config.ValidateWorkloadOutcomes(cfg); err != nil {
+		return err
+	}
+	if err := config.ValidateWorkloadTargets(cfg); err != nil {
+		return err
+	}
+	if cfg.WorkloadReplayEnabled {
+		return runWorkloadReplayFn(ctx, db, collections, queries, cfg, collector)
+	}
+
 	if duration <= 0 {
 		return runAllQueriesOnceFn(ctx, db, queries, cfg.DebugMode)
 	}
@@ -1331,9 +1303,34 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 		schedule:           schedule,
 		thinkTime:          time.Duration(cfg.ThinkTimeMs) * time.Millisecond,
 		thinkJitter:        time.Duration(cfg.ThinkJitterMs) * time.Millisecond,
+		outcomes:           cfg.WorkloadRecordOutcomes,
+		checksums:          cfg.WorkloadRecordOutcomes && cfg.WorkloadRecordResultChecksums,
+	}
+	if cfg.WorkloadDeterministic {
+		det, err := newDeterministicRun(ctx, collections, queries, cfg, wCfg.concurrency)
+		if err != nil {
+			return fmt.Errorf("deterministic workload: %w", err)
+		}
+		wCfg.det = det
+		ow, closeOutcomes, err := deterministicOutcomeWriter(ctx, db, cfg, det, collector)
+		if err != nil {
+			return fmt.Errorf("deterministic workload outcomes: %w", err)
+		}
+		wCfg.outcomeFile = ow
+		defer closeOutcomes()
 	}
 
-	return runContinuousWorkloadFn(ctx, wCfg)
+	if !cfg.WorkloadRecordEnabled {
+		return runContinuousWorkloadFn(ctx, wCfg)
+	}
+	rec, done, err := workloadRecorder(ctx, db, collections, queries, cfg, wCfg.concurrency, collector)
+	if err != nil {
+		return fmt.Errorf("workload recording: %w", err)
+	}
+	wCfg.recorder = rec
+	err = runContinuousWorkloadFn(ctx, wCfg)
+	done()
+	return err
 }
 
 func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
@@ -1363,10 +1360,12 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	wCfg.activeTarget = &activeTarget
 	wCfg.activeCount = &activeCount
 
-	if wCfg.recordPool == nil {
+	// Deterministic runs derive existing-record values from the seed: no
+	// shared record pool, bootstrap sampling, or insert cache.
+	if wCfg.recordPool == nil && wCfg.det == nil {
 		wCfg.recordPool = NewRecordPool(wCfg.appConfig.RecordPoolMaxSize)
 	}
-	if wCfg.appConfig != nil {
+	if wCfg.appConfig != nil && wCfg.det == nil {
 		if sel, err := accesspattern.Compile(wCfg.appConfig.AccessPattern); err != nil {
 			log.Printf("[AccessPattern] invalid configuration (%v); falling back to uniform access", err)
 		} else {
@@ -1376,8 +1375,10 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 			}
 		}
 	}
-	bootstrapRecordPool(ctx, wCfg.database, wCfg.collections, wCfg.recordPool, wCfg.appConfig.RecordPoolBootstrapSample)
-	if wCfg.debug {
+	if wCfg.det == nil {
+		bootstrapRecordPool(ctx, wCfg.database, wCfg.collections, wCfg.recordPool, wCfg.appConfig.RecordPoolBootstrapSample, wCfg.appConfig.RandomSeed != 0)
+	}
+	if wCfg.debug && wCfg.det == nil {
 		for _, col := range wCfg.collections {
 			ns := collectionNamespace(wCfg.database, col)
 			if wCfg.recordPool.Len(ns) == 0 {
@@ -1386,7 +1387,11 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 		}
 	}
 
-	InsertDocumentCache = make(chan map[string]interface{}, wCfg.maxInsertCache)
+	// Deterministic runs never read the insert cache; leaving the global
+	// alone lets the targets of a concurrent multi-target run start together.
+	if wCfg.det == nil {
+		InsertDocumentCache = make(chan map[string]interface{}, wCfg.maxInsertCache)
+	}
 
 	// Mark the precise start of the measured workload window. This is done after
 	// all preparation (seeding, sharding, record-pool bootstrap) so the UI/CLI
@@ -1395,6 +1400,7 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	if wCfg.collector != nil {
 		wCfg.collector.MarkWorkloadStart()
 	}
+	wCfg.recorder.SetStart(time.Now())
 
 	workloadCtx, cancel := context.WithTimeout(ctx, wCfg.duration)
 	defer cancel()
@@ -1413,6 +1419,9 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	}
 
 	for _, col := range wCfg.collections {
+		if wCfg.det != nil {
+			break
+		}
 		seedCol := col
 		go func() {
 			defer func() {
@@ -1468,6 +1477,19 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 	var wg sync.WaitGroup
 	for i := 1; i <= wCfg.concurrency; i++ {
 		wg.Add(1)
+		if wCfg.det != nil {
+			workerID := i
+			go func() {
+				defer wg.Done()
+				defer func() {
+					if r := recover(); r != nil {
+						reportPanic(fmt.Sprintf("worker %d", workerID), r)
+					}
+				}()
+				deterministicWorker(workloadCtx, newDetWorker(workerID, wCfg))
+			}()
+			continue
+		}
 		// Seed each worker deterministically when a random seed is configured so
 		// per-worker operation streams are reproducible; otherwise stay random.
 		workerSeed := time.Now().UnixNano() + int64(i)
@@ -1486,12 +1508,31 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 		}()
 	}
 
+	// A deterministic run ends when every worker sent its budget; its
+	// duration is only a safety timeout.
+	timedOut := false
+	if wCfg.det != nil {
+		allDone := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(allDone)
+		}()
+		select {
+		case <-allDone:
+		case <-workloadCtx.Done():
+			timedOut = ctx.Err() == nil && errors.Is(workloadCtx.Err(), context.DeadlineExceeded)
+		}
+		cancel()
+	}
 	<-workloadCtx.Done()
 	wg.Wait()
 	if wCfg.collector != nil {
 		wCfg.collector.MarkWorkloadEnd()
 	}
 	close(monitorDone)
+	if wCfg.det != nil {
+		wCfg.det.traffic.finishIteration(wCfg.det.iteration, wCfg.collector, timedOut)
+	}
 
 	panicMu.Lock()
 	err := panicErr
@@ -1500,7 +1541,11 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 		return err
 	}
 
-	wCfg.collector.PrintFinalSummary(wCfg.duration, wCfg.appConfig.WebUI.Enabled)
+	summaryDuration := wCfg.duration
+	if d, ok := wCfg.collector.WorkloadDuration(); ok && wCfg.det != nil {
+		summaryDuration = d
+	}
+	wCfg.collector.PrintFinalSummary(summaryDuration, wCfg.appConfig.WebUI.Enabled)
 	return nil
 }
 
@@ -1516,7 +1561,7 @@ func runAllQueriesOnce(ctx context.Context, db *mongo.Database, queries []config
 		if q.Operation == "insert" || q.Operation == "insertMany" {
 			continue
 		}
-		tasks <- &queryTask{definition: q, database: db, runID: int64(i + 1), debug: debug, rng: rand.New(rand.NewSource(time.Now().UnixNano()))}
+		tasks <- &queryTask{definition: q, database: db, runID: int64(i + 1), debug: debug, rng: rand.New(rand.NewSource(datagen.NextSeed()))}
 	}
 	close(tasks)
 	wg.Wait()

@@ -13,10 +13,14 @@ package schemainfer
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 )
@@ -130,6 +134,67 @@ func splitEntries(text string) []string {
 		lines = append(lines, sc.Text())
 	}
 	return lines
+}
+
+// MaxEntryBytes bounds one entry read by ForEachEntry.
+const MaxEntryBytes = 64 << 20
+
+// ForEachEntry streams the entries of a query log, in the formats Infer
+// accepts: newline-delimited JSON objects (mongod logs, mongoexport of
+// system.profile, raw commands) or one top-level JSON array of objects
+// (mongoexport --jsonArray). fn gets each entry's bytes and its 1-based line
+// (for an array, its 1-based element index); blank lines are skipped. The
+// bytes are only valid during the call.
+func ForEachEntry(r io.Reader, fn func(entry []byte, line int) error) error {
+	br := bufio.NewReaderSize(r, 1<<20)
+	skippedLines := 0
+	for {
+		b, err := br.Peek(1)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		if !unicode.IsSpace(rune(b[0])) {
+			break
+		}
+		if b[0] == '\n' {
+			skippedLines++
+		}
+		_, _ = br.ReadByte()
+	}
+	if b, _ := br.Peek(1); b[0] == '[' {
+		dec := json.NewDecoder(br)
+		if _, err := dec.Token(); err != nil {
+			return err
+		}
+		for i := 1; dec.More(); i++ {
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				return fmt.Errorf("array element %d: %w", i, err)
+			}
+			if err := fn(raw, i); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	sc := bufio.NewScanner(br)
+	sc.Buffer(make([]byte, 0, 64*1024), MaxEntryBytes)
+	for line := skippedLines + 1; sc.Scan(); line++ {
+		b := bytes.TrimSpace(sc.Bytes())
+		if len(b) == 0 {
+			continue
+		}
+		if err := fn(b, line); err != nil {
+			return err
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return fmt.Errorf("read entries: %w", err)
+	}
+	return nil
 }
 
 func parseJSONObject(s string) (map[string]interface{}, error) {

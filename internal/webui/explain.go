@@ -309,6 +309,7 @@ func enrichInsightsWithExplain(ctx context.Context, status string, rep *stats.In
 				ClientLatencyMs: round2(pk.sample.DurationMs),
 				Status:          "explain_unavailable",
 				Reason:          "explain_pending",
+				Query:           pk.sample.Query,
 			})
 			refs = append(refs, sampleRef{shape: idx, sample: len(cs.Samples) - 1, job: jobIdx})
 		}

@@ -91,6 +91,24 @@ const reportTemplate = `<!DOCTYPE html>
       {{range .AccessPatternItems}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}
     </div>
   </section>
+  {{if .GeneratedTrafficItems}}
+  <section id="generated-traffic">
+    <h2>Deterministic Traffic Fingerprint</h2>
+    <div class="kv">
+      {{range .GeneratedTrafficItems}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}
+    </div>
+    <p class="muted">Two complete runs with the same fingerprint sent the same commands, with the same values, in the same order per worker. Cross-worker interleaving, server-generated values, and results on different data can still differ.</p>
+  </section>
+  {{end}}
+  {{if .MultiTargetItems}}
+  <section id="multi-target">
+    <h2>Multi-Target Replay</h2>
+    <div class="kv">
+      {{range .MultiTargetItems}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}
+    </div>
+    {{range .MultiTargetNotes}}<p class="muted">{{.}}</p>{{end}}
+  </section>
+  {{end}}
 
   <section>
     <h2>Latency by Operation (ms)</h2>
@@ -181,7 +199,8 @@ const reportTemplate = `<!DOCTYPE html>
     <p class="note">{{.CausationNote}}</p>
     <p class="muted">{{.MethodNote}}</p>
     <p class="muted">{{.EvidenceNote}}</p>
-    <p class="muted">Criteria: {{.CriteriaSummary}} {{.CriteriaNote}}</p>
+    <p class="muted">Criteria: {{.CriteriaSummary}} {{.CriteriaNote}}</p>{{if .QueryValuesNotice}}
+    <div class="warn" id="trendQueryValuesNotice">{{.QueryValuesNotice}}</div>{{end}}
     <div class="kv">{{range .Store}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}</div>
     <div class="kv">{{range .Counts}}<div><span class="k">{{.Key}}</span><span>{{.Value}}</span></div>{{end}}</div>
     <table>
@@ -189,7 +208,7 @@ const reportTemplate = `<!DOCTYPE html>
       <tbody>
       {{range .Rows}}
         <tr><td>{{.Namespace}}</td><td>{{.Operation}}</td><td>{{.Shape}}</td><td>{{.Comparability}}{{if .BaselineAge}} <span class="muted">({{.BaselineAge}})</span>{{end}}</td><td>{{.Efficiency}}</td><td>{{.Latency}}</td><td>{{.Impact}}</td></tr>
-        {{if .Details}}<tr class="detail"><td></td><td colspan="6"><details><summary>Comparison details: {{.Operation}} {{.Namespace}} ({{.ShapeID}})</summary><ul>{{range .Details}}<li>{{.}}</li>{{end}}</ul></details></td></tr>{{end}}
+        {{if .Details}}<tr class="detail"><td></td><td colspan="6"><details><summary>Comparison details: {{.Operation}} {{.Namespace}} ({{.ShapeID}})</summary><ul>{{range .Details}}<li>{{.}}</li>{{end}}</ul></details></td></tr>{{end}}{{if .QueryValues}}<tr class="detail trend-values"><td></td><td colspan="6"><details><summary>{{if .QueryValuesFromTraffic}}Query values (same deterministic traffic fingerprint; annotation only){{else if .QueryValuesFromRecording}}Query values (both runs replayed the same recording; annotation only){{else}}Query values (literal, recorded with insights_trend_store_query_values on){{end}}: {{.QueryValues}}</summary><ul>{{range .QueryValueDetails}}<li><code>{{.}}</code></li>{{end}}</ul></details></td></tr>{{end}}
       {{else}}
         <tr><td colspan="7" class="muted">No trend rows ({{.Status}}).</td></tr>
       {{end}}

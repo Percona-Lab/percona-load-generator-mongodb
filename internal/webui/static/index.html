@@ -330,6 +330,236 @@
             max-width: none;
         }
 
+        /* Record & Replay tab: one row per setting, control left, explanation right. */
+        .rr-layout > .settings-card {
+            scroll-margin-top: 12px;
+            padding: 16px 20px 18px;
+        }
+
+        .rr-layout code {
+            white-space: nowrap;
+        }
+
+        .rr-intro > .settings-help {
+            font-size: 13px;
+            margin: 4px 0 14px;
+        }
+
+        .rr-flows {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+
+        .rr-flow {
+            border: 1px solid #e6ebf2;
+            border-left: 3px solid var(--p-sky);
+            border-radius: 6px;
+            background: #f8fafc;
+            padding: 10px 12px;
+        }
+
+        .rr-flow-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--p-night);
+            margin-bottom: 3px;
+        }
+
+        .rr-flow-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        /* Browser-style section tabs; the active tab joins the panel below it. */
+        .rr-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            padding: 0 6px;
+            margin-top: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .rr-tab {
+            position: relative;
+            margin-bottom: -1px;
+            padding: 9px 18px;
+            border: 1px solid transparent;
+            border-bottom: 0;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .rr-tab:hover {
+            color: var(--p-night);
+            background: rgba(226, 232, 240, 0.6);
+        }
+
+        .rr-tab:focus-visible {
+            outline: 2px solid rgba(20, 134, 255, 0.45);
+            outline-offset: -2px;
+        }
+
+        .rr-tab[aria-selected="true"] {
+            background: #fff;
+            color: var(--p-night);
+            font-weight: 600;
+            border-color: var(--border);
+            box-shadow: inset 0 2px 0 var(--p-sky);
+        }
+
+        .rr-layout > .rr-panel {
+            display: none;
+            border-top: 0;
+            border-radius: 0 0 8px 8px;
+            padding-top: 18px;
+        }
+
+        .rr-layout > .rr-panel.active {
+            display: block;
+        }
+
+        .rr-card-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eef2f6;
+        }
+
+        .rr-card-head h4 {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .rr-card-head .settings-help {
+            margin-bottom: 0;
+        }
+
+        .rr-tag {
+            flex: none;
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+            background: #f1f5f9;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 2px 10px;
+            white-space: nowrap;
+        }
+
+        .rr-lead {
+            margin: 0 0 10px;
+        }
+
+        .rr-facts {
+            display: grid;
+            grid-template-columns: 110px minmax(0, 1fr);
+            gap: 6px 16px;
+            margin: 0;
+        }
+
+        .rr-facts dt {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .rr-facts dd {
+            margin: 0;
+        }
+
+        .setting-row {
+            display: grid;
+            grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
+            gap: 8px 32px;
+            align-items: start;
+            padding: 16px 0;
+            border-top: 1px solid #f1f4f8;
+        }
+
+        .setting-rows > .setting-row:first-child {
+            border-top: 0;
+        }
+
+        .setting-rows > .setting-row:last-child {
+            padding-bottom: 0;
+        }
+
+        .setting-row-wide {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .setting-control {
+            min-width: 0;
+        }
+
+        .setting-control .setting-sublabel {
+            margin-top: 10px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .setting-row > .settings-note {
+            margin: 0;
+            padding-top: 2px;
+            font-size: 12px;
+            line-height: 1.55;
+            max-width: 95ch;
+        }
+
+        .setting-row > .settings-note strong {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .setting-keys {
+            display: block;
+            margin-top: 6px;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .replay-targets-list:not(:empty) {
+            margin-bottom: 8px;
+        }
+
+        .rr-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid #eef2f6;
+        }
+
+        .rr-import-result:not(:empty) {
+            margin-top: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .setting-row {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .rr-card-head {
+                flex-direction: column;
+            }
+
+            .rr-facts {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
         .tab-content {
             display: none;
             padding: 0;
@@ -831,15 +1061,20 @@
             position: sticky;
             bottom: 0;
             z-index: 5;
-            margin: 0 -16px;
-            padding: 10px 16px;
-            background: rgba(255, 255, 255, 0.96);
-            border-top: 1px solid var(--border);
-            box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+            padding: 12px 0;
             display: flex;
             align-items: center;
             justify-content: flex-end;
             gap: 12px;
+            pointer-events: none;
+        }
+
+        .footer > * {
+            pointer-events: auto;
+        }
+
+        .footer .btn-primary {
+            box-shadow: 0 6px 18px rgba(14, 26, 83, 0.28);
         }
 
         @media (max-width: 900px) {
@@ -1680,15 +1915,34 @@
         .insight-badge.trend-regressed { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
         .insight-badge.trend-increased, .insight-badge.trend-decreased { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
         #trendMatrixTable .trend-current { background: #eff6ff; border-left: 3px solid #3b82f6; }
-        .eff-table tr.trend-detail td { background: var(--bg); }
+        .insight-badge.trend-values-different_values, .insight-badge.trend-values-overlapping { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+        .trend-values-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .trend-value-sample { border-left: 3px solid transparent; padding-left: 6px; margin-bottom: 8px; }
+        .trend-value-sample.trend-value-match { border-left-color: #86efac; }
+        .trend-value-sample pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; margin: 4px 0 0; }
+        .replay-literal-banner { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 6px 10px; margin: 8px 0; font-size: 12px; }
+        .insight-badge.replay-verdict-slower { background: #fee2e2; color: #991b1b; }
+        .insight-badge.replay-verdict-faster { background: #dcfce7; color: #166534; }
+        .replay-table-wrap { overflow-x: auto; }
         .eff-table td.num, .eff-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
         .eff-table tr.selected td { background: #eef2ff; }
         .eff-table tr.eff-row-clickable { cursor: pointer; }
         .eff-table tr.eff-row-clickable:hover td { background: #eef2ff; }
         .eff-row-hint { font-size: 12px; color: var(--text); background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
         .eff-scope-note { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 8px; }
-        .eff-detail { margin-top: 12px; }
-        .eff-detail ul { margin: 4px 0 6px 16px; padding: 0; }
+        .modal-box.shape-detail-box { max-width: min(1100px, 92vw); max-height: 85vh; display: flex; flex-direction: column; padding: 0; font-size: 14px; }
+        .shape-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+        .shape-detail-header h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+        .shape-detail-x { border: none; background: transparent; font-size: 24px; line-height: 1; color: var(--text-secondary); cursor: pointer; padding: 0 4px; }
+        .shape-detail-x:hover { color: var(--p-night); }
+        .shape-detail-body { overflow-y: auto; padding: 14px 20px; }
+        .shape-detail-body .insights-kv, .shape-detail-body .insights-row-title, .shape-detail-body .insights-finding-title { font-size: 14px; }
+        .shape-detail-body .insights-row-subtitle { font-size: 13px; }
+        .shape-detail-body .insights-detail-label { font-size: 12px; margin-top: 12px; }
+        .shape-detail-body .insight-badge { font-size: 11px; }
+        .shape-detail-body code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere; }
+        .shape-detail-body ul { margin: 4px 0 6px 18px; padding: 0; }
+        .shape-detail-box .modal-actions { margin-top: 0; padding: 12px 20px; border-top: 1px solid var(--border); }
 
         .toggle-chip {
             border: 1px solid var(--border);
@@ -2127,6 +2381,22 @@
                 <button type="button" class="btn btn-danger" onclick="stopWorkload()">Stop Workload</button>
             </div>
 
+            <div id="generatedTrafficCard" class="mat-card" style="display:none; margin-top: 16px;">
+                <div class="mat-card-title">DETERMINISTIC TRAFFIC FINGERPRINT</div>
+                <div id="generatedTrafficBody" class="insights-status-line"></div>
+            </div>
+
+            <div id="multiTargetCard" class="mat-card" style="display:none; margin-top: 16px;">
+                <div class="mat-card-title">MULTI-TARGET REPLAY</div>
+                <div id="multiTargetSummary" class="insights-status-line"></div>
+                <table class="data-table" id="multiTargetTable">
+                    <thead><tr><th>Target</th><th>Status</th><th>Operations</th><th>Elapsed</th><th>Client-side lag</th><th>Starting data</th></tr></thead>
+                    <tbody id="multiTargetRows"></tbody>
+                </table>
+                <div id="multiTargetComparisons" class="insights-status-line"></div>
+                <div id="multiTargetNotes" class="settings-note"></div>
+            </div>
+
             <div id="insightsPanel" class="mat-card" style="display:none; margin-top: 16px;">
                 <div class="insights-header">
                     <div class="mat-card-title" style="margin-bottom: 0;">POST-RUN INSIGHTS</div>
@@ -2203,6 +2473,44 @@
                     <button type="button" id="qaTabEfficiencyBtn" class="toggle-chip active" aria-pressed="true" onclick="showQueryAnalysisTab('efficiency')">Efficiency</button>
                     <button type="button" id="qaTabFindingsBtn" class="toggle-chip" aria-pressed="false" onclick="showQueryAnalysisTab('findings')">Slow Queries &amp; Indexes</button>
                     <button type="button" id="qaTabTrendsBtn" class="toggle-chip" aria-pressed="false" onclick="showQueryAnalysisTab('trends')">Trends</button>
+                    <button type="button" id="qaTabReplayBtn" class="toggle-chip" aria-pressed="false" onclick="showQueryAnalysisTab('replay')">Replay Comparison</button>
+                </div>
+
+                <div id="queryAnalysisTabReplay" style="display:none;">
+                    <div class="insights-section-card">
+                        <div class="insights-section-title">Replay Comparison</div>
+                        <div class="eff-scope-note" id="replayCompareIntro">Compare the outcome files of two executions of the same operations: two replays of one recording, a recording with outcomes and a replay of it, or two deterministic runs with the same traffic fingerprint. Operations are matched one to one (by recording seq, or by iteration, worker, and per-worker seq). Result and error differences are facts; latency verdicts are heuristics. Files with a different recording or fingerprint are refused unless you allow the mismatch.</div>
+                        <form id="replayCompareForm" onsubmit="event.preventDefault(); runReplayCompare();">
+                            <div class="eff-controls">
+                                <strong>Side A</strong>
+                                <label for="replayAFile">Upload <input type="file" id="replayAFile"></label>
+                                <label for="replayAPath">or server path <input type="text" id="replayAPath" placeholder="/path/to/outcomes-a.ndjson"></label>
+                                <label for="replayALabel">Label <input type="text" id="replayALabel" maxlength="64" placeholder="A"></label>
+                                <label for="replayARun">Plans from trend run <select id="replayARun"></select></label>
+                            </div>
+                            <div class="eff-controls">
+                                <strong>Side B</strong>
+                                <label for="replayBFile">Upload <input type="file" id="replayBFile"></label>
+                                <label for="replayBPath">or server path <input type="text" id="replayBPath" placeholder="/path/to/outcomes-b.ndjson"></label>
+                                <label for="replayBLabel">Label <input type="text" id="replayBLabel" maxlength="64" placeholder="B"></label>
+                                <label for="replayBRun">Plans from trend run <select id="replayBRun"></select></label>
+                            </div>
+                            <div class="eff-controls">
+                                <label for="replayRecFile">Recording (shows the commands) <input type="file" id="replayRecFile"></label>
+                                <label for="replayRecPath">or server path <input type="text" id="replayRecPath"></label>
+                                <label for="replayTopN">Differing operations kept <input type="number" id="replayTopN" min="1" max="1000" value="20"></label>
+                                <label for="replayAllowMismatch"><input type="checkbox" id="replayAllowMismatch"> Allow a mismatch (compare files of different recordings or fingerprints, with a warning)</label>
+                                <button type="submit" id="replayCompareBtn" class="insights-explore-btn">Compare</button>
+                            </div>
+                        </form>
+                        <div id="replayCompareStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                        <div class="eff-controls">
+                            <label for="replayCompareSelect">Kept comparisons (in memory, newest 10)
+                                <select id="replayCompareSelect" onchange="selectReplayComparison(this.value)"></select>
+                            </label>
+                        </div>
+                        <div id="replayCompareResult"></div>
+                    </div>
                 </div>
 
                 <div id="queryAnalysisTabTrends" style="display:none;">
@@ -2210,6 +2518,10 @@
                         <div class="insights-section-title">Trends vs Baseline</div>
                         <div id="trendCausationNote" class="eff-scope-note"></div>
                         <div id="trendSummary" class="insights-row-subtitle"></div>
+                        <details class="eff-notes" id="trendValuesNotes" style="display:none;">
+                            <summary>How to read the Query values column</summary>
+                            <dl id="trendColumnNotes" class="eff-scope-note"></dl>
+                        </details>
                         <div class="eff-controls">
                             <label for="trendStateFilter">Show
                                 <select id="trendStateFilter" onchange="setTrendFilter(this.value)">
@@ -2217,6 +2529,10 @@
                                     <option value="labeled">Labeled changes (improved, regressed, share changed)</option>
                                     <option value="insufficient">Insufficient evidence</option>
                                     <option value="not_comparable">Not comparable or no baseline</option>
+                                    <option value="values_same_values">Query values: same values</option>
+                                    <option value="values_overlapping">Query values: overlapping</option>
+                                    <option value="values_different_values">Query values: different values</option>
+                                    <option value="values_not_recorded">Query values: not recorded</option>
                                 </select>
                             </label>
                             <label for="trendCompareSelect">Compare with
@@ -2305,7 +2621,6 @@
                         <div id="efficiencyTable"></div>
                         <div id="efficiencyLimitations" class="insights-row-subtitle"></div>
                     </div>
-                    <div id="efficiencyDetail" class="insights-section-card eff-detail" role="region" aria-label="Efficiency details" aria-live="polite" style="display:none;"></div>
                 </div>
             </div>
 
@@ -2363,6 +2678,7 @@
                             <button type="button" class="tab-btn active" onclick="showTab('tab-conn', this)">Execution / Runtime</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-workload', this)">Workload Configuration</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-mix', this)">Data / Query Mix</button>
+                            <button type="button" class="tab-btn" onclick="showTab('tab-replay', this)">Record &amp; Replay</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-adv', this)">Metrics & Insights</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-query-analysis', this)">Query Analysis (Explain)</button>
                             <button type="button" class="tab-btn" onclick="showTab('tab-trends', this)">Trends &amp; History</button>
@@ -2591,6 +2907,349 @@
                         </div>
                     </div>
                 </section>
+            </div>
+
+            <div id="tab-replay" class="tab-content">
+                <div id="workloadRecordReplayCard" class="rr-layout">
+                <section class="settings-card rr-intro">
+                    <h4>Reproducible Workload (Record &amp; Replay)</h4>
+                    <div class="settings-help">Run the exact same operations, with the same values, on two instances: record on one, replay on the other. Off by default. Record and replay cannot both be on for the same run, and neither works with the raw injector.</div>
+                    <div class="rr-flows">
+                        <div class="rr-flow">
+                            <div class="rr-flow-title">Record, then replay</div>
+                            <div class="rr-flow-text">Record a run on the source instance, then replay the file on one or more target instances.</div>
+                        </div>
+                        <div class="rr-flow">
+                            <div class="rr-flow-title">Deterministic generation</div>
+                            <div class="rr-flow-text">Generate identical traffic from the same random seed on every instance, without a recording file.</div>
+                        </div>
+                        <div class="rr-flow">
+                            <div class="rr-flow-title">Import captured traffic</div>
+                            <div class="rr-flow-text">Convert mongod logs or profiler exports into a recording, then replay it like any other.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="rr-tabs" role="tablist" aria-label="Record and replay sections">
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrSeedCard" aria-selected="true" onclick="showReplaySection('rrSeedCard')">Seed &amp; Determinism</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrRecordCard" aria-selected="false" onclick="showReplaySection('rrRecordCard')">Record</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrReplayCard" aria-selected="false" onclick="showReplaySection('rrReplayCard')">Replay</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrTargetsCard" aria-selected="false" onclick="showReplaySection('rrTargetsCard')">Multi-Target</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrOutcomeCard" aria-selected="false" onclick="showReplaySection('rrOutcomeCard')">Outcomes</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="trafficImportCard" aria-selected="false" onclick="showReplaySection('trafficImportCard')">Import Traffic</button>
+                </div>
+
+                <section class="settings-card rr-card rr-panel active" id="rrSeedCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Seed &amp; Deterministic Traffic</h4>
+                            <div class="settings-help">Make generated data and operations repeatable. With deterministic traffic, every instance receives the same commands without a recording file.</div>
+                        </div>
+                        <span class="rr-tag">Any run</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="randomSeedInput">Random Seed</label>
+                                <input type="number" name="random_seed" id="randomSeedInput" value="0" step="1">
+                            </div>
+                            <div class="settings-note" id="randomSeedNote"><strong>Set (non-zero):</strong> seeds data and query generation, so the same seed, documents count, and collection definitions seed identical documents on any instance; use it on both sides of a replay. <strong>0 (default):</strong> values are time-based and differ every run. <span class="setting-keys"><code>random_seed</code> / <code>PLGM_RANDOM_SEED</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="workloadDeterministic" name="workload_deterministic" value="true">
+                                    <label for="workloadDeterministic">Deterministic traffic</label>
+                                </div>
+                            </div>
+                            <div class="settings-note" id="workloadDeterministicNote"><strong>On:</strong> every operation is generated from the random seed, iteration, worker, and operation number, so two runs with the same settings send the same commands with the same values, without a recording file. Each worker sends exactly Operations per Worker operations; failures and retries do not shift later operations. Needs a non-zero Random Seed, Drop Collections on and Skip Seed off, and a fixed worker count; Duration becomes a safety timeout (the run is marked incomplete if it is hit). The insert cache and bootstrap are not used, and the run reports a traffic fingerprint (hashes only). Cross-worker interleaving, server-generated values, and results on different data can still differ. <strong>Off (default):</strong> operations are generated as usual until Duration ends. <span class="setting-keys"><code>workload_deterministic</code> / <code>PLGM_WORKLOAD_DETERMINISTIC</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="operationsPerWorker">Operations per Worker</label>
+                                <input type="number" name="operations_per_worker" id="operationsPerWorker" value="0" min="0" step="1">
+                            </div>
+                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> each worker sends exactly this many operations per iteration; required when Deterministic traffic is on. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card rr-card rr-panel" id="rrRecordCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Record</h4>
+                            <div class="settings-help">Write every operation this run sends, with its exact values, to a recording file that can be replayed elsewhere.</div>
+                        </div>
+                        <span class="rr-tag">Source instance</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordEnabled">Record Workload</label>
+                                <select name="workload_record_enabled" id="workloadRecordEnabled">
+                                    <option value="false" selected>Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadRecordEnabledNote"><strong>On:</strong> writes every operation sent, with its exact values, to the recording file so it can be replayed on another instance. The file contains real query values, and recording adds about 2 &micro;s per operation. Every iteration is recorded into the one file, and a replay runs them in order. <strong>Off (default):</strong> nothing is recorded. <span class="setting-keys"><code>workload_record_enabled</code> / <code>PLGM_WORKLOAD_RECORD_ENABLED</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordPath">Recording File (server path)</label>
+                                <input type="text" name="workload_record_path" id="workloadRecordPath" placeholder="plgm_workload_record.ndjson">
+                            </div>
+                            <div class="settings-note" id="workloadRecordPathNote"><strong>Set:</strong> NDJSON file on the server, written with mode 0600; an existing file that is not a recording is never overwritten. <strong>Empty (default):</strong> <code>plgm_workload_record.ndjson</code> in the working directory when recording is on. <span class="setting-keys"><code>workload_record_path</code> / <code>PLGM_WORKLOAD_RECORD_PATH</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordMaxBytes">Max Recording Size (bytes)</label>
+                                <input type="number" name="workload_record_max_bytes" id="workloadRecordMaxBytes" value="536870912" min="0">
+                            </div>
+                            <div class="settings-note" id="workloadRecordMaxBytesNote"><strong>Set:</strong> when the uncompressed size reaches this many bytes the recording stops and is marked truncated; the run continues. <strong>0:</strong> unlimited; watch the free disk space. <strong>Empty (default):</strong> 536870912 (512 MiB). <span class="setting-keys"><code>workload_record_max_bytes</code> / <code>PLGM_WORKLOAD_RECORD_MAX_BYTES</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordBackpressure">When the Writer Falls Behind</label>
+                                <select name="workload_record_backpressure" id="workloadRecordBackpressure">
+                                    <option value="fail" selected>Fail recording</option>
+                                    <option value="block">Block workers</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadRecordBackpressureNote"><strong>Block:</strong> workers wait for the writer, so every operation is recorded; throughput may drop, and the total and longest wait are reported. <strong>Fail (default):</strong> the recording stops and is marked failed; the run continues at full speed. <span class="setting-keys"><code>workload_record_backpressure</code> / <code>PLGM_WORKLOAD_RECORD_BACKPRESSURE</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordCompression">Recording Compression</label>
+                                <select name="workload_record_compression" id="workloadRecordCompression">
+                                    <option value="none" selected>None</option>
+                                    <option value="zstd">zstd</option>
+                                    <option value="gzip">gzip</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadRecordCompressionNote"><strong>zstd / gzip:</strong> compresses the file (typically 10&ndash;15&times; smaller; zstd is faster) at some extra writer CPU; replay and upload detect it. The size cap counts uncompressed bytes. <strong>None (default):</strong> plain NDJSON. <span class="setting-keys"><code>workload_record_compression</code> / <code>PLGM_WORKLOAD_RECORD_COMPRESSION</code></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card rr-card rr-panel" id="rrReplayCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Replay</h4>
+                            <div class="settings-help">Run the operations from a recording instead of generating new ones.</div>
+                        </div>
+                        <span class="rr-tag">Target instance</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayEnabled">Replay Workload</label>
+                                <select name="workload_replay_enabled" id="workloadReplayEnabled">
+                                    <option value="false" selected>Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadReplayEnabledNote"><strong>On:</strong> no operations are generated; the recorded operations run on the recorded worker count until the file ends. Duration, load profile, access pattern, and think time are ignored. Iterations is ignored too: the replay runs once and replays every recorded iteration in order. <strong>Off (default):</strong> operations are generated as usual. <span class="setting-keys"><code>workload_replay_enabled</code> / <code>PLGM_WORKLOAD_REPLAY_ENABLED</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayPath">Recording to Replay (server path)</label>
+                                <input type="text" name="workload_replay_path" id="workloadReplayPath" placeholder="plgm_workload_record.ndjson">
+                                <label for="workloadReplayFile" class="setting-sublabel">or upload a recording</label>
+                                <input type="file" name="workload_replay_file" id="workloadReplayFile" accept=".ndjson,.jsonl,.json,.zst,.gz">
+                            </div>
+                            <div class="settings-note" id="workloadReplayPathNote"><strong>Set:</strong> the recording to replay; an uploaded file is used instead of the path and deleted after the run. <strong>Empty (default):</strong> nothing to replay; required when Replay Workload is on. <span class="setting-keys"><code>workload_replay_path</code> / <code>PLGM_WORKLOAD_REPLAY_PATH</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayMode">Replay Mode</label>
+                                <select name="workload_replay_mode" id="workloadReplayMode">
+                                    <option value="per_worker" selected>Per worker (recorded order, as fast as possible)</option>
+                                    <option value="timed">Timed (recorded offsets; reports lag)</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadReplayModeNote"><strong>Timed:</strong> sends each operation at its recorded offset from the start and reports how far behind it fell (lag). <strong>Per worker (default):</strong> each worker sends its recorded operations in order, as fast as possible. <span class="setting-keys"><code>workload_replay_mode</code> / <code>PLGM_WORKLOAD_REPLAY_MODE</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayOps">Replay Operations</label>
+                                <select name="workload_replay_ops" id="workloadReplayOps">
+                                    <option value="all" selected>All operations</option>
+                                    <option value="reads_only">Reads only</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadReplayOpsNote"><strong>Reads only:</strong> replays finds and read-only aggregates and skips every write (inserts, updates, deletes, transactions with a write, and aggregates with $out or $merge), so the target keeps its starting data; skipped writes are counted and reported, and the commands hash is not compared. <strong>All (default):</strong> replays every recorded operation, including writes. <span class="setting-keys"><code>workload_replay_ops</code> / <code>PLGM_WORKLOAD_REPLAY_OPS</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayAllowMismatch">Allow Mismatch</label>
+                                <select name="workload_replay_allow_mismatch" id="workloadReplayAllowMismatch">
+                                    <option value="false" selected>Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadReplayAllowMismatchNote"><strong>On:</strong> replays even when the collection/query definitions or namespaces differ from the recording, or the recording did not complete; results may not be comparable. <strong>Off (default):</strong> such a replay fails before any operation is sent. <span class="setting-keys"><code>workload_replay_allow_mismatch</code> / <code>PLGM_WORKLOAD_REPLAY_ALLOW_MISMATCH</code></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card rr-card rr-panel" id="rrTargetsCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Multi-Target Replay &amp; Starting Data</h4>
+                            <div class="settings-help">Replay one recording on several instances and check that each one starts from the same data.</div>
+                        </div>
+                        <span class="rr-tag">2&ndash;8 targets</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row setting-row-wide">
+                            <div class="setting-control">
+                                <label for="workloadReplayTargetsList">Replay Targets</label>
+                                <div id="workloadReplayTargetsList" class="replay-targets-list"></div>
+                                <button type="button" class="btn btn-secondary btn-small" id="workloadReplayTargetAdd" onclick="addReplayTargetRow('', '')">Add target</button>
+                                <input type="hidden" name="workload_replay_targets" id="workloadReplayTargets" value="">
+                            </div>
+                            <div class="settings-note" id="workloadReplayTargetsNote"><strong>Listed (2&ndash;8 targets):</strong> the replay (or deterministic run) runs once on every listed target, and only on those: MongoDB URI is not used. Each target gets its own client, workers, stats, outcome file (the label goes before the extension, for example <code>outcomes.m8.ndjson</code>), insights, and trend run, and is compared with the first target. Needs Replay Workload or Deterministic traffic, and Record Outcomes with an outcome file. Username, password, and TLS settings apply to every target; put other per-target options in its URI. <strong>Empty (default):</strong> a single run on MongoDB URI. <span class="setting-keys"><code>workload_replay_targets</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS</code> (<code>label=uri;label=uri</code>)</span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayTargetsMode">Targets Mode</label>
+                                <select name="workload_replay_targets_mode" id="workloadReplayTargetsMode">
+                                    <option value="sequential" selected>Sequential</option>
+                                    <option value="concurrent">Concurrent</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadReplayTargetsModeNote"><strong>Concurrent:</strong> every target is prepared first, one at a time, then all run at once from this host; they share its CPU, memory, and network, so latencies may be affected, and the report shows each target's client-side lag behind the recorded timeline. <strong>Sequential (default):</strong> targets run one after another and do not compete for this host. <span class="setting-keys"><code>workload_replay_targets_mode</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS_MODE</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadDataFingerprint">Starting-Data Fingerprint</label>
+                                <select name="workload_data_fingerprint" id="workloadDataFingerprint">
+                                    <option value="off" selected>Off</option>
+                                    <option value="counts">Counts and indexes</option>
+                                    <option value="dbhash">Counts, indexes, and dbHash</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadDataFingerprintNote"><strong>Counts / dbHash:</strong> a recording stores each collection's document count and index list (plus the <code>dbHash</code> collection hash with dbHash) before the first operation; every replay of it compares them with its target first and fails on a difference (warns with Allow Mismatch). dbHash needs the dbHash privilege, does not run through mongos, and matches only byte-identical copies (a snapshot or mongodump restore), not separately seeded ones. A replay always checks a recording that has a fingerprint. <strong>Off (default):</strong> nothing is stored or checked. <span class="setting-keys"><code>workload_data_fingerprint</code> / <code>PLGM_WORKLOAD_DATA_FINGERPRINT</code></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card rr-card rr-panel" id="rrOutcomeCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Outcome Capture</h4>
+                            <div class="settings-help">Keep what every operation returned so two executions can be compared operation by operation (Query Analysis &gt; Replay Comparison).</div>
+                        </div>
+                        <span class="rr-tag">Result comparison</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordOutcomes">Record Outcomes</label>
+                                <select name="workload_record_outcomes" id="workloadRecordOutcomes">
+                                    <option value="false" selected>Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadRecordOutcomesNote"><strong>On:</strong> keeps what every operation returned: client latency, ok or the error code and name (never the message), and a result summary (documents returned; inserted; matched/modified/upserted; deleted; transaction commit/abort), so two executions can be compared. A recording stores it on each operation line; a replay or deterministic run writes it to the outcome file below. The commands sent, stats, insights, and trends do not change; the cost is negligible without checksums. <strong>Off (default):</strong> no outcomes are kept and recordings are unchanged. <span class="setting-keys"><code>workload_record_outcomes</code> / <code>PLGM_WORKLOAD_RECORD_OUTCOMES</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadRecordResultChecksums">Result Checksums</label>
+                                <select name="workload_record_result_checksums" id="workloadRecordResultChecksums">
+                                    <option value="false" selected>Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="workloadRecordResultChecksumsNote"><strong>On:</strong> adds an order-sensitive sha256 of every find and aggregate result (each returned document as canonical Extended JSON, keys sorted) to its outcome, so different results show up even when the counts match. Costs about 5 &micro;s of worker CPU and a copy of each returned document (hashed after the latency is measured); needs Record Outcomes on. <strong>Off (default):</strong> outcomes carry document counts only. <span class="setting-keys"><code>workload_record_result_checksums</code> / <code>PLGM_WORKLOAD_RECORD_RESULT_CHECKSUMS</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadReplayOutcomesPath">Replay Outcome File (server path)</label>
+                                <input type="text" name="workload_replay_outcomes_path" id="workloadReplayOutcomesPath" placeholder="plgm_replay_outcomes.ndjson">
+                            </div>
+                            <div class="settings-note" id="workloadReplayOutcomesPathNote"><strong>Set:</strong> a replay writes one outcome per replayed operation to this NDJSON file (mode 0600), with the recording's sequence numbers and header hash, so any two executions of a recording can be compared offline; required when Record Outcomes is on during a replay. An existing file that is not an outcome file is never overwritten. <strong>Empty (default):</strong> a replay writes no outcome file. <span class="setting-keys"><code>workload_replay_outcomes_path</code> / <code>PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH</code></span></div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="workloadDeterministicOutcomesPath">Deterministic Outcome File (server path)</label>
+                                <input type="text" name="workload_deterministic_outcomes_path" id="workloadDeterministicOutcomesPath" placeholder="plgm_deterministic_outcomes.ndjson">
+                            </div>
+                            <div class="settings-note" id="workloadDeterministicOutcomesPathNote"><strong>Set:</strong> a deterministic run writes one outcome per operation to this NDJSON file (mode 0600), keyed by iteration, worker, and operation number and stamped with the traffic fingerprint. <strong>Empty (default):</strong> no outcome file; with Record Workload on, the outcomes go into the recording instead. <span class="setting-keys"><code>workload_deterministic_outcomes_path</code> / <code>PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH</code></span></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-card rr-card rr-panel" id="trafficImportCard" role="tabpanel">
+                    <header class="rr-card-head">
+                        <div>
+                            <h4>Import Captured Traffic</h4>
+                            <div class="settings-help" id="trafficImportIntro">
+                                <p class="rr-lead">Converts real application traffic into a recording that Replay Workload runs, like pt-upgrade replaying logs. Nothing is imported until you click Convert; the same conversion runs from the CLI as <code>plgm import-traffic</code>.</p>
+                                <dl class="rr-facts">
+                                    <dt>Sources</dt>
+                                    <dd>mongod JSON logs (4.4+), a mongoexport of <code>system.profile</code> (NDJSON or <code>--jsonArray</code>), or raw command documents; plain, gzip, or zstd.</dd>
+                                    <dt>Conversion</dt>
+                                    <dd>Operations keep their order and timing (start = logged time minus duration), and each connection becomes a worker. find, aggregate, insert, update, and delete are converted; getMore, truncated commands, other commands, replacement updates, and system namespaces are skipped and counted.</dd>
+                                    <dt>Coverage</dt>
+                                    <dd>Logs and the profiler hold only operations slower than slowms (default 100 ms), sampled by slowOpSampleRate, unless profiling level 2 or slowms 0 was set while capturing.</dd>
+                                    <dt>Data handling</dt>
+                                    <dd>The recording contains literal values from the captured traffic; the server keeps the newest 5 (mode 0600) and deletes them when it shuts down from the UI.</dd>
+                                </dl>
+                            </div>
+                        </div>
+                        <span class="rr-tag">Standalone tool</span>
+                    </header>
+                    <div class="setting-rows">
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="trafficImportFiles">Captured Traffic Files</label>
+                                <input type="file" id="trafficImportFiles" multiple accept=".log,.json,.ndjson,.jsonl,.gz,.zst">
+                            </div>
+                            <div class="settings-note" id="trafficImportFilesNote"><strong>Chosen:</strong> every file is read, and their operations are merged in start-time order. <strong>None (default):</strong> nothing to convert.</div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="trafficImportWorkers">Import Workers</label>
+                                <input type="number" id="trafficImportWorkers" value="0" min="0" max="1024" step="1">
+                            </div>
+                            <div class="settings-note" id="trafficImportWorkersNote"><strong>Set:</strong> the captured connections are mapped onto this many workers, so several connections can share one worker and run one after another. <strong>0 (default):</strong> one worker per captured connection, up to 1024.</div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="trafficImportDb">Default Database</label>
+                                <input type="text" id="trafficImportDb" placeholder="appdb">
+                            </div>
+                            <div class="settings-note" id="trafficImportDbNote"><strong>Set:</strong> the database of raw command documents without <code>$db</code>. <strong>Empty (default):</strong> such commands are skipped and counted; log and profiler entries name their database.</div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <label for="trafficImportCompression">Imported Recording Compression</label>
+                                <select id="trafficImportCompression">
+                                    <option value="none" selected>None</option>
+                                    <option value="zstd">zstd</option>
+                                    <option value="gzip">gzip</option>
+                                </select>
+                            </div>
+                            <div class="settings-note" id="trafficImportCompressionNote"><strong>zstd / gzip:</strong> the recording is compressed; replay detects it. <strong>None (default):</strong> plain NDJSON.</div>
+                        </div>
+                        <div class="setting-row">
+                            <div class="setting-control">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="trafficImportSkipGenerated">
+                                    <label for="trafficImportSkipGenerated">Skip server-generated values</label>
+                                </div>
+                            </div>
+                            <div class="settings-note" id="trafficImportSkipGeneratedNote"><strong>On:</strong> operations whose values the server generates (inserts or upserts without <code>_id</code>, <code>$currentDate</code>, <code>$$NOW</code>, <code>$rand</code>, <code>$sample</code>) are skipped and counted. <strong>Off (default):</strong> they are converted and flagged; their results can differ between targets.</div>
+                        </div>
+                    </div>
+                    <div class="rr-actions">
+                        <button type="button" id="trafficImportBtn" class="btn btn-primary btn-small" onclick="runTrafficImport()">Convert</button>
+                        <div id="trafficImportStatus" class="insights-row-subtitle" aria-live="polite"></div>
+                    </div>
+                    <div id="trafficImportResult" class="rr-import-result"></div>
+                </section>
+                </div>
             </div>
 
             <div id="tab-mix" class="tab-content">
@@ -2901,7 +3560,7 @@
                 <div class="adv-layout">
                     <section class="settings-card">
                         <h4>Trend History</h4>
-                        <div class="settings-help">Each finished run stores one redacted snapshot per query shape (no query text, literals, or URI). Results are compared on the <strong>Trends</strong> view of Query &amp; Index Analysis. These settings apply to the next run; config.yaml keys and PLGM_* environment variables set the defaults (environment over YAML over built-in default).</div>
+                        <div class="settings-help">Each finished run stores one redacted snapshot per query shape (no query text, literals, or URI unless <strong>Store query values</strong> below is on). Results are compared on the <strong>Trends</strong> view of Query &amp; Index Analysis. These settings apply to the next run; config.yaml keys and PLGM_* environment variables set the defaults (environment over YAML over built-in default).</div>
                         <div class="grid-3" style="gap:12px;">
                             <div class="form-group" style="margin-bottom:0;">
                                 <label for="trendHistoryRuns">Runs to keep</label>
@@ -2932,6 +3591,11 @@
                                 <div class="settings-note">Empty = default (<code>&lt;user config dir&gt;/plgm/trend_baselines.json</code>); <code>off</code> disables history and comparison. Instances may share one file. <code>trend_baseline_store</code> / <code>PLGM_TREND_BASELINE_STORE</code></div>
                             </div>
                         </div>
+                        <div class="checkbox-group" style="margin-top:12px;">
+                            <input type="checkbox" id="trendStoreQueryValues" name="insights_trend_store_query_values" value="true">
+                            <label for="trendStoreQueryValues">Store query values</label>
+                        </div>
+                        <div class="settings-note" id="trendStoreQueryValuesNote"><strong>On:</strong> each run also stores the exact commands of each shape's explained samples (plus up to 8 retained samples), so Trends can check whether ordinary generated runs used the same query values; this never changes the improved/regressed labels. To compare instances with identical operations, use Record &amp; Replay instead: replays of one recording compare as the same values without stored literals, and Query Analysis &gt; Replay Comparison compares them operation by operation. The baseline file, exports, Download Summary, and HTML report then contain real query values (up to 16 KiB per sample, 1 MiB per run). <strong>Off (default):</strong> only redacted shapes and metrics are stored. <code>insights_trend_store_query_values</code> / <code>PLGM_INSIGHTS_TREND_STORE_QUERY_VALUES</code></div>
                     </section>
 
                     <section class="settings-card">
@@ -3070,6 +3734,19 @@
             </div>
         </div>
 
+        <div class="modal-overlay" id="shapeDetailModal" onclick="if (event.target === this) closeShapeDetail()">
+            <div class="modal-box shape-detail-box" role="dialog" aria-modal="true" aria-labelledby="shapeDetailTitle" onkeydown="shapeDetailKeydown(event)">
+                <div class="shape-detail-header">
+                    <h3 id="shapeDetailTitle"></h3>
+                    <button type="button" class="shape-detail-x" id="shapeDetailX" aria-label="Close" onclick="closeShapeDetail()">×</button>
+                </div>
+                <div class="shape-detail-body" id="shapeDetailBody"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-flat" id="shapeDetailCloseBtn" onclick="closeShapeDetail()">Close</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -3134,6 +3811,28 @@
             const form = document.getElementById('configForm');
             if (form && form.getBoundingClientRect().top < 0) form.scrollIntoView({ block: 'start' });
             if (tabId === 'tab-trends') loadTrendHistory();
+        }
+
+        function showReplaySection(panelId) {
+            const panel = document.getElementById(panelId);
+            if (!panel || !panel.classList.contains('rr-panel')) return;
+            document.querySelectorAll('#tab-replay .rr-panel').forEach(el => el.classList.toggle('active', el === panel));
+            document.querySelectorAll('#tab-replay .rr-tab').forEach(btn => {
+                btn.setAttribute('aria-selected', btn.getAttribute('aria-controls') === panelId ? 'true' : 'false');
+            });
+        }
+
+        // Opens the section holding the setting named earliest in a validation message.
+        function showReplaySectionFor(message) {
+            let best = null;
+            document.querySelectorAll('#tab-replay .rr-panel label').forEach(label => {
+                const name = label.textContent.trim();
+                const at = name ? message.indexOf(name) : -1;
+                if (at >= 0 && (!best || at < best.at || (at === best.at && name.length > best.len))) {
+                    best = { at, len: name.length, panel: label.closest('.rr-panel') };
+                }
+            });
+            if (best) showReplaySection(best.panel.id);
         }
 
         // --- Live dashboard tabs ---
@@ -3772,6 +4471,140 @@
             el.textContent = '';
             el.style.display = 'none';
         }
+        // Replay targets editor: one row (label, URI) per target; the rows
+        // are kept as JSON in the hidden workload_replay_targets input.
+        function replayTargetRows() {
+            return Array.from(document.querySelectorAll('#workloadReplayTargetsList .replay-target-row')).map(row => ({
+                label: (row.querySelector('.replay-target-label')?.value || '').trim(),
+                uri: (row.querySelector('.replay-target-uri')?.value || '').trim(),
+            }));
+        }
+        function syncReplayTargets() {
+            const hidden = document.getElementById('workloadReplayTargets');
+            if (!hidden) return;
+            const rows = replayTargetRows().filter(t => t.label || t.uri);
+            hidden.value = rows.length ? JSON.stringify(rows) : '';
+        }
+        function addReplayTargetRow(label, uri) {
+            const list = document.getElementById('workloadReplayTargetsList');
+            if (!list) return;
+            const row = document.createElement('div');
+            row.className = 'replay-target-row';
+            row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px;';
+            row.innerHTML = '<input type="text" class="replay-target-label" placeholder="label (e.g. m8)" maxlength="32" style="max-width:160px;">'
+                + '<input type="text" class="replay-target-uri" placeholder="mongodb://host:27017" style="flex:1;">'
+                + '<button type="button" class="btn btn-secondary replay-target-remove" title="Remove target">Remove</button>';
+            row.querySelector('.replay-target-label').value = label || '';
+            row.querySelector('.replay-target-uri').value = uri || '';
+            row.querySelectorAll('input').forEach(i => i.addEventListener('input', syncReplayTargets));
+            row.querySelector('.replay-target-remove').addEventListener('click', () => { row.remove(); syncReplayTargets(); });
+            list.appendChild(row);
+            syncReplayTargets();
+        }
+        function setReplayTargetRows(targets) {
+            const list = document.getElementById('workloadReplayTargetsList');
+            if (!list) return;
+            list.innerHTML = '';
+            (Array.isArray(targets) ? targets : []).forEach(t => addReplayTargetRow(t.label || t.Label || '', t.uri || t.URI || ''));
+            syncReplayTargets();
+        }
+        function listedReplayTargets() {
+            return replayTargetRows().filter(t => t.label || t.uri);
+        }
+        function validateReplayTargets(recordOn, replayOn, detOn, outcomesOn, replayOutPath, detOutPath) {
+            const ops = document.getElementById('workloadReplayOps')?.value || 'all';
+            if (ops === 'reads_only' && !replayOn) return 'Replay Operations "Reads only" needs Replay Workload on.';
+            const fp = document.getElementById('workloadDataFingerprint')?.value || 'off';
+            if (fp !== 'off' && !recordOn && !replayOn) return 'Starting-Data Fingerprint needs Record Workload (the recording stores it) or Replay Workload on.';
+            const targets = listedReplayTargets();
+            if (targets.length === 0) return '';
+            if (targets.length < 2 || targets.length > 8) return `Replay Targets needs 2 to 8 targets (got ${targets.length}); use MongoDB URI for a single instance.`;
+            if (!replayOn && !detOn) return 'Replay Targets needs Replay Workload or Deterministic traffic on.';
+            if (recordOn) return 'Replay Targets cannot be combined with Record Workload: every target would write the same recording.';
+            if (document.getElementById('rawEnable')?.checked) return 'Replay Targets does not work with the raw injector (Expert / Debug tab).';
+            const labels = new Set(), uris = new Set();
+            for (let i = 0; i < targets.length; i++) {
+                const t = targets[i];
+                if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/.test(t.label)) return `Replay target ${i + 1}: the label must be 1-32 letters, digits, '.', '_' or '-', starting with a letter or digit.`;
+                if (labels.has(t.label.toLowerCase())) return `Replay target label "${t.label}" is used twice.`;
+                labels.add(t.label.toLowerCase());
+                if (!/^mongodb(\+srv)?:\/\//.test(t.uri)) return `Replay target "${t.label}": the URI must start with mongodb:// or mongodb+srv://.`;
+                if (uris.has(t.uri)) return `Replay target "${t.label}": the same URI is listed twice.`;
+                uris.add(t.uri);
+            }
+            const outPath = replayOn ? replayOutPath : detOutPath;
+            if (!outcomesOn || !outPath) return `Replay Targets needs Record Outcomes on and the ${replayOn ? 'Replay' : 'Deterministic'} Outcome File set: every target writes its own outcome file.`;
+            return '';
+        }
+        // A multi-target run writes to every listed target unless it only
+        // replays reads and neither drops nor seeds: ask first.
+        function confirmMultiTargetWrites() {
+            const targets = listedReplayTargets();
+            if (targets.length === 0) return true;
+            const replayOn = document.getElementById('workloadReplayEnabled')?.value === 'true';
+            const readsOnly = replayOn && document.getElementById('workloadReplayOps')?.value === 'reads_only';
+            const drop = !!document.getElementById('dropColl')?.checked;
+            const seeds = !document.getElementById('skipSeed')?.checked && Number(document.querySelector('[name="documents_count"]')?.value || 0) > 0;
+            const what = [];
+            if (!readsOnly) what.push(replayOn ? 'replay the recorded writes' : 'send the generated writes');
+            if (drop) what.push('drop the collections');
+            if (seeds) what.push('seed documents');
+            if (what.length === 0) return true;
+            return confirm(`This run will ${what.join(', ')} on ${targets.length} targets: ${targets.map(t => t.label).join(', ')}. Continue?`);
+        }
+        function validateWorkloadRecordReplay() {
+            const recordOn = document.getElementById('workloadRecordEnabled')?.value === 'true';
+            const replayOn = document.getElementById('workloadReplayEnabled')?.value === 'true';
+            if (recordOn && replayOn) {
+                return 'Record Workload and Replay Workload cannot both be on for the same run.';
+            }
+            if ((recordOn || replayOn) && document.getElementById('rawEnable')?.checked) {
+                return 'Record Workload and Replay Workload do not work with the raw injector (Expert / Debug tab).';
+            }
+            if (replayOn) {
+                const path = (document.getElementById('workloadReplayPath')?.value || '').trim();
+                const files = document.getElementById('workloadReplayFile')?.files?.length || 0;
+                if (!path && files === 0) {
+                    return 'Replay Workload is on: enter the recording path or upload a recording.';
+                }
+            }
+            const seed = (document.querySelector('[name="random_seed"]')?.value || '').trim();
+            if (seed && !/^-?\d+$/.test(seed)) {
+                return 'Random Seed must be a whole number (0 = random).';
+            }
+            const opsRaw = (document.getElementById('operationsPerWorker')?.value || '').trim();
+            if (opsRaw && !/^\d+$/.test(opsRaw)) {
+                return 'Operations per Worker must be 0 (off) or a positive whole number.';
+            }
+            if (document.getElementById('workloadDeterministic')?.checked) {
+                if (!seed || Number(seed) === 0) return 'Deterministic traffic needs a non-zero Random Seed.';
+                if (!(Number(opsRaw) > 0)) return 'Deterministic traffic needs Operations per Worker greater than 0.';
+                if (replayOn) return 'Deterministic traffic and Replay Workload cannot both be on.';
+                if (document.getElementById('rawEnable')?.checked) return 'Deterministic traffic does not work with the raw injector (Expert / Debug tab).';
+                const kind = document.getElementById('loadProfileKind')?.value || 'fixed';
+                if (kind !== 'fixed') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed.';
+                if (!document.getElementById('dropColl')?.checked || document.getElementById('skipSeed')?.checked) {
+                    return 'Deterministic traffic needs Drop Collections on and Skip Seed off, so existing records are the seeded documents.';
+                }
+            }
+            const outcomesOn = document.getElementById('workloadRecordOutcomes')?.value === 'true';
+            const checksumsOn = document.getElementById('workloadRecordResultChecksums')?.value === 'true';
+            const detOn = !!document.getElementById('workloadDeterministic')?.checked;
+            const replayOutPath = (document.getElementById('workloadReplayOutcomesPath')?.value || '').trim();
+            const detOutPath = (document.getElementById('workloadDeterministicOutcomesPath')?.value || '').trim();
+            if (!outcomesOn) {
+                if (checksumsOn) return 'Result Checksums needs Record Outcomes on.';
+                if (replayOutPath) return 'Replay Outcome File is set: turn Record Outcomes on, or clear the path.';
+                if (detOutPath) return 'Deterministic Outcome File is set: turn Record Outcomes on, or clear the path.';
+            } else {
+                if (replayOutPath && !replayOn) return 'Replay Outcome File is set but Replay Workload is off.';
+                if (detOutPath && !detOn) return 'Deterministic Outcome File is set but Deterministic traffic is off.';
+                if (replayOn && !replayOutPath) return 'Record Outcomes during a replay needs a Replay Outcome File.';
+                if (!replayOn && detOn && !detOutPath && !recordOn) return 'Record Outcomes in a deterministic run needs a Deterministic Outcome File or Record Workload on.';
+                if (!replayOn && !detOn && !recordOn) return 'Record Outcomes needs Record Workload on, a replay with a Replay Outcome File, or Deterministic traffic with a Deterministic Outcome File.';
+            }
+            return validateReplayTargets(recordOn, replayOn, detOn, outcomesOn, replayOutPath, detOutPath);
+        }
         function validateConfigForm() {
             if (selectedQueryNeedsSortReview()) {
                 showTab('tab-mix');
@@ -3780,7 +4613,7 @@
             }
             const num = (name) => Number(document.querySelector(`[name="${name}"]`)?.value || 0);
             const uri = (document.querySelector('[name="uri"]')?.value || '').trim();
-            if (!uri) {
+            if (!uri && listedReplayTargets().length === 0) {
                 showConfigInlineError('MongoDB URI is required.');
                 showTab('tab-conn', document.querySelector('.tab-btn'));
                 return false;
@@ -3829,6 +4662,13 @@
                 showTab('tab-workload');
                 return false;
             }
+            const recordReplayErr = validateWorkloadRecordReplay();
+            if (recordReplayErr) {
+                showConfigInlineError(recordReplayErr);
+                showTab('tab-replay');
+                showReplaySectionFor(recordReplayErr);
+                return false;
+            }
 
             {
                 const selectedCollection = (document.getElementById('selectedCollectionDefinitionId')?.value || '').trim();
@@ -3857,7 +4697,7 @@
                 num('transaction_percent');
             if (mixTotal <= 0) {
                 showConfigInlineError('Operation mix must have at least one percentage greater than zero.');
-                showTab('tab-mix', document.querySelectorAll('.tab-btn')[2]);
+                showTab('tab-mix');
                 return false;
             }
             return true;
@@ -4478,13 +5318,14 @@
             document.getElementById('insightsExplainEnabled').addEventListener('change', updateExplainOffWarning);
             updateExplainOffWarning();
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeInsightsDrawer();
+                if (e.key !== 'Escape') return;
+                if (shapeDetail) closeShapeDetail(); else closeInsightsDrawer();
             });
             updateInsightsDrawerNavButtons();
             wireHeatmapHoverPause();
             onLoadProfileKindChange();
             onAccessPatternKindChange();
-            fetch('/api/config').then(r => r.json()).then(cfg => {
+            fetch('/api/config').then(r => r.text()).then(parseJSONKeepingSeeds).then(cfg => {
                 document.querySelector('[name="uri"]').value = cfg.URI || '';
                 document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
                 document.querySelector('[name="duration"]').value = cfg.Duration || '60s';
@@ -4563,8 +5404,29 @@
                 document.querySelector('[name="trend_default_comparison"]').value = cfg.TrendDefaultComparison === 'pinned' ? 'pinned' : 'previous';
                 document.querySelector('[name="trend_run_label"]').value = cfg.TrendRunLabel || '';
                 document.querySelector('[name="trend_baseline_store"]').value = cfg.TrendBaselineStore || '';
+                document.getElementById('trendStoreQueryValues').checked = !!cfg.InsightsTrendStoreQueryValues;
                 document.querySelector('[name="sharding_mode"]').value = cfg.ShardingMode || 'auto';
                 document.getElementById('shardSkipNoConfig').checked = (cfg.ShardingSkipGenericWithoutConfig !== undefined) ? !!cfg.ShardingSkipGenericWithoutConfig : true;
+                document.getElementById('randomSeedInput').value = cfg.RandomSeed || 0;
+                document.getElementById('workloadRecordEnabled').value = cfg.WorkloadRecordEnabled ? 'true' : 'false';
+                document.getElementById('workloadRecordPath').value = cfg.WorkloadRecordPath || '';
+                document.getElementById('workloadRecordMaxBytes').value = cfg.WorkloadRecordMaxBytes ?? 536870912;
+                document.getElementById('workloadRecordBackpressure').value = cfg.WorkloadRecordBackpressure === 'block' ? 'block' : 'fail';
+                document.getElementById('workloadRecordCompression').value = ['zstd', 'gzip'].includes(cfg.WorkloadRecordCompression) ? cfg.WorkloadRecordCompression : 'none';
+                document.getElementById('workloadReplayEnabled').value = cfg.WorkloadReplayEnabled ? 'true' : 'false';
+                document.getElementById('workloadReplayPath').value = cfg.WorkloadReplayPath || '';
+                document.getElementById('workloadReplayMode').value = cfg.WorkloadReplayMode === 'timed' ? 'timed' : 'per_worker';
+                document.getElementById('workloadReplayAllowMismatch').value = cfg.WorkloadReplayAllowMismatch ? 'true' : 'false';
+                document.getElementById('workloadDeterministic').checked = !!cfg.WorkloadDeterministic;
+                document.getElementById('operationsPerWorker').value = cfg.OperationsPerWorker || 0;
+                document.getElementById('workloadRecordOutcomes').value = cfg.WorkloadRecordOutcomes ? 'true' : 'false';
+                document.getElementById('workloadRecordResultChecksums').value = cfg.WorkloadRecordResultChecksums ? 'true' : 'false';
+                document.getElementById('workloadReplayOutcomesPath').value = cfg.WorkloadReplayOutcomesPath || '';
+                document.getElementById('workloadDeterministicOutcomesPath').value = cfg.WorkloadDeterministicOutcomesPath || '';
+                document.getElementById('workloadReplayOps').value = cfg.WorkloadReplayOps === 'reads_only' ? 'reads_only' : 'all';
+                document.getElementById('workloadReplayTargetsMode').value = cfg.WorkloadReplayTargetsMode === 'concurrent' ? 'concurrent' : 'sequential';
+                document.getElementById('workloadDataFingerprint').value = ['counts', 'dbhash'].includes(cfg.WorkloadDataFingerprint) ? cfg.WorkloadDataFingerprint : 'off';
+                setReplayTargetRows(cfg.WorkloadReplayTargets);
 
                 if (cfg.RawInjector) {
                     document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
@@ -4603,6 +5465,9 @@
             e.preventDefault();
             clearConfigInlineError();
             if (!validateConfigForm()) {
+                return;
+            }
+            if (!confirmMultiTargetWrites()) {
                 return;
             }
             const username = document.querySelector('[name="username"]').value.trim();
@@ -4742,7 +5607,11 @@
         }
 
         function showQueryAnalysisTab(tab) {
-            toggleSubTabs('queryAnalysisTab', { efficiency: 'qaTabEfficiencyBtn', findings: 'qaTabFindingsBtn', trends: 'qaTabTrendsBtn' }, tab);
+            toggleSubTabs('queryAnalysisTab', { efficiency: 'qaTabEfficiencyBtn', findings: 'qaTabFindingsBtn', trends: 'qaTabTrendsBtn', replay: 'qaTabReplayBtn' }, tab);
+            if (tab === 'replay') {
+                renderReplayComparison();
+                if (!replayState.loaded) loadReplayComparisons();
+            }
         }
 
         function toggleSubTabs(prefix, btnIds, tab) {
@@ -5165,7 +6034,6 @@
                 'efficiencyCoverage',
                 'efficiencyTable',
                 'efficiencyLimitations',
-                'efficiencyDetail',
                 'trendCausationNote',
                 'trendSummary',
                 'trendResetStatus',
@@ -5177,10 +6045,78 @@
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = '';
             });
+            hideShapeDetail();
             closeInsightsDrawer();
         }
 
+        // Shows the per-target progress of a multi-target replay or
+        // deterministic run, then the comparisons with the first target.
+        // Labels only; the API never returns target URIs.
+        function renderMultiTarget(mt) {
+            const card = document.getElementById('multiTargetCard');
+            if (!card) return;
+            if (!mt || !Array.isArray(mt.targets)) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = '';
+            const n = mt.targets.length;
+            document.getElementById('multiTargetSummary').textContent =
+                `${mt.mode === 'concurrent' ? 'Concurrent' : 'Sequential'} ${mt.kind || 'replay'} on ${n} targets; each is compared with ${mt.reference}.`
+                + (mt.mode === 'concurrent' ? ' The dashboard shows the first target.' : ' The dashboard follows the running target.');
+            const ms = (v) => (v === undefined || v === null) ? '-' : `${Number(v).toFixed(1)} ms`;
+            document.getElementById('multiTargetRows').innerHTML = mt.targets.map(t => {
+                let ops = String(Number(t.ops_done || 0));
+                if (t.ops_total) ops += ` / ${Number(t.ops_total)}`;
+                if (t.ops_skipped) ops += ` (${Number(t.ops_skipped)} writes skipped)`;
+                const lag = t.lag_max_ms === undefined ? '-' : `max ${ms(t.lag_max_ms)}, avg ${ms(t.lag_avg_ms)}`;
+                const data = t.data_fingerprint_match === undefined ? '-' : (t.data_fingerprint_match ? 'matches recording' : 'differs from recording');
+                const status = escHtml(t.status || '') + (t.error ? `: ${escHtml(t.error)}` : '');
+                return `<tr data-target="${escHtml(t.label)}"><td>${t.index}. ${escHtml(t.label)}</td><td>${status}</td><td>${ops}</td><td>${Number(t.elapsed_sec || 0).toFixed(1)} s</td><td>${lag}</td><td>${data}</td></tr>`;
+            }).join('');
+            const comps = Array.isArray(mt.comparisons) ? mt.comparisons : [];
+            let compHtml = '';
+            if (mt.fingerprints_match !== undefined) {
+                compHtml += `<div>Traffic fingerprints match the reference: <strong>${mt.fingerprints_match ? 'yes' : 'no'}</strong></div>`;
+            }
+            compHtml += comps.map(c => {
+                const head = `${escHtml(c.reference)} vs ${escHtml(c.target)}`;
+                if (c.error) return `<div>${head}: not compared (${escHtml(c.error)})</div>`;
+                const link = c.report_id ? ` <a href="/api/replay-compare/${encodeURIComponent(c.report_id)}/report.html">HTML report</a>` : '';
+                return `<div>${head}: ${Number(c.differing_ops || 0)} differing operations, latency ${escHtml(String(c.latency_verdict || '').replace(/_/g, ' '))} (heuristic).${link}</div>`;
+            }).join('');
+            document.getElementById('multiTargetComparisons').innerHTML = compHtml;
+            const notes = Array.isArray(mt.notes) ? mt.notes : [];
+            document.getElementById('multiTargetNotes').textContent = notes.join(' ');
+        }
+
+        // Shows the traffic fingerprint of a deterministic run (hashes and
+        // counts only); hidden for every other run.
+        function renderGeneratedTraffic(md) {
+            const card = document.getElementById('generatedTrafficCard');
+            const body = document.getElementById('generatedTrafficBody');
+            if (!card || !body) return;
+            const g = md && md.generated_traffic;
+            if (!g) {
+                card.style.display = 'none';
+                body.innerHTML = '';
+                return;
+            }
+            const workers = Object.keys(g.worker_hashes || {}).sort((a, b) => Number(a) - Number(b));
+            const lines = [
+                `Fingerprint: <code id="generatedTrafficFingerprint">${escHtml(g.fingerprint || '')}</code>`,
+                `Status: <strong id="generatedTrafficStatus">${escHtml(g.status || '')}</strong>${g.reason ? ` (${escHtml(g.reason)})` : ''}`,
+                `Random seed ${escHtml(String(g.random_seed))} | ${Number(g.workers || 0)} workers × ${Number(g.operations_per_worker || 0)} operations | ${Number(g.iterations || 1)} iteration(s) | planned ${Number(g.ops_planned || 0)}, generated ${Number(g.ops_generated || 0)}, sent ${Number(g.ops_sent || 0)}`,
+                `PLGM ${escHtml(g.plgm_version || '')} | collections hash ${escHtml(String(g.collections_hash || '').slice(0, 12))} | queries hash ${escHtml(String(g.queries_hash || '').slice(0, 12))} | commands hash ${escHtml(String(g.commands_hash || '').slice(0, 12))}${g.safety_timeout ? ` | safety timeout ${escHtml(g.safety_timeout)}` : ''}`,
+                `<details><summary>Per-worker hashes (${workers.length})</summary>${workers.map(w => `<div>worker ${escHtml(w)}: <code>${escHtml(g.worker_hashes[w])}</code></div>`).join('')}</details>`,
+                'Two complete runs with the same fingerprint sent the same commands, with the same values, in the same order per worker. Cross-worker interleaving, server-generated values, and results on different data can still differ.'
+            ];
+            body.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+            card.style.display = '';
+        }
+
         function renderFinalInsights(rep) {
+            renderGeneratedTraffic(rep && rep.metadata);
             const panel = document.getElementById('insightsPanel');
             const status = document.getElementById('insightsStatus');
             const pill = document.getElementById('insightsPill');
@@ -5470,7 +6406,7 @@
             } else {
                 const body = rows.map(r => {
                     const open = efficiencyState.openShape === r.shape_id;
-                    return `<tr data-shape-id="${escHtml(r.shape_id)}" class="eff-row-clickable${open ? ' selected' : ''}" title="Click to show details for this query shape below" onclick="efficiencyRowClick(event, '${escHtml(r.shape_id)}')">
+                    return `<tr data-shape-id="${escHtml(r.shape_id)}" tabindex="-1" class="eff-row-clickable${open ? ' selected' : ''}" title="Click to open the details for this query shape" onclick="efficiencyRowClick(event, '${escHtml(r.shape_id)}')">
                         <td class="eff-col-ns"><span class="eff-ns">${escHtml(r.namespace || '')}</span><br><span class="eff-op insights-row-subtitle">${escHtml(r.operation || '')}</span></td>
                         <td class="eff-col-shape">${escHtml(trimText(r.shape_summary || '', 80))}</td>
                         <td class="num eff-score eff-col-score"><strong>${escHtml(r.score_label || 'Unassessed')}</strong></td>
@@ -5481,10 +6417,10 @@
                         <td class="eff-col-overhead">${efficiencyOverheadCell(r.execution_overhead || {})}</td>
                         <td class="eff-col-other">${efficiencyOtherCell(r)}</td>
                         <td class="eff-col-cov">${escHtml(r.coverage_label || r.coverage || '')}${r.coverage_reason ? ` <span class="insights-row-subtitle">(${escHtml(r.coverage_reason)})</span>` : ''}</td>
-                        <td><button type="button" class="insights-explore-btn" aria-controls="efficiencyDetail" aria-expanded="${open ? 'true' : 'false'}" onclick="event.stopPropagation(); openEfficiencyDetail('${escHtml(r.shape_id)}')">Details</button></td>
+                        <td><button type="button" class="insights-explore-btn" aria-haspopup="dialog" aria-controls="shapeDetailModal" aria-expanded="${open ? 'true' : 'false'}" onclick="event.stopPropagation(); openEfficiencyDetail('${escHtml(r.shape_id)}', 'button')">Details</button></td>
                     </tr>`;
                 }).join('');
-                tableEl.innerHTML = `<div class="eff-row-hint" id="efficiencyRowHint">👉 Click any row to see the full details for that query shape in the panel below the table.</div>
+                tableEl.innerHTML = `<div class="eff-row-hint" id="efficiencyRowHint">👉 Click any row (or Details) to open the full details for that query shape.</div>
                 <table class="eff-table" id="efficiencyRows">
                     <caption>Showing ${rows.length} of ${all.length} tracked shapes, sorted by ${efficiencyState.sort === 'impact' ? 'workload impact' : 'lowest scan efficiency'}.</caption>
                     <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th>${efficiencyHeader(v, 'scan_efficiency', 'num')}<th scope="col">Band</th><th scope="col">Confidence</th>${efficiencyHeader(v, 'latency')}${efficiencyHeader(v, 'workload_impact')}${efficiencyHeader(v, 'execution_overhead')}${efficiencyHeader(v, 'other')}<th scope="col">Assessment coverage</th><th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
@@ -5499,23 +6435,89 @@
             return `<th scope="col"${cls ? ` class="${cls}"` : ''} title="${escHtml(c.explanation)}" data-column="${escHtml(key)}">${escHtml(c.title)}</th>`;
         }
 
-        function openEfficiencyDetail(shapeId) {
+        // Shared details modal for Efficiency and Trends rows. The open shape lives in
+        // efficiencyState.openShape / trendState.openShape; shapeDetail records which
+        // table opened it and whether focus returns to the row or its Details button.
+        let shapeDetail = null;
+
+        function shapeDetailRowClickAllowed(event) {
+            const sel = window.getSelection ? String(window.getSelection()) : '';
+            if (sel) return false;
+            return !(event && event.target && event.target.closest && event.target.closest('a, button, input, select, summary'));
+        }
+
+        function showShapeDetail(kind, from) {
+            const wasOpen = !!shapeDetail;
+            shapeDetail = { kind, from: from === 'button' ? 'button' : 'row' };
+            if (kind === 'efficiency') renderEfficiencyView();
+            else if (kind === 'replay') renderReplayComparison();
+            else renderTrendView();
+            if (!wasOpen && shapeDetail) document.getElementById('shapeDetailX').focus();
+        }
+
+        function hideShapeDetail() {
+            shapeDetail = null;
+            const modal = document.getElementById('shapeDetailModal');
+            if (modal) modal.style.display = 'none';
+            const body = document.getElementById('shapeDetailBody');
+            if (body) body.innerHTML = '';
+        }
+
+        function fillShapeDetail(row, html) {
+            document.getElementById('shapeDetailTitle').textContent = [row.namespace, row.operation, row.shape_summary].filter(Boolean).join(' • ');
+            document.getElementById('shapeDetailBody').innerHTML = html;
+            document.getElementById('shapeDetailModal').style.display = 'flex';
+        }
+
+        function closeShapeDetail() {
+            const d = shapeDetail;
+            if (!d) return;
+            if (d.kind === 'replay') {
+                const key = replayState.openOp;
+                hideShapeDetail();
+                replayState.openOp = null;
+                renderReplayComparison();
+                const table = document.getElementById('replayOpRows');
+                const tr = table ? [...table.querySelectorAll('tbody tr[data-op-key]')].find(r => r.dataset.opKey === key) : null;
+                const target = tr ? (d.from === 'button' ? tr.querySelector('button') : tr) : null;
+                if (target) target.focus();
+                return;
+            }
+            const isEff = d.kind === 'efficiency';
+            const shapeId = isEff ? efficiencyState.openShape : trendState.openShape;
+            hideShapeDetail();
+            if (isEff) { efficiencyState.openShape = null; renderEfficiencyView(); }
+            else { trendState.openShape = null; renderTrendView(); }
+            const table = document.getElementById(isEff ? 'efficiencyRows' : 'trendRows');
+            const tr = table ? [...table.querySelectorAll('tbody tr[data-shape-id]')].find(r => r.dataset.shapeId === shapeId) : null;
+            const target = tr ? (d.from === 'button' ? tr.querySelector('button') : tr) : null;
+            if (target) target.focus();
+        }
+
+        function shapeDetailKeydown(event) {
+            if (event.key !== 'Tab') return;
+            const box = event.currentTarget;
+            const items = [...box.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, summary, [tabindex]:not([tabindex="-1"])')];
+            if (!items.length) return;
+            const first = items[0];
+            const last = items[items.length - 1];
+            const active = document.activeElement;
+            if (event.shiftKey && (active === first || !box.contains(active))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (active === last || !box.contains(active))) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+
+        function openEfficiencyDetail(shapeId, from) {
             efficiencyState.openShape = shapeId;
-            renderEfficiencyView();
-            const detail = document.getElementById('efficiencyDetail');
-            if (detail && typeof detail.scrollIntoView === 'function') detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            showShapeDetail('efficiency', from);
         }
 
         function efficiencyRowClick(event, shapeId) {
-            const sel = window.getSelection ? String(window.getSelection()) : '';
-            if (sel) return;
-            if (event && event.target && event.target.closest && event.target.closest('a, button, input, select, summary')) return;
-            openEfficiencyDetail(shapeId);
-        }
-
-        function closeEfficiencyDetail() {
-            efficiencyState.openShape = null;
-            renderEfficiencyView();
+            if (shapeDetailRowClickAllowed(event)) openEfficiencyDetail(shapeId, 'row');
         }
 
         function efficiencyCounterText(label, c) {
@@ -5593,13 +6595,12 @@
         }
 
         function renderEfficiencyDetail() {
-            const el = document.getElementById('efficiencyDetail');
-            if (!el) return;
+            if (!shapeDetail || shapeDetail.kind !== 'efficiency') return;
             const v = efficiencyView();
             const row = v && efficiencyState.openShape ? (v.rows || []).find(r => r.shape_id === efficiencyState.openShape) : null;
             if (!row) {
-                el.style.display = 'none';
-                el.innerHTML = '';
+                efficiencyState.openShape = null;
+                hideShapeDetail();
                 return;
             }
             const recs = ((finalInsightsData || {}).recommendations) || [];
@@ -5643,15 +6644,8 @@
                     ${efficiencyList((r.limitations || []).map(l => `limitation: ${l}`))}
                 </div>`;
             }).join('') : `<div class="insights-row-subtitle">No recommendation is linked to this shape.</div>`;
-            el.style.display = 'block';
-            el.innerHTML = `
-                <div class="insights-finding-head">
-                    <div>
-                        <p class="insights-finding-title" id="efficiencyDetailTitle">${escHtml(row.operation || '')} • ${escHtml(row.namespace || '')}</p>
-                        <div class="insights-row-subtitle">${escHtml(row.shape_summary || '')} | shape id ${escHtml(row.shape_id)}</div>
-                    </div>
-                    <button type="button" class="insights-drawer-close" onclick="closeEfficiencyDetail()">Close details</button>
-                </div>
+            fillShapeDetail(row, `
+                <div class="insights-row-subtitle">Scan efficiency details | shape id ${escHtml(row.shape_id)}</div>
                 <div class="insights-detail-label">Redacted query</div>
                 <div class="insights-kv">${row.query ? `<code id="efficiencyDetailQuery">${escHtml(row.query)}</code>${row.query_truncated ? ' (truncated)' : ''}` : 'No redacted query descriptor was captured for this shape.'}</div>
                 <div class="insights-detail-label" style="margin-top:8px;">Scan efficiency</div>
@@ -5676,7 +6670,7 @@
                 ${(row.limitations || []).length ? `<div class="insights-detail-label">Limitations</div>${efficiencyList(row.limitations)}` : ''}
                 <div class="insights-detail-label" style="margin-top:8px;">Recommendations, tradeoffs, and validation</div>
                 ${recHtml}
-            `;
+            `);
         }
 
         function currentEfficiencyViewState() {
@@ -5735,8 +6729,139 @@
                 if (f === 'labeled') return st.some(x => TREND_LABELED.includes(x));
                 if (f === 'insufficient') return st.includes('insufficient_evidence');
                 if (f === 'not_comparable') return st.some(x => x === 'not_comparable' || x === 'no_baseline');
+                if (f.startsWith('values_')) return trendValuesState(r) === f.slice('values_'.length);
                 return true;
             });
+        }
+
+        const TREND_VALUES_TEXT = {
+            same_values: 'same values', overlapping: 'overlapping', different_values: 'different values', not_recorded: 'not recorded'
+        };
+        const TREND_VALUES_LEGEND = {
+            same_values: 'every sample command of this run also ran in the baseline run',
+            overlapping: 'some sample commands match the baseline run, others differ',
+            different_values: 'no sample command matches the baseline run; the runs touched different documents, so cache state may differ',
+            not_recorded: 'at least one of the two runs has no stored values (the setting was off, or no literal sample was kept)'
+        };
+
+        function trendValuesState(r) {
+            return (r.query_values || {}).state || 'not_recorded';
+        }
+
+        function trendHasValues(v) {
+            return !!(v && (v.rows || []).some(r => r.query_values));
+        }
+
+        // Equal traffic fingerprints compare as same values without any
+        // stored literals; only stored samples make a summary sensitive.
+        function trendHasLiteralValues(v) {
+            return !!(v && (v.rows || []).some(r => r.query_values && (r.query_values.current || r.query_values.baseline)));
+        }
+
+        function trendValuesCell(r) {
+            const q = r.query_values;
+            if (!q) return `<span class="insight-badge trend-values-not_recorded">not recorded</span><br><span class="insights-row-subtitle">values not recorded for this run</span>`;
+            return `<span class="insight-badge trend-values-${escHtml(q.state)}">${escHtml(TREND_VALUES_TEXT[q.state] || q.state)}</span><br><span class="insights-row-subtitle">${escHtml(q.label || '')}</span>${trendReplayLink(r)}`;
+        }
+
+        // A kept replay comparison of the recording both runs replayed; the
+        // one made with these two trend runs' plans wins over the newest.
+        function trendReplayComparison(r) {
+            const q = r.query_values;
+            if (!q || q.source !== 'same_recording' || !q.replay_header_hash) return null;
+            const all = (replayState.list || []).filter(x => x.identity === q.replay_header_hash);
+            const cur = ((trendView() || {}).current_run || {}).run_id;
+            const runs = [cur, q.baseline_run_id].filter(Boolean).sort().join(',');
+            return all.find(x => [x.run_a, x.run_b].filter(Boolean).sort().join(',') === runs) || all[0] || null;
+        }
+
+        function trendReplayLink(r) {
+            const c = trendReplayComparison(r);
+            if (!c) return '';
+            return `<br><a href="#" class="trend-replay-link" data-compare-id="${escHtml(c.id)}" onclick="event.preventDefault(); event.stopPropagation(); openReplayComparison('${escHtml(c.id)}')">Open replay comparison (${escHtml(c.label_a)} vs ${escHtml(c.label_b)})</a>`;
+        }
+
+        // Indents canonical Extended JSON without parsing it, so key order
+        // (for example a multi-key $sort) stays exactly as executed.
+        function prettyExtJSON(s) {
+            s = String(s || '');
+            let out = '', depth = 0, inStr = false, esc = false;
+            const nl = () => '\n' + '  '.repeat(depth);
+            for (let i = 0; i < s.length; i++) {
+                const ch = s[i];
+                if (inStr) {
+                    out += ch;
+                    if (esc) esc = false;
+                    else if (ch === '\\') esc = true;
+                    else if (ch === '"') inStr = false;
+                    continue;
+                }
+                if (ch === '"') {
+                    inStr = true;
+                    out += ch;
+                } else if (ch === '{' || ch === '[') {
+                    const close = ch === '{' ? '}' : ']';
+                    let j = i + 1;
+                    while (j < s.length && /\s/.test(s[j])) j++;
+                    if (s[j] === close) {
+                        out += ch + close;
+                        i = j;
+                        continue;
+                    }
+                    depth++;
+                    out += ch + nl();
+                } else if (ch === '}' || ch === ']') {
+                    depth--;
+                    out += nl() + ch;
+                } else if (ch === ',') {
+                    out += ',' + nl();
+                } else if (ch === ':') {
+                    out += ': ';
+                } else if (!/\s/.test(ch)) {
+                    out += ch;
+                }
+            }
+            return out;
+        }
+
+        // One literal command with its meta line, shared by the trend values
+        // and the replay comparison side-by-side views.
+        function valueSampleHtml(meta, command, missing, matchMark) {
+            const cmd = command
+                ? `<pre>${escHtml(prettyExtJSON(command))}</pre>`
+                : `<div class="insights-row-subtitle">${escHtml(missing)}</div>`;
+            return `<div class="trend-value-sample${matchMark ? ' trend-value-match' : ''}"><div>${escHtml(meta)}${matchMark ? ` · <strong class="trend-value-match-mark">${escHtml(matchMark)}</strong>` : ''}</div>${cmd}</div>`;
+        }
+
+        function trendValuesSide(side, title, vals, reason, other) {
+            const head = `<div class="insights-detail-label">${escHtml(title)}</div>`;
+            if (!vals) {
+                return `<div class="trend-values-side" data-side="${side}">${head}<div class="insights-row-subtitle trend-values-missing">${escHtml(reason || 'values not recorded for this run')}</div></div>`;
+            }
+            const otherHashes = new Set(((other || {}).samples || []).map(x => x.values_hash));
+            const samples = (vals.samples || []).map(x => {
+                const meta = [`Role: ${x.role}`, x.explained ? 'explained' : 'retained, not explained', `client latency ${Number(x.client_latency_ms)} ms`];
+                const missing = `Command not kept (${Number(x.command_bytes)} bytes, over the 16 KiB sample limit); compared by hash only.`;
+                return valueSampleHtml(meta.join(' · '), x.command, missing, otherHashes.has(x.values_hash) ? '✓ matches the other run' : '');
+            }).join('');
+            const trunc = vals.truncated ? `<div class="insights-row-subtitle trend-values-truncated">⚠ Truncated: ${escHtml(vals.truncation_note || 'some samples were not kept')}</div>` : '';
+            return `<div class="trend-values-side" data-side="${side}">${head}${samples || '<div class="insights-row-subtitle">No samples.</div>'}${trunc}</div>`;
+        }
+
+        function trendValuesDetail(r) {
+            const q = r.query_values;
+            if (!q) return '<div class="insights-row-subtitle trend-values-missing">values not recorded for this run</div>';
+            if (q.source === 'same_recording' && !q.current && !q.baseline) {
+                return `<div>${trendValuesCell(r)}</div>
+                <div class="insights-row-subtitle">${escHtml(q.note || '')}</div>
+                <div class="insights-row-subtitle" id="trendDetailReplayNote">Both runs sent the operations of one recording, so no literal values are stored for this comparison.${trendReplayComparison(r) ? ' The replay comparison report shows each differing operation with its command and both outcomes side by side.' : ' To see operation-level differences, compare the two runs\' outcome files under Replay Comparison.'}</div>`;
+            }
+            return `<div>${trendValuesCell(r)}</div>
+                <div class="insights-row-subtitle">${escHtml(q.note || '')}</div>
+                <div class="trend-values-sides">
+                    ${trendValuesSide('current', 'Current run', q.current, q.current_reason, q.baseline)}
+                    ${trendValuesSide('baseline', `Baseline run${q.baseline_run_label ? ` (${q.baseline_run_label})` : ''}`, q.baseline, q.baseline_reason, q.current)}
+                </div>`;
         }
 
         function setTrendFilter(value) {
@@ -5799,13 +6924,16 @@
             if (!noteEl || !sumEl || !tableEl || !critEl || !limEl) return;
             const filterEl = document.getElementById('trendStateFilter');
             if (filterEl) filterEl.value = trendState.filter;
+            if (!replayState.loaded && ((v || {}).rows || []).some(r => (r.query_values || {}).source === 'same_recording')) loadReplayComparisons();
             renderTrendRunPickers();
             renderTrendMatrix();
+            renderTrendDetail();
             if (!v) {
                 noteEl.textContent = '';
                 sumEl.textContent = '';
                 critEl.textContent = '';
                 limEl.innerHTML = '';
+                renderTrendValuesNotes(null, false);
                 tableEl.innerHTML = `<div class="insights-row-subtitle" id="trendEmpty">No trend comparison was returned. No improvement or regression is claimed.</div>`;
                 return;
             }
@@ -5821,6 +6949,8 @@
                 `Oldest / newest baseline: ${st.oldest_recorded_at || 'none'} / ${st.newest_recorded_at || 'none'}`,
                 `Comparability: ${trendCountsText(counts.comparability)}`,
                 `Scan efficiency: ${trendCountsText(counts.efficiency)} | Latency: ${trendCountsText(counts.latency)} | Impact: ${trendCountsText(counts.impact)}`,
+                counts.query_values ? `Query values (annotation only): ${trendCountsText(counts.query_values)}` : '',
+                v.query_values_notice ? `⚠ ${v.query_values_notice}` : '',
                 v.method_note || '',
                 v.evidence_note || ''
             ];
@@ -5828,6 +6958,8 @@
             const crit = v.criteria || {};
             critEl.innerHTML = `<div>Criteria: ${escHtml(crit.summary || '')}</div><div>${escHtml(crit.note || '')}</div>`;
             limEl.innerHTML = (v.limitations || []).map(l => `<div>⚠ ${escHtml(l)}</div>`).join('');
+            const withValues = trendHasValues(v);
+            renderTrendValuesNotes(v, withValues);
 
             const all = v.rows || [];
             const rows = trendVisibleRows();
@@ -5846,28 +6978,450 @@
             const body = rows.map(r => {
                 const open = trendState.openShape === r.shape_id;
                 const age = trendBaselineAgeText(r.baseline);
-                const main = `<tr data-shape-id="${escHtml(r.shape_id)}"${open ? ' class="selected"' : ''}>
+                return `<tr data-shape-id="${escHtml(r.shape_id)}" tabindex="-1" class="eff-row-clickable${open ? ' selected' : ''}" title="Click to open the details for this query shape" onclick="trendRowClick(event, '${escHtml(r.shape_id)}')">
                     <td><span class="eff-ns">${escHtml(r.namespace || '')}</span><br><span class="eff-op insights-row-subtitle">${escHtml(r.operation || '')}</span></td>
                     <td>${escHtml(trimText(r.shape_summary || '', 80))}</td>
                     <td class="trend-baseline">${escHtml(r.comparability || '')}${age ? `<br><span class="insights-row-subtitle">${escHtml(age)}</span>` : ''}</td>
                     <td class="trend-eff">${trendCell(r.efficiency)}</td>
                     <td class="trend-lat">${trendCell(r.latency)}</td>
                     <td class="trend-imp">${trendCell(r.impact)}</td>
-                    <td><button type="button" class="insights-explore-btn" aria-expanded="${open ? 'true' : 'false'}" onclick="toggleTrendDetail('${escHtml(r.shape_id)}')">Details</button></td>
+                    ${withValues ? `<td class="trend-values">${trendValuesCell(r)}</td>` : ''}
+                    <td><button type="button" class="insights-explore-btn" aria-haspopup="dialog" aria-controls="shapeDetailModal" aria-expanded="${open ? 'true' : 'false'}" onclick="event.stopPropagation(); openTrendDetail('${escHtml(r.shape_id)}', 'button')">Details</button></td>
                 </tr>`;
-                if (!open) return main;
-                return main + `<tr class="trend-detail" data-detail-for="${escHtml(r.shape_id)}"><td colspan="7">${efficiencyList(trendRowDetails(r))}</td></tr>`;
             }).join('');
-            tableEl.innerHTML = `<table class="eff-table" id="trendRows">
+            tableEl.innerHTML = `<div class="eff-row-hint" id="trendRowHint">👉 Click any row (or Details) to open the full details for that query shape.</div>
+            <table class="eff-table" id="trendRows">
                 <caption>Showing ${rows.length} of ${all.length} shapes. Efficiency, latency, and impact are compared separately.</caption>
-                <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th><th scope="col">Baseline</th><th scope="col">Scan efficiency</th><th scope="col">Latency (full-run avg)</th><th scope="col">Impact (share of time)</th><th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
+                <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th><th scope="col">Baseline</th><th scope="col">Scan efficiency</th><th scope="col">Latency (full-run avg)</th><th scope="col">Impact (share of time)</th>${withValues ? '<th scope="col">Query values</th>' : ''}<th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
                 <tbody>${body}</tbody>
             </table>`;
         }
 
-        function toggleTrendDetail(shapeId) {
-            trendState.openShape = trendState.openShape === shapeId ? null : shapeId;
+        function renderTrendValuesNotes(v, withValues) {
+            const panel = document.getElementById('trendValuesNotes');
+            const dl = document.getElementById('trendColumnNotes');
+            if (!panel || !dl) return;
+            panel.style.display = withValues ? '' : 'none';
+            if (!withValues) {
+                dl.innerHTML = '';
+                return;
+            }
+            const note = (v.rows || []).find(r => r.query_values).query_values.note || '';
+            const legend = Object.keys(TREND_VALUES_LEGEND).map(k => `<div data-values-state="${k}"><dt><strong>${escHtml(TREND_VALUES_TEXT[k])}</strong></dt><dd>${escHtml(TREND_VALUES_LEGEND[k])}</dd></div>`).join('');
+            dl.innerHTML = `<div data-column="query_values"><dt><strong>Query values</strong></dt><dd>${escHtml(note)}</dd></div>${legend}`;
+        }
+
+        function openTrendDetail(shapeId, from) {
+            trendState.openShape = shapeId;
+            showShapeDetail('trend', from);
+        }
+
+        function trendRowClick(event, shapeId) {
+            if (shapeDetailRowClickAllowed(event)) openTrendDetail(shapeId, 'row');
+        }
+
+        function renderTrendDetail() {
+            if (!shapeDetail || shapeDetail.kind !== 'trend') return;
+            const v = trendView();
+            const r = v && trendState.openShape ? (v.rows || []).find(x => x.shape_id === trendState.openShape) : null;
+            if (!r) {
+                trendState.openShape = null;
+                hideShapeDetail();
+                return;
+            }
+            const age = trendBaselineAgeText(r.baseline);
+            const details = efficiencyList(trendRowDetails(r));
+            fillShapeDetail(r, `
+                <div class="insights-row-subtitle">Trend comparison details | shape id ${escHtml(r.shape_id)}</div>
+                <div class="insights-detail-label">Baseline</div>
+                <div class="insights-kv" id="trendDetailBaseline">${escHtml(r.comparability || '')}${age ? ` (${escHtml(age)})` : ''}</div>
+                <div class="insights-detail-label">Scan efficiency</div>
+                <div class="insights-kv trend-eff">${trendCell(r.efficiency)}</div>
+                <div class="insights-detail-label">Latency (full-run avg)</div>
+                <div class="insights-kv trend-lat">${trendCell(r.latency)}</div>
+                <div class="insights-detail-label">Impact (share of time)</div>
+                <div class="insights-kv trend-imp">${trendCell(r.impact)}</div>
+                ${trendHasValues(v) ? `<div class="insights-detail-label">Query values (literal; annotation only)</div>
+                <div id="trendDetailValues">${trendValuesDetail(r)}</div>` : ''}
+                <div class="insights-detail-label">Reasons, evidence, and annotations</div>
+                <div id="trendDetailReasons">${details || '<div class="insights-row-subtitle">No further details for this shape.</div>'}</div>
+            `);
+        }
+
+        // Replay Comparison (/api/replay-compare): reports are kept in server
+        // memory only; the list carries no literal values, a report can.
+        let replayState = { list: [], loaded: false, report: null, shapeFilter: 'all', opFilter: 'all', openOp: null };
+        const REPLAY_KIND_TEXT = {
+            result_count_mismatch: 'result count differs', checksum_mismatch: 'result checksum differs',
+            error_only_a: 'error on A only', error_only_b: 'error on B only', error_code_differs: 'different error codes',
+            missing_in_a: 'missing on A', missing_in_b: 'missing on B'
+        };
+        const REPLAY_VERDICT_TEXT = {
+            slower: 'slower on B', faster: 'faster on B', no_material_change: 'no material change', insufficient_evidence: 'insufficient evidence'
+        };
+
+        function replayOpKey(d) {
+            return d.seq ? `s${d.seq}` : `i${d.iteration || 1}w${d.worker}n${d.worker_seq}`;
+        }
+
+        function replayOpText(d) {
+            return d.seq ? `seq ${d.seq} (worker ${d.worker} #${d.worker_seq})` : `iteration ${d.iteration || 1}, worker ${d.worker} #${d.worker_seq}`;
+        }
+
+        function replayOutcomeText(o) {
+            if (!o) return 'not run';
+            const parts = [o.ok ? 'ok' : ['error', o.error_code || '', o.error_name || ''].filter(Boolean).join(' ')];
+            parts.push(`${(Number(o.latency_us || 0) / 1000).toFixed(3)} ms`);
+            ['returned', 'inserted', 'matched', 'modified', 'upserted', 'deleted'].forEach(k => {
+                if (o[k] !== undefined && o[k] !== null) parts.push(`${k} ${Number(o[k])}`);
+            });
+            if (o.checksum) parts.push(`checksum ${String(o.checksum).slice(0, 12)}`);
+            if (o.transaction) parts.push(`transaction ${o.transaction}`);
+            return parts.join(', ');
+        }
+
+        function replayErrorsText(m) {
+            const keys = Object.keys(m || {}).sort();
+            return keys.length ? keys.map(k => `${k}: ${Number(m[k])}`).join(', ') : 'none';
+        }
+
+        function replayLatencyMetric(l, name) {
+            const a = (l.a || {})[`${name}_ms`], b = (l.b || {})[`${name}_ms`], d = l[`${name}_delta_pct`];
+            const ms = x => (x === undefined || x === null ? '–' : `${Number(x).toFixed(2)} ms`);
+            return `${ms(a)} → ${ms(b)}${d === undefined || d === null ? '' : ` (${d >= 0 ? '+' : ''}${Number(d).toFixed(1)}%)`}`;
+        }
+
+        function replayVerdictCell(l) {
+            l = l || {};
+            return `<span class="insight-badge replay-verdict-${escHtml(l.verdict || '')}">${escHtml(REPLAY_VERDICT_TEXT[l.verdict] || l.verdict || '–')}</span><br><span class="insights-row-subtitle">${escHtml(l.label || '')}</span>`;
+        }
+
+        function setReplayStatus(text) {
+            const el = document.getElementById('replayCompareStatus');
+            if (el) el.textContent = text;
+        }
+
+        async function loadReplayComparisons() {
+            replayState.loaded = true;
+            try {
+                const res = await fetch('/api/replay-compare');
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                replayState.list = body.reports || [];
+            } catch (e) {
+                setReplayStatus(`Could not load kept comparisons: ${e.message}`);
+            }
+            renderReplayComparison();
             renderTrendView();
+        }
+
+        async function runReplayCompare() {
+            const val = id => ((document.getElementById(id) || {}).value || '').trim();
+            const fd = new FormData();
+            [['A', 'a'], ['B', 'b'], ['Rec', 'recording']].forEach(([id, field]) => {
+                const f = document.getElementById(`replay${id}File`);
+                if (f && f.files && f.files[0]) fd.append(`${field}_file`, f.files[0]);
+                else if (val(`replay${id}Path`)) fd.append(`${field}_path`, val(`replay${id}Path`));
+            });
+            if (!fd.has('a_file') && !fd.has('a_path')) return setReplayStatus('Choose the side A file (upload or server path).');
+            if (!fd.has('b_file') && !fd.has('b_path')) return setReplayStatus('Choose the side B file (upload or server path).');
+            [['replayALabel', 'label_a'], ['replayBLabel', 'label_b'], ['replayTopN', 'top_n'], ['replayARun', 'run_a'], ['replayBRun', 'run_b']].forEach(([id, field]) => {
+                if (val(id)) fd.append(field, val(id));
+            });
+            if ((document.getElementById('replayAllowMismatch') || {}).checked) fd.append('allow_mismatch', 'true');
+            const btn = document.getElementById('replayCompareBtn');
+            if (btn) btn.disabled = true;
+            setReplayStatus('Comparing…');
+            try {
+                const res = await fetch('/api/replay-compare', { method: 'POST', body: fd });
+                const body = await res.json();
+                if (res.status === 409) throw new Error(`refused: ${body.error || 'the files are not executions of the same operations'}`);
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                replayState = { ...replayState, report: body.report, shapeFilter: 'all', opFilter: 'all', openOp: null };
+                setReplayStatus(`Compared ${body.report.a.label} with ${body.report.b.label}: ${Number(body.report.overall.differing_ops)} differing operations.`);
+                await loadReplayComparisons();
+            } catch (e) {
+                setReplayStatus(`Comparison failed: ${e.message}`);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        let lastTrafficImport = null;
+
+        function setTrafficImportStatus(msg) {
+            const el = document.getElementById('trafficImportStatus');
+            if (el) el.textContent = msg;
+        }
+
+        function trafficCounts(m) {
+            const keys = Object.keys(m || {}).sort();
+            return keys.length ? keys.map(k => `${k} ${Number(m[k])}`).join(', ') : 'none';
+        }
+
+        function renderTrafficImport(imp) {
+            const el = document.getElementById('trafficImportResult');
+            if (!el) return;
+            if (!imp) { el.innerHTML = ''; return; }
+            const r = imp.report || {};
+            const rows = [
+                ['Converted', `${Number(r.converted)} of ${Number(r.entries)} entries (${escHtml((r.sources || []).join(', '))}) from ${escHtml((r.files || []).join(', '))}`],
+                ['Operations', escHtml(trafficCounts(r.ops_by_type))],
+                ['Workers', `${Number(r.connections)} connections → ${Number(r.workers)} workers${r.folded_connections ? ' (connections share workers)' : ''}`],
+                ['Captured', r.first_timestamp ? `${escHtml(r.first_timestamp)} .. ${escHtml(r.last_timestamp)} (${Number(r.span_ms)} ms)` : 'no timestamps (file order, no offsets)'],
+                ['Not operations', String(Number(r.non_operations))],
+                ['Skipped', `${Number(r.skipped)}: ${escHtml(trafficCounts(r.skipped_by_reason))}`],
+                ['Unsupported commands', escHtml(trafficCounts(r.unsupported_commands))],
+                ['Flagged', `${escHtml(trafficCounts(r.flagged))} <span class="insights-row-subtitle">(replayed, but not exactly as captured)</span>`],
+                ['Options not replayed', escHtml(trafficCounts(r.dropped_options))],
+            ];
+            const warnings = (r.warnings || []).map(w => `<li>${escHtml(w)}</li>`).join('');
+            el.innerHTML = `<table class="eff-table" id="trafficImportSummary"><tbody>${rows.map(([k, v]) => `<tr data-row="${escHtml(k)}"><th>${escHtml(k)}</th><td>${v}</td></tr>`).join('')}</tbody></table>`
+                + (warnings ? `<ul id="trafficImportWarnings">${warnings}</ul>` : '')
+                + `<div class="settings-note" id="trafficImportNote">${escHtml(r.note || '')}</div>`
+                + (imp.download_url ? `<div class="settings-note"><strong>Contains literal values</strong> from the captured traffic.</div>`
+                    + `<a id="trafficImportDownload" class="insights-explore-btn" href="${escHtml(imp.download_url)}" download="${escHtml(imp.file_name)}">Download recording</a> `
+                    + `<button type="button" id="trafficImportUseBtn" class="insights-explore-btn" onclick="useTrafficImportForReplay()">Use for replay</button>` : '');
+        }
+
+        async function runTrafficImport() {
+            const files = (document.getElementById('trafficImportFiles') || {}).files;
+            if (!files || !files.length) return setTrafficImportStatus('Choose one or more captured-traffic files first.');
+            const fd = new FormData();
+            for (const f of files) fd.append('traffic_file', f);
+            const val = id => ((document.getElementById(id) || {}).value || '').trim();
+            fd.append('workers', val('trafficImportWorkers') || '0');
+            if (val('trafficImportDb')) fd.append('default_db', val('trafficImportDb'));
+            fd.append('compression', val('trafficImportCompression') || 'none');
+            if ((document.getElementById('trafficImportSkipGenerated') || {}).checked) fd.append('skip_server_generated', 'true');
+            const btn = document.getElementById('trafficImportBtn');
+            if (btn) btn.disabled = true;
+            setTrafficImportStatus('Converting…');
+            try {
+                const res = await fetch('/api/import-traffic', { method: 'POST', body: fd });
+                const body = await res.json();
+                if (!res.ok) {
+                    lastTrafficImport = null;
+                    renderTrafficImport(body.report ? { report: body.report } : null);
+                    throw new Error(body.error || `HTTP ${res.status}`);
+                }
+                lastTrafficImport = body.import;
+                renderTrafficImport(lastTrafficImport);
+                setTrafficImportStatus(`Converted ${Number(lastTrafficImport.report.converted)} operations into ${lastTrafficImport.file_name}.`);
+            } catch (e) {
+                setTrafficImportStatus(`Import failed: ${e.message}`);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function useTrafficImportForReplay() {
+            if (!lastTrafficImport) return;
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('workloadReplayEnabled', 'true');
+            set('workloadReplayPath', lastTrafficImport.server_path);
+            const up = document.getElementById('workloadReplayFile');
+            if (up) up.value = '';
+            setTrafficImportStatus('Replay Workload is on with the imported recording. Each target should hold a copy of the captured data: turn Drop Collections off and Skip Seed on.');
+        }
+
+        async function selectReplayComparison(id) {
+            if (!id) {
+                replayState.report = null;
+                renderReplayComparison();
+                return;
+            }
+            try {
+                const res = await fetch(`/api/replay-compare/${encodeURIComponent(id)}`);
+                const body = await res.json();
+                if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                replayState = { ...replayState, report: body.report, shapeFilter: 'all', opFilter: 'all', openOp: null };
+                setReplayStatus('');
+            } catch (e) {
+                setReplayStatus(`Could not load the comparison: ${e.message}`);
+            }
+            renderReplayComparison();
+        }
+
+        async function openReplayComparison(id) {
+            if (shapeDetail) {
+                hideShapeDetail();
+                trendState.openShape = null;
+                efficiencyState.openShape = null;
+            }
+            showQueryAnalysisTab('replay');
+            await selectReplayComparison(id);
+            const el = document.getElementById('replayCompareResult');
+            if (el && el.scrollIntoView) el.scrollIntoView();
+        }
+
+        function downloadReplayJSON() {
+            const r = replayState.report;
+            if (!r) return;
+            const a = document.createElement('a');
+            a.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(r, null, 2)));
+            a.setAttribute('download', `plgm-replay-compare-${r.id}.json`);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        function setReplayShapeFilter(v) { replayState.shapeFilter = v; renderReplayComparison(); }
+        function setReplayOpFilter(v) { replayState.opFilter = v; renderReplayComparison(); }
+
+        function openReplayOp(key, from) {
+            replayState.openOp = key;
+            showShapeDetail('replay', from);
+        }
+
+        function replayOpRowClick(event, key) {
+            if (shapeDetailRowClickAllowed(event)) openReplayOp(key, 'row');
+        }
+
+        function renderReplayRunPickers() {
+            const v = runTrendView() || {};
+            const runs = [v.current_run].concat(v.available_runs || []).filter(r => r && r.run_id);
+            ['replayARun', 'replayBRun'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const cur = sel.value;
+                sel.innerHTML = [['', 'None (no plan annotation)']].concat(runs.map(r => [r.run_id, trendRunText(r)]))
+                    .map(([val, l]) => `<option value="${escHtml(val)}">${escHtml(l)}</option>`).join('');
+                sel.value = runs.some(r => r.run_id === cur) ? cur : '';
+            });
+        }
+
+        function replaySideRow(name, s) {
+            const cells = [s.label, s.file, s.kind, s.status, Number(s.ops || 0), s.server_version || 'unknown', s.topology || 'unknown', s.workers || '–', s.plgm_version || '', s.created_at || '', s.plan_run_id || 'none'];
+            return `<tr data-side="${name}"><th scope="row">${name.toUpperCase()}</th>${cells.map(c => `<td>${escHtml(String(c))}</td>`).join('')}</tr>`;
+        }
+
+        function replayShapeVisible(sh) {
+            const f = replayState.shapeFilter;
+            if (f === 'differing') return Number(sh.differing_ops || 0) > 0;
+            if (f !== 'all') return (sh.latency || {}).verdict === f;
+            return true;
+        }
+
+        function replayPlanText(p) {
+            if (!p) return '–';
+            const side = x => ((x || {}).plan_signatures || []).join(' / ') || 'none';
+            return `${p.changed ? 'changed' : 'same'}: ${side(p.a)} → ${side(p.b)}`;
+        }
+
+        function renderReplayComparison() {
+            const sel = document.getElementById('replayCompareSelect');
+            const out = document.getElementById('replayCompareResult');
+            if (!sel || !out) return;
+            const r = replayState.report;
+            sel.innerHTML = [['', replayState.list.length ? 'Choose a kept comparison' : 'No kept comparisons']]
+                .concat(replayState.list.map(x => [x.id, `${x.label_a} vs ${x.label_b} · ${x.generated_at} · ${Number(x.differing_ops)} differing`]))
+                .map(([v, l]) => `<option value="${escHtml(v)}">${escHtml(l)}</option>`).join('');
+            sel.value = r && replayState.list.some(x => x.id === r.id) ? r.id : '';
+            renderReplayRunPickers();
+            if (!r) {
+                out.innerHTML = '<div class="insights-row-subtitle" id="replayEmpty">No comparison shown. Choose two outcome files and click Compare, or pick a kept comparison.</div>';
+                renderReplayDetail();
+                return;
+            }
+            const o = r.overall || {};
+            const lat = o.latency || {};
+            const ident = r.identity_kind === 'recording_header_hash' ? 'recording header hash' : 'traffic fingerprint';
+            const matched = r.matched_by === 'seq' ? 'recording seq' : 'iteration, worker, and per-worker seq';
+            const shapes = (r.shapes || []).filter(replayShapeVisible);
+            const ops = (r.differing_ops || []).filter(d => replayState.opFilter === 'all' || (d.kinds || []).includes(replayState.opFilter));
+            const kinds = [...new Set((r.differing_ops || []).flatMap(d => d.kinds || []))];
+            const opt = (v, l, cur) => `<option value="${escHtml(v)}"${v === cur ? ' selected' : ''}>${escHtml(l)}</option>`;
+            const shapeRows = shapes.map(sh => `<tr data-shape-id="${escHtml(sh.shape_id)}">
+                    <td><span class="eff-ns">${escHtml(sh.namespace || '')}</span><br><span class="insights-row-subtitle">${escHtml(sh.operation || '')}</span></td>
+                    <td>${escHtml(trimText(sh.shape_summary || sh.shape_key || '', 80))}</td>
+                    <td class="num">${Number(sh.ops_a || 0)} / ${Number(sh.ops_b || 0)}</td>
+                    <td class="replay-shape-diffs">${Number(sh.differing_ops || 0)}<br><span class="insights-row-subtitle">count ${Number(sh.count_mismatches || 0)}, checksum ${Number(sh.checksum_mismatches || 0)}, errors A ${escHtml(replayErrorsText(sh.errors_only_a))}, errors B ${escHtml(replayErrorsText(sh.errors_only_b))}, missing ${Number(sh.missing_in_a || 0)} / ${Number(sh.missing_in_b || 0)}</span></td>
+                    <td class="replay-shape-latency">${replayVerdictCell(sh.latency)}</td>
+                    <td>${escHtml(replayLatencyMetric(sh.latency || {}, 'avg'))}<br><span class="insights-row-subtitle">p95 ${escHtml(replayLatencyMetric(sh.latency || {}, 'p95'))}</span></td>
+                    <td class="replay-shape-plan">${escHtml(replayPlanText(sh.plan))}${sh.plan ? `<br><span class="insights-row-subtitle">${escHtml(sh.plan.note || '')}</span>` : ''}</td>
+                </tr>`).join('');
+            const opRows = ops.map(d => {
+                const key = replayOpKey(d);
+                const open = replayState.openOp === key;
+                return `<tr data-op-key="${escHtml(key)}" tabindex="-1" class="eff-row-clickable${open ? ' selected' : ''}" title="Click to open this operation side by side" onclick="replayOpRowClick(event, '${escHtml(key)}')">
+                    <td>${escHtml(replayOpText(d))}</td>
+                    <td>${escHtml(trimText(d.shape_summary || d.shape_key || '', 60))}</td>
+                    <td class="replay-op-kinds">${escHtml((d.kinds || []).map(k => REPLAY_KIND_TEXT[k] || k).join(', '))}</td>
+                    <td class="replay-op-a">${escHtml(replayOutcomeText(d.a))}</td>
+                    <td class="replay-op-b">${escHtml(replayOutcomeText(d.b))}</td>
+                    <td><button type="button" class="insights-explore-btn" aria-haspopup="dialog" aria-controls="shapeDetailModal" aria-expanded="${open ? 'true' : 'false'}" onclick="event.stopPropagation(); openReplayOp('${escHtml(key)}', 'button')">Details</button></td>
+                </tr>`;
+            }).join('');
+            out.innerHTML = `
+                ${r.contains_literal_values ? `<div class="replay-literal-banner" id="replayLiteralBanner">⚠ Contains literal query values. ${escHtml(r.literal_note || '')}</div>` : ''}
+                <div class="insights-row-subtitle" id="replayIdentity">Matched by ${escHtml(matched)}; ${escHtml(ident)} ${escHtml(String(r.identity || '').slice(0, 12))} ${r.identity_match ? 'is the same on both sides' : 'DIFFERS between the sides (compared because a mismatch was allowed)'}.</div>
+                ${(r.warnings || []).length ? `<div id="replayWarnings">${r.warnings.map(w => `<div>⚠ ${escHtml(w)}</div>`).join('')}</div>` : ''}
+                <div class="eff-controls">
+                    <a id="replayDownloadHtml" class="insights-explore-btn" href="/api/replay-compare/${encodeURIComponent(r.id)}/report.html" download="plgm-replay-compare-${escHtml(r.id)}.html">Download HTML report</a>
+                    <button type="button" id="replayDownloadJson" class="insights-explore-btn" onclick="downloadReplayJSON()">Download JSON</button>
+                </div>
+                <div class="replay-table-wrap"><table class="eff-table" id="replaySides">
+                    <thead><tr><th scope="col">Side</th><th scope="col">Label</th><th scope="col">File</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Operations</th><th scope="col">Server version</th><th scope="col">Topology</th><th scope="col">Workers</th><th scope="col">PLGM</th><th scope="col">Created</th><th scope="col">Plans from trend run</th></tr></thead>
+                    <tbody>${replaySideRow('a', r.a || {})}${replaySideRow('b', r.b || {})}</tbody>
+                </table></div>
+                <div class="insights-detail-label">Overall</div>
+                <div class="insights-kv" id="replayOverall">
+                    <div>Operations: A ${Number(o.ops_a || 0)}, B ${Number(o.ops_b || 0)}, matched ${Number(o.matched || 0)}, differing ${Number(o.differing_ops || 0)}</div>
+                    <div>Result count differs: ${Number(o.count_mismatches || 0)} | checksum differs: ${Number(o.checksum_mismatches || 0)} of ${Number(o.checksums_compared || 0)} compared</div>
+                    <div>Errors only on A: ${escHtml(replayErrorsText(o.errors_only_a))} | only on B: ${escHtml(replayErrorsText(o.errors_only_b))} | different codes: ${Number(o.error_code_differences || 0)}</div>
+                    <div>Missing on A: ${Number(o.missing_in_a || 0)} | missing on B: ${Number(o.missing_in_b || 0)}</div>
+                    <div>Latency (${Number((lat.a || {}).ops || 0)} operations ok on both sides): avg ${escHtml(replayLatencyMetric(lat, 'avg'))}, p50 ${escHtml(replayLatencyMetric(lat, 'p50'))}, p95 ${escHtml(replayLatencyMetric(lat, 'p95'))}, p99 ${escHtml(replayLatencyMetric(lat, 'p99'))}</div>
+                    <div id="replayOverallVerdict">${replayVerdictCell(lat)}</div>
+                </div>
+                <div class="eff-scope-note" id="replayNotes"><div>${escHtml(r.latency_note || '')}</div><div>${escHtml(r.facts_note || '')}</div><div>${escHtml(r.memory_note || '')}</div></div>
+                <div class="insights-detail-label">Per shape</div>
+                <div class="eff-controls"><label for="replayShapeFilter">Show
+                    <select id="replayShapeFilter" onchange="setReplayShapeFilter(this.value)">
+                        ${opt('all', 'All shapes', replayState.shapeFilter)}${opt('differing', 'Shapes with differing operations', replayState.shapeFilter)}
+                        ${Object.keys(REPLAY_VERDICT_TEXT).map(k => opt(k, `Latency: ${REPLAY_VERDICT_TEXT[k]}`, replayState.shapeFilter)).join('')}
+                    </select></label></div>
+                ${shapes.length ? `<div class="replay-table-wrap"><table class="eff-table" id="replayShapeRows">
+                    <caption>Showing ${shapes.length} of ${(r.shapes || []).length} shapes. Plan changes are annotations from the chosen trend runs, not evidence of cause.</caption>
+                    <thead><tr><th scope="col">Namespace / op</th><th scope="col">Shape</th><th scope="col" class="num">Ops A / B</th><th scope="col">Differing operations</th><th scope="col">Latency verdict (heuristic)</th><th scope="col">Avg A → B</th><th scope="col">Plan (annotation)</th></tr></thead>
+                    <tbody>${shapeRows}</tbody></table></div>` : `<div class="insights-row-subtitle" id="replayShapesEmpty">No shapes match this filter.</div>`}
+                <div class="insights-detail-label">Differing operations</div>
+                <div class="eff-controls"><label for="replayOpFilter">Show
+                    <select id="replayOpFilter" onchange="setReplayOpFilter(this.value)">
+                        ${opt('all', 'All differences', replayState.opFilter)}${kinds.map(k => opt(k, REPLAY_KIND_TEXT[k] || k, replayState.opFilter)).join('')}
+                    </select></label></div>
+                ${ops.length ? `<div class="eff-row-hint">👉 Click an operation (or Details) to see its command and both outcomes side by side.</div>
+                    <div class="replay-table-wrap"><table class="eff-table" id="replayOpRows">
+                    <caption>Showing ${ops.length} of ${(r.differing_ops || []).length} kept operations (the first ${Number(r.top_n || 0)} by operation order) of ${Number(o.differing_ops || 0)} differing.</caption>
+                    <thead><tr><th scope="col">Operation</th><th scope="col">Shape</th><th scope="col">Differences (facts)</th><th scope="col">Outcome A</th><th scope="col">Outcome B</th><th scope="col"><span style="position:absolute;left:-9999px;">Actions</span></th></tr></thead>
+                    <tbody>${opRows}</tbody></table></div>` : `<div class="insights-row-subtitle" id="replayOpsEmpty">${(r.differing_ops || []).length ? 'No operations match this filter.' : 'No differing operations: every matched operation returned the same counts and checksums and had the same errors.'}</div>`}
+            `;
+            renderReplayDetail();
+        }
+
+        function renderReplayDetail() {
+            if (!shapeDetail || shapeDetail.kind !== 'replay') return;
+            const r = replayState.report;
+            const d = r && replayState.openOp ? (r.differing_ops || []).find(x => replayOpKey(x) === replayState.openOp) : null;
+            if (!d) {
+                replayState.openOp = null;
+                hideShapeDetail();
+                return;
+            }
+            const mark = d.command && r.identity_match ? '✓ same command on both sides' : '';
+            const side = (name, s, o) => `<div class="trend-values-side" data-side="${name}">
+                    <div class="insights-detail-label">${escHtml(`Side ${name.toUpperCase()}: ${s.label || name}`)}</div>
+                    <div class="insights-row-subtitle">${escHtml([s.server_version || 'server version unknown', s.topology || 'topology unknown', s.file].filter(Boolean).join(' · '))}</div>
+                    ${valueSampleHtml(`Outcome: ${replayOutcomeText(o)}`, d.command, d.command_note || 'command not shown', mark)}
+                </div>`;
+            fillShapeDetail({ namespace: d.namespace, operation: d.operation, shape_summary: d.shape_summary || d.shape_key }, `
+                <div class="insights-row-subtitle">Replay comparison | ${escHtml(replayOpText(d))} | shape id ${escHtml(d.shape_id || '')}</div>
+                <div class="insights-detail-label">Differences (facts)</div>
+                <div class="insights-kv" id="replayDetailKinds">${escHtml((d.kinds || []).map(k => REPLAY_KIND_TEXT[k] || k).join(', '))}</div>
+                <div class="insights-detail-label">${d.command ? 'Command (literal values) and outcomes' : 'Outcomes'}</div>
+                <div class="insights-row-subtitle" id="replayDetailCommandNote">${escHtml(d.command_note || '')}</div>
+                <div class="trend-values-sides" id="replayDetailSides">${side('a', r.a || {}, d.a)}${side('b', r.b || {}, d.b)}</div>
+            `);
         }
 
         async function resetTrendBaselines() {
@@ -6011,7 +7565,7 @@
             return n;
         }
 
-        let trendHistoryState = { data: null, deleteArmed: null, resetArmed: false };
+        let trendHistoryState = { data: null, deleteArmed: null, resetArmed: false, exportArmed: null };
 
         function setTrendHistoryStatus(msg) {
             const el = document.getElementById('trendHistoryStatus');
@@ -6052,7 +7606,7 @@
                     <td><input type="checkbox" class="trend-run-select" value="${id}" aria-label="Select ${escHtml(r.label || r.run_id)}"></td>
                     <td><input type="text" class="trend-run-label" maxlength="64" value="${escHtml(r.label || '')}" aria-label="Label"> <button type="button" class="insights-explore-btn trend-run-rename" onclick="renameTrendRun('${id}', this)">Rename</button></td>
                     <td>${escHtml((r.server_versions || []).join(', ') || 'unknown')}</td>
-                    <td>${escHtml(r.recorded_at || '')}<br><span class="insights-row-subtitle">${escHtml(r.age || '')}${r.outdated ? ' · outdated' : ''}</span></td>
+                    <td>${escHtml(r.recorded_at || '')}<br><span class="insights-row-subtitle">${escHtml(r.age || '')}${r.outdated ? ' · outdated' : ''}</span>${r.query_values_stored ? '<br><span class="insights-row-subtitle trend-run-values">⚠ contains literal query values</span>' : ''}</td>
                     <td>${r.source ? `${escHtml(r.source)}<br><span class="insights-row-subtitle">imported ${escHtml(r.imported_at || '')}</span>` : 'this machine'}</td>
                     <td><button type="button" class="insights-explore-btn trend-run-pin" aria-pressed="${r.pinned ? 'true' : 'false'}" onclick="toggleTrendPin('${id}', ${r.pinned ? 'false' : 'true'})">${r.pinned ? 'Pinned' : 'Pin'}</button></td>
                     <td><button type="button" class="insights-explore-btn trend-run-delete" onclick="deleteTrendRun('${id}')">${armed ? 'Confirm delete' : 'Delete'}</button></td>
@@ -6115,17 +7669,35 @@
                 setTrendHistoryStatus('Select at least one run to export.');
                 return;
             }
+            const key = selectedOnly ? ids.join(',') : '*';
+            const valueRuns = (((trendHistoryState.data || {}).runs) || []).filter(r => r.query_values_stored && (!selectedOnly || ids.includes(r.run_id)));
+            const confirmed = trendHistoryState.exportArmed === key;
+            const armExport = n => {
+                trendHistoryState.exportArmed = key;
+                setTrendHistoryStatus(`⚠ ${n ? `${n} of these runs contain` : 'This export contains'} literal query values from your workload (recorded with insights_trend_store_query_values on). Anyone with the file can read them. Click Export again to confirm.`);
+            };
+            if (valueRuns.length && !confirmed) {
+                armExport(valueRuns.length);
+                return;
+            }
+            trendHistoryState.exportArmed = null;
             try {
                 const res = await fetch(`/api/trend-baselines/export${ids.length ? `?runs=${ids.map(encodeURIComponent).join(',')}` : ''}`);
                 const body = await res.json();
                 if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+                if (body.contains_query_values && !confirmed) {
+                    armExport(0);
+                    return;
+                }
                 const a = document.createElement('a');
                 a.setAttribute('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(body, null, 2)));
                 a.setAttribute('download', `plgm-trend-runs-${(body.exported_at || '').replace(/[^0-9TZ]/g, '')}.json`);
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
-                setTrendHistoryStatus(`Exported ${(body.runs || []).length} runs (redacted: no query text, literals, or URI).`);
+                setTrendHistoryStatus(body.contains_query_values
+                    ? `Exported ${(body.runs || []).length} runs. ⚠ The file contains literal query values (contains_query_values: true); treat it like the database contents.`
+                    : `Exported ${(body.runs || []).length} runs (redacted: no query text, literals, or URI).`);
             } catch (e) {
                 setTrendHistoryStatus(`Export failed: ${e.message}`);
             }
@@ -6227,9 +7799,17 @@
             });
         }
 
+        // Random seeds are int64: values beyond 2^53 are kept as their exact
+        // digits (a string) instead of being rounded by JSON.parse.
+        function parseJSONKeepingSeeds(text) {
+            return JSON.parse(text.replace(/("(?:RandomSeed|random_seed)"\s*:\s*)(-?\d+)(?![\d.eE])/g,
+                (m, key, digits) => Number.isSafeInteger(Number(digits)) ? m : `${key}"${digits}"`));
+        }
+
         function fetchFinalInsights() {
             return fetch('/api/insights')
-                .then(r => r.json())
+                .then(r => r.text())
+                .then(parseJSONKeepingSeeds)
                 .then(rep => {
                     finalInsightsData = rep || null;
                     renderFinalInsights(finalInsightsData);
@@ -6383,6 +7963,7 @@
 
                         // Latency heatmap (always update so the Latency Analysis tab is current).
                         renderLatencyHeatmap(stats.latencyHeatmap);
+                        renderMultiTarget(stats.multi_target);
 
                         // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
                         if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
@@ -6912,6 +8493,8 @@
             finalReportData.insights = finalInsightsData;
             finalReportData.efficiency_view_state = currentEfficiencyViewState();
             finalReportData.trend_view_state = currentTrendViewState();
+            if (trendHasLiteralValues(runTrendView())) finalReportData.contains_query_values = true;
+            else delete finalReportData.contains_query_values;
 
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(finalReportData, null, 4));
 

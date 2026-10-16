@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,8 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/definitions"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/loadprofile"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/multitarget"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/replaycompare"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/report"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/schemainfer"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
@@ -66,8 +69,10 @@ type WebServer struct {
 	// trendStoreSetting is the trend_baseline_store value TrendStore was opened with.
 	trendStoreSetting string
 	insightsBuildMu   sync.Mutex
-	// explainCancel stops in-flight post-run explains when a new run starts.
-	explainCancel     context.CancelFunc
+	// explainCancels stop in-flight post-run explains when a new run starts;
+	// concurrent multi-target runs explain several targets at once.
+	explainCancels    map[uint64]context.CancelFunc
+	explainCancelSeq  uint64
 	LifecyclePhase    string
 	LifecycleMessage  string
 	LifecycleStep     string
@@ -81,6 +86,14 @@ type WebServer struct {
 	InitDurationSec   float64
 	LifecycleEvents   []lifecycleEvent
 	DefinitionStore   *definitions.FileStore
+	// replayCompares are the kept replay comparison reports, oldest first.
+	replayCompares []*replaycompare.Report
+	// trafficImports are the kept converted recordings, oldest first.
+	trafficImports []*trafficImport
+	// multiTarget is the plan of the current or last multi-target run;
+	// multiTargetRefInsights is its reference target's final insights.
+	multiTarget            *multitarget.Plan
+	multiTargetRefInsights *stats.InsightsReport
 }
 
 type lifecycleEvent struct {
@@ -227,6 +240,19 @@ func saveUploadedTempFile(file multipart.File, pattern string) (string, error) {
 	return tmp.Name(), nil
 }
 
+// removeReplayUpload deletes an uploaded replay file after its run and clears
+// it from the shown config, which later runs also start from.
+func (s *WebServer) removeReplayUpload(path string) {
+	_ = os.Remove(path)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.AppConfig != nil && s.AppConfig.WorkloadReplayPath == path {
+		cfg := *s.AppConfig
+		cfg.WorkloadReplayPath = ""
+		s.AppConfig = &cfg
+	}
+}
+
 func (s *WebServer) Start(port int) error {
 	mux := http.NewServeMux()
 
@@ -246,6 +272,10 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/trend-baselines", s.handleTrendBaselines)
 	mux.HandleFunc("/api/trend-baselines/", s.handleTrendBaselineItem)
 	mux.HandleFunc("/api/trends/compare", s.handleTrendCompare)
+	mux.HandleFunc("/api/replay-compare", s.handleReplayCompare)
+	mux.HandleFunc("/api/replay-compare/", s.handleReplayCompareItem)
+	mux.HandleFunc("/api/import-traffic", s.handleImportTraffic)
+	mux.HandleFunc("/api/import-traffic/", s.handleImportTrafficItem)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
 	mux.HandleFunc("/api/query-definitions/", s.handleQueryDefinitionItem)
@@ -730,9 +760,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.IsRunning = true
 	s.RunID++
 	s.InsightsCache = nil
-	if s.explainCancel != nil {
-		s.explainCancel()
-	}
+	s.multiTarget, s.multiTargetRefInsights = nil, nil
+	s.cancelExplainsLocked()
 	s.LastError = ""
 	s.InitStartedAt = time.Now()
 	s.ExecStartedAt = time.Time{}
@@ -747,6 +776,16 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	baseCfg := *s.AppConfig
 	s.mu.Unlock()
+
+	// An uploaded replay file holds literal values; it is removed when the
+	// run ends, or here when the run does not start.
+	var replayUpload string
+	replayHandedOff := false
+	defer func() {
+		if replayUpload != "" && !replayHandedOff {
+			_ = os.Remove(replayUpload)
+		}
+	}()
 
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
@@ -840,6 +879,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	cfg.InsightsExplainWorkers = parseInt(r.FormValue("insights_explain_workers"), cfg.InsightsExplainWorkers)
 	cfg.InsightsExplainRetries = parseInt(r.FormValue("insights_explain_retries"), cfg.InsightsExplainRetries)
 	cfg.InsightsExplainBackoffMS = parseInt(r.FormValue("insights_explain_backoff_ms"), cfg.InsightsExplainBackoffMS)
+	cfg.InsightsTrendStoreQueryValues = r.FormValue("insights_trend_store_query_values") == "true" || r.FormValue("insights_trend_store_query_values") == "on"
+	cfg.WorkloadDeterministic = r.FormValue("workload_deterministic") == "true" || r.FormValue("workload_deterministic") == "on"
 	applyLatencyTargetForm(cfg, r.Form)
 	if err := applyTrendForm(cfg, r.Form); err != nil {
 		s.abortRun(err.Error())
@@ -875,6 +916,22 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.IntervalDelay = v
 	}
 	applyLoadProfileForm(cfg, r)
+	if err := applyWorkloadRecordForm(cfg, r.Form); err != nil {
+		s.abortRun("Invalid workload record/replay settings: " + err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if file, _, err := r.FormFile("workload_replay_file"); err == nil {
+		uploadedPath, uploadErr := saveUploadedTempFile(file, "plgm-workload-replay-*.ndjson")
+		file.Close()
+		if uploadErr != nil {
+			s.abortRun("Failed to store workload replay file: " + uploadErr.Error())
+			writeStartError(w, http.StatusBadRequest, "failed to store workload replay file: "+uploadErr.Error())
+			return
+		}
+		cfg.WorkloadReplayPath = uploadedPath
+		replayUpload = uploadedPath
+	}
 
 	cfg.FindPercent = parseInt(r.FormValue("find_percent"), cfg.FindPercent)
 	cfg.UpdatePercent = parseInt(r.FormValue("update_percent"), cfg.UpdatePercent)
@@ -1101,6 +1158,33 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeStartError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	config.NormalizeWorkloadRecordReplay(cfg)
+	if err := config.ValidateWorkloadRecordReplay(cfg); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateWorkloadDeterministic(cfg); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateWorkloadOutcomes(cfg); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := config.ValidateWorkloadTargets(cfg); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if multitarget.Enabled(cfg) && cfg.RawInjector.Enabled {
+		msg := "invalid multi-target settings: workload_replay_targets cannot be combined with the raw injector"
+		s.abortRun(msg)
+		writeStartError(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -1294,6 +1378,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.addLifecycleEventLocked("init", fmt.Sprintf("Connecting to database %q", dbName))
 	s.mu.Unlock()
 
+	if multitarget.Enabled(cfg) {
+		replayHandedOff = true
+		s.startMultiTarget(w, ctx, cancel, cfg, collectionsCfg, queriesCfg, dbName, replayUpload)
+		return
+	}
+
 	benchConn, connectErr := connectFn(ctx, cfg, dbName)
 	if connectErr != nil {
 		s.abortRun("Database connection failed: " + connectErr.Error())
@@ -1312,7 +1402,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.ActiveCancel = cancel
 	s.LastError = ""
 	s.CurrentIteration = 1
-	s.TotalIterations = cfg.Iterations
+	s.TotalIterations = config.RunIterations(cfg)
 	s.IntervalStr = cfg.IntervalDelay
 	s.IsWaiting = false
 	s.CurrentStats.CurrentIteration = 1
@@ -1322,8 +1412,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 
 	s.runWG.Add(1)
+	replayHandedOff = true
 	go func() {
 		defer s.runWG.Done()
+		if replayUpload != "" {
+			defer s.removeReplayUpload(replayUpload)
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				msg := fmt.Sprintf("Workload crashed unexpectedly: %v", r)
@@ -1434,8 +1528,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 
 		intervalDuration, _ := time.ParseDuration(cfg.IntervalDelay)
+		iterations := config.RunIterations(cfg)
+		runCtx, finishRecording := mongo.WithWorkloadRecordingSession(ctx)
+		defer finishRecording()
 
-		for i := 1; i <= cfg.Iterations; i++ {
+		for i := 1; i <= iterations; i++ {
 			if ctx.Err() != nil {
 				break
 			}
@@ -1446,7 +1543,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			s.CurrentStats.CurrentIteration = i
 			s.mu.Unlock()
 
-			if err := runWorkloadFn(ctx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
+			if err := runWorkloadFn(runCtx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
 				if err != context.Canceled {
 					msg := fmt.Sprintf("Workload crashed: %v", err)
 					log.Println("UI Run Error:", msg)
@@ -1458,7 +1555,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			if i < cfg.Iterations && intervalDuration > 0 {
+			if i < iterations && intervalDuration > 0 {
 				s.mu.Lock()
 				s.IsWaiting = true
 				s.mu.Unlock()
@@ -1581,6 +1678,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	completedAt := s.CompletedAt
 	initDurationSec := s.InitDurationSec
 	lifecycleEvents := append([]lifecycleEvent(nil), s.LifecycleEvents...)
+	plan := s.multiTarget
 	s.mu.Unlock()
 
 	now := time.Now()
@@ -1770,6 +1868,9 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"intervalLatency": collector.GetUILatencyTimelineAndReset(),
 		"latencyHeatmap":  collector.LatencyHeatmap(),
 	}
+	if mt := multiTargetStatus(plan); mt != nil {
+		statsResp["multi_target"] = mt
+	}
 	json.NewEncoder(w).Encode(statsResp)
 }
 
@@ -1791,6 +1892,43 @@ func (s *WebServer) handleReport(w http.ResponseWriter, r *http.Request) {
 	w.Write(html)
 }
 
+// generatedTrafficItems lists the traffic fingerprint of a deterministic run
+// (hashes and counts only); nil for any other run.
+func generatedTrafficItems(g *stats.GeneratedTrafficInfo) []report.KV {
+	if g == nil {
+		return nil
+	}
+	status := g.Status
+	if g.Reason != "" {
+		status += " (" + g.Reason + ")"
+	}
+	items := []report.KV{
+		{Key: "Fingerprint", Value: g.Fingerprint},
+		{Key: "Status", Value: status},
+		{Key: "Random Seed", Value: strconv.FormatInt(g.RandomSeed, 10)},
+		{Key: "Workers x Operations", Value: fmt.Sprintf("%d x %d per iteration, %d iteration(s)", g.Workers, g.OperationsPerWorker, g.Iterations)},
+		{Key: "Operations planned / generated / sent", Value: fmt.Sprintf("%d / %d / %d", g.OpsPlanned, g.OpsGenerated, g.OpsSent)},
+		{Key: "PLGM Version", Value: g.PLGMVersion},
+		{Key: "Collections Hash", Value: g.CollectionsHash},
+		{Key: "Queries Hash", Value: g.QueriesHash},
+		{Key: "Commands Hash", Value: g.CommandsHash},
+	}
+	if g.SafetyTimeout != "" {
+		items = append(items, report.KV{Key: "Safety Timeout", Value: g.SafetyTimeout})
+	}
+	workers := make([]int, 0, len(g.WorkerHashes))
+	for k := range g.WorkerHashes {
+		if n, err := strconv.Atoi(k); err == nil {
+			workers = append(workers, n)
+		}
+	}
+	sort.Ints(workers)
+	for _, w := range workers {
+		items = append(items, report.KV{Key: fmt.Sprintf("Worker %d Hash", w), Value: g.WorkerHashes[strconv.Itoa(w)]})
+	}
+	return items
+}
+
 // buildReportData snapshots the current run state into a render-ready ReportData.
 func (s *WebServer) buildReportData() report.ReportData {
 	s.mu.Lock()
@@ -1799,6 +1937,7 @@ func (s *WebServer) buildReportData() report.ReportData {
 	lastErr := s.LastError
 	isRunning := s.IsRunning
 	completedAt := s.CompletedAt
+	plan := s.multiTarget
 	s.mu.Unlock()
 
 	data := report.ReportData{
@@ -1868,6 +2007,8 @@ func (s *WebServer) buildReportData() report.ReportData {
 		if data.DurationSeconds > 0 {
 			data.AvgOpsPerSec = float64(total) / data.DurationSeconds
 		}
+		data.GeneratedTrafficItems = generatedTrafficItems(collector.GeneratedTraffic())
+		data.MultiTargetItems, data.MultiTargetNotes = multiTargetReportItems(plan)
 		for _, hp := range collector.LatencyHeatmap() {
 			data.Heatmap = append(data.Heatmap, report.HeatmapPoint{
 				ElapsedSec: hp.ElapsedSec, Count: hp.Count, P50: hp.P50, P95: hp.P95, P99: hp.P99, Max: hp.Max,
@@ -2094,34 +2235,8 @@ func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
 		return cached, "ready"
 	}
 
-	rep := collector.GetFinalInsights()
-	explainEnabled, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
-	if explainEnabled {
-		ctx, cancel := context.WithCancel(context.Background())
-		s.mu.Lock()
-		s.explainCancel = cancel
-		s.mu.Unlock()
-		enrichInsightsWithExplain(ctx, rep.Metadata.Status, &rep, collector.SnapshotExplainInventory(), appCfg, explainParams{
-			topN: explainTopN, maxTimeMs: explainMaxMs, verbosity: explainVerbosity, severityMode: explainSeverityMode,
-			efficiencyMode: collector.GetExplainEfficiencyMode(), workers: explainWorkers, retries: explainRetries, backoffMs: explainBackoffMs,
-		})
-		s.mu.Lock()
-		s.explainCancel = nil
-		s.mu.Unlock()
-		cancel()
-	}
-	stats.ApplyEfficiencyView(&rep)
-	if trendStore == nil {
-		trendStore = stats.DisabledTrendStore()
-	}
 	now := trendClock()
-	policy := stats.TrendPolicyFromConfig(appCfg)
-	label := ""
-	if appCfg != nil {
-		label = appCfg.TrendRunLabel
-	}
-	run := stats.NewTrendRunContext(rep, stats.TrendWorkloadFromConfig(appCfg), newTrendRunID(now, runID), label, now)
-	stats.ApplyTrends(&rep, run, trendStore.Snapshot(), trendStore.Status(), now, stats.TrendOptions{Policy: policy})
+	rep, run, policy := s.buildFinalInsights(collector, appCfg, trendStore, newTrendRunID(now, runID), now)
 
 	s.mu.Lock()
 	record := !s.IsRunning && s.RunID == runID
@@ -2129,12 +2244,77 @@ func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
 		s.InsightsCache = &rep
 	}
 	s.mu.Unlock()
-	if record && rep.Metadata.Status == "ready" {
-		if err := trendStore.Record(run, stats.CurrentTrendBaselines(rep, run), policy); err != nil {
-			log.Printf("Warning: trend baselines not saved: %v", err)
-		}
+	if record {
+		recordTrendRun(trendStore, rep, run, policy)
 	}
 	return &rep, "ready"
+}
+
+func recordTrendRun(trendStore *stats.TrendStore, rep stats.InsightsReport, run stats.TrendRunContext, policy stats.TrendPolicy) {
+	if trendStore == nil || rep.Metadata.Status != "ready" {
+		return
+	}
+	if err := trendStore.Record(run, stats.CurrentTrendBaselines(rep, run), policy); err != nil {
+		log.Printf("Warning: trend baselines not saved: %v", err)
+	}
+}
+
+// registerExplainCancel adds cancel to the explains a new run stops and
+// returns the function that removes it again.
+func (s *WebServer) registerExplainCancel(cancel context.CancelFunc) func() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.explainCancels == nil {
+		s.explainCancels = map[uint64]context.CancelFunc{}
+	}
+	s.explainCancelSeq++
+	key := s.explainCancelSeq
+	s.explainCancels[key] = cancel
+	return func() {
+		s.mu.Lock()
+		delete(s.explainCancels, key)
+		s.mu.Unlock()
+	}
+}
+
+// cancelExplainsLocked stops every in-flight post-run explain; s.mu is held.
+func (s *WebServer) cancelExplainsLocked() {
+	for _, cancel := range s.explainCancels {
+		cancel()
+	}
+}
+
+// buildFinalInsights computes the post-run insights of collector with
+// explain enrichment against appCfg's server and the trend comparison.
+func (s *WebServer) buildFinalInsights(collector *stats.Collector, appCfg *config.AppConfig, trendStore *stats.TrendStore, trendRunID string, now time.Time) (stats.InsightsReport, stats.TrendRunContext, stats.TrendPolicy) {
+	rep := collector.GetFinalInsights()
+	explainEnabled, explainTopN, explainMaxMs, explainVerbosity, explainSeverityMode, explainWorkers, explainRetries, explainBackoffMs := collector.GetExplainSettings()
+	if explainEnabled {
+		ctx, cancel := context.WithCancel(context.Background())
+		unregister := s.registerExplainCancel(cancel)
+		enrichInsightsWithExplain(ctx, rep.Metadata.Status, &rep, collector.SnapshotExplainInventory(), appCfg, explainParams{
+			topN: explainTopN, maxTimeMs: explainMaxMs, verbosity: explainVerbosity, severityMode: explainSeverityMode,
+			efficiencyMode: collector.GetExplainEfficiencyMode(), workers: explainWorkers, retries: explainRetries, backoffMs: explainBackoffMs,
+		})
+		unregister()
+		cancel()
+	}
+	stats.ApplyEfficiencyView(&rep)
+	if trendStore == nil {
+		trendStore = stats.DisabledTrendStore()
+	}
+	policy := stats.TrendPolicyFromConfig(appCfg)
+	label := ""
+	if appCfg != nil {
+		label = appCfg.TrendRunLabel
+	}
+	run := stats.NewTrendRunContext(rep, stats.TrendWorkloadFromConfig(appCfg), trendRunID, label, now)
+	if appCfg != nil && appCfg.InsightsTrendStoreQueryValues && !trendStore.Disabled() && rep.Metadata.Status == "ready" {
+		rep.TrendQueryValues = stats.BuildTrendQueryValues(rep, collector.SnapshotRepresentativeSamples())
+		run.QueryValuesStored = true
+	}
+	stats.ApplyTrends(&rep, run, trendStore.Snapshot(), trendStore.Status(), now, stats.TrendOptions{Policy: policy})
+	return rep, run, policy
 }
 
 func containsStage(v interface{}, stage string) bool {
@@ -2222,6 +2402,7 @@ func (s *WebServer) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		log.Println("Shutdown requested via Web UI. Exiting application...")
+		s.removeTrafficImports()
 		os.Exit(0)
 	}()
 }
