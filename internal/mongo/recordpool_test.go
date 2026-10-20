@@ -1,8 +1,10 @@
 package mongo
 
 import (
+	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/accesspattern"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
@@ -223,5 +225,61 @@ func TestLookupFieldNestedPath(t *testing.T) {
 	val, ok := lookupField(record, "customer.address.city")
 	if !ok || val != "Denver" {
 		t.Fatalf("expected nested lookup, got %#v ok=%v", val, ok)
+	}
+}
+
+func TestAppendPooledIntIDsSkipsRecordsWithoutIntKey(t *testing.T) {
+	pool := NewRecordPool(100)
+	sel, err := accesspattern.Compile(accesspattern.Config{Kind: string(accesspattern.KindZipfian)})
+	if err != nil {
+		t.Fatalf("compile selector: %v", err)
+	}
+	pool.SetSelector(sel)
+	ns := "shop.orders"
+	for i := 0; i < 50; i++ {
+		pool.Add(ns, map[string]interface{}{"_id": "oid", "status": "open"})
+	}
+
+	done := make(chan []int64, 1)
+	go func() {
+		done <- appendPooledIntIDs(context.Background(), nil, pool, ns, "_id", 10, rand.New(rand.NewSource(1)))
+	}()
+	select {
+	case ids := <-done:
+		if len(ids) != 0 {
+			t.Fatalf("expected no ids from records without an integer key, got %v", ids)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("appendPooledIntIDs did not return for records without an integer key")
+	}
+}
+
+func TestAppendPooledIntIDsCollectsIntKeys(t *testing.T) {
+	pool := NewRecordPool(100)
+	ns := "shop.orders"
+	pool.Add(ns, map[string]interface{}{"_id": int(1)})
+	pool.Add(ns, map[string]interface{}{"_id": int32(2)})
+	pool.Add(ns, map[string]interface{}{"_id": int64(3)})
+
+	ids := appendPooledIntIDs(context.Background(), []int64{99}, pool, ns, "_id", 5, rand.New(rand.NewSource(1)))
+	if len(ids) != 5 || ids[0] != 99 {
+		t.Fatalf("expected 5 ids starting with the existing one, got %v", ids)
+	}
+	for _, id := range ids[1:] {
+		if id < 1 || id > 3 {
+			t.Fatalf("unexpected pooled id %d in %v", id, ids)
+		}
+	}
+}
+
+func TestAppendPooledIntIDsStopsOnCanceledContext(t *testing.T) {
+	pool := NewRecordPool(10)
+	ns := "shop.orders"
+	pool.Add(ns, map[string]interface{}{"_id": int64(1)})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if ids := appendPooledIntIDs(ctx, nil, pool, ns, "_id", 10, rand.New(rand.NewSource(1))); len(ids) != 0 {
+		t.Fatalf("expected no draws after cancellation, got %v", ids)
 	}
 }

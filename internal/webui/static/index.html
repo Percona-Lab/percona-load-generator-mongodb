@@ -3610,7 +3610,7 @@
                             <button type="button" id="trendHistoryResetBtn" class="insights-explore-btn" onclick="resetTrendHistory()">Reset baselines</button>
                         </div>
                         <div id="trendHistoryStatus" class="insights-row-subtitle" aria-live="polite"></div>
-                        <div id="trendHistoryRuns"></div>
+                        <div id="trendHistoryRunList"></div>
                     </section>
                 </div>
             </div>
@@ -7587,7 +7587,7 @@
         function renderTrendHistory() {
             const d = trendHistoryState.data;
             const storeEl = document.getElementById('trendHistoryStore');
-            const listEl = document.getElementById('trendHistoryRuns');
+            const listEl = document.getElementById('trendHistoryRunList');
             if (!storeEl || !listEl || !d) return;
             const st = d.store || {};
             const set = d.settings || {};

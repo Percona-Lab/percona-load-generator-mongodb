@@ -276,7 +276,7 @@ kubectl logs -f plgm-benchmark-754zn -n lab -c plgm
 
 ## 4. Configuration Reference
 
-You can override almost any setting in `config.yaml` using these Environment Variables in your Kubernetes manifest. More variables are accepted, please see our [readme](./README.md#environment-variable-overrides) for a full list:
+You can override almost any setting in `config.yaml` using these Environment Variables in your Kubernetes manifest. More variables are accepted, please see our [readme](./docs/configuration-reference.md#environment-variable-overrides) for a full list:
 
 | Variable | Description |
 | :--- | :--- |

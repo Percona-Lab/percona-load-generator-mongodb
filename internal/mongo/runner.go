@@ -521,6 +521,28 @@ func runTransaction(ctx context.Context, id int, wCfg workloadConfig, rng *rand.
 	return err == nil
 }
 
+// appendPooledIntIDs appends up to want-len(ids) integer patchKey values drawn
+// from the pool. Draws are capped because pooled records may lack an integer
+// patchKey, and skewed selectors keep returning the same few records.
+func appendPooledIntIDs(ctx context.Context, ids []int64, pool *RecordPool, ns, patchKey string, want int, rng *rand.Rand) []int64 {
+	maxDraws := 4 * want
+	for draws := 0; len(ids) < want && draws < maxDraws && ctx.Err() == nil; draws++ {
+		rec, ok := pool.Random(ns, rng)
+		if !ok {
+			break
+		}
+		switch v := rec[patchKey].(type) {
+		case int:
+			ids = append(ids, int64(v))
+		case int32:
+			ids = append(ids, int64(v))
+		case int64:
+			ids = append(ids, v)
+		}
+	}
+	return ids
+}
+
 func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg workloadConfig, rng *rand.Rand) {
 	defer wg.Done()
 	dbOpCtx := context.Background()
@@ -643,28 +665,10 @@ func independentWorker(ctx context.Context, id int, wg *sync.WaitGroup, wCfg wor
 
 			ns := collectionNamespace(wCfg.database, currentCol)
 			ids := make([]int64, 0, batchSize)
-			pooledIDs := 0
 			if wCfg.recordPool != nil && wCfg.recordPool.Len(ns) > 0 && rng.Intn(100) < wCfg.appConfig.ExistingRecordHitRate {
-				for len(ids) < batchSize {
-					rec, ok := wCfg.recordPool.Random(ns, rng)
-					if !ok {
-						break
-					}
-					if raw, ok := rec[patchKey]; ok {
-						switch v := raw.(type) {
-						case int:
-							ids = append(ids, int64(v))
-							pooledIDs++
-						case int32:
-							ids = append(ids, int64(v))
-							pooledIDs++
-						case int64:
-							ids = append(ids, v)
-							pooledIDs++
-						}
-					}
-				}
+				ids = appendPooledIntIDs(ctx, ids, wCfg.recordPool, ns, patchKey, batchSize, rng)
 			}
+			pooledIDs := len(ids)
 			for len(ids) < batchSize {
 				targetW := rng.Intn(wCfg.concurrency)
 				targetSeq := rng.Int63n(10000000)

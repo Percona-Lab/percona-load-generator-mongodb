@@ -98,7 +98,7 @@ insights_explain_backoff_ms: 150
 # insights_latency_target_p99_ms: 0
 
 # ==============================================================================
-# Trend History (Trends view; see README "Trend history")
+# Trend History (Trends view; see docs/trends-and-history.md)
 # ==============================================================================
 # Unpinned runs to keep per store (1-50). Pinned runs (max 10) are extra.
 trend_history_runs: 5
@@ -307,7 +307,7 @@ record_pool_bootstrap_sample: 500
 # one, replay on the other. Off by default. Record and replay cannot both be on for
 # the same run, and neither works with the raw injector. For a full upgrade-test
 # workflow (record or import, replay on several targets, compare outcomes), see the
-# README section "Comparing Two Instances (Upgrade Testing)".
+# docs/record-and-replay.md, "Comparing Two Instances (Upgrade Testing)".
 #
 # Random seed. Set (non-zero): seeds data and query generation, so the same seed,
 # documents count, and collection definitions seed identical documents on any

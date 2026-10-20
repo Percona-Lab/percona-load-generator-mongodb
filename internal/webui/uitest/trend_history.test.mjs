@@ -103,6 +103,10 @@ test('opening the tab lists stored runs with label, server, time, source, and pi
     assert.equal(calls.length, 0, 'runs load only when the tab opens');
     await openHistoryTab(doc);
     assert.equal(calls[0].method, 'GET');
+    const table = doc.getElementById('trendRunsTable');
+    assert.equal(table.parentElement.tagName, 'DIV', 'browsers do not render a table placed inside an <input>');
+    const ids = [...doc.querySelectorAll('[id]')].map(el => el.id);
+    assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), [], 'element ids are unique');
     const trs = runRows(doc);
     assert.deepEqual(trs.map(tr => tr.dataset.runId), h.baselines.runs.map(r => r.run_id));
     trs.forEach((tr, i) => {
