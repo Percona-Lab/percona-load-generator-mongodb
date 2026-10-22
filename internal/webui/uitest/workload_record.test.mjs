@@ -22,10 +22,13 @@ const FIELDS = ['random_seed', 'workload_record_enabled', 'workload_record_path'
 
 test('record and replay controls live on the Record & Replay tab, default off, and are submitted', async () => {
     const { doc, errors } = await page();
-    const tabBtn = [...doc.querySelectorAll('.tab-btn')].find(b => b.textContent === 'Record & Replay');
-    assert.ok(tabBtn, 'the Record & Replay tab has a sidebar button');
-    tabBtn.click();
-    assert.ok(doc.getElementById('tab-replay').classList.contains('active'));
+    const w = doc.defaultView;
+    w.selectMode('record');
+    w.toggleTier('advanced');
+    doc.getElementById('snav-reproducibility').click();
+    assert.equal(doc.getElementById('snav-reproducibility').getAttribute('aria-selected'), 'true');
+    assert.equal(doc.getElementById('rrSeedCard').dataset.groupHidden, '0', 'Record & replay shows its advanced cards');
+    w.selectMode('');
     for (const name of FIELDS) {
         const el = doc.querySelector(`[name="${name}"]`);
         assert.ok(el, name);
@@ -120,7 +123,7 @@ test('conflicting or incomplete record/replay settings block the run on the Reco
     const set = (id, v) => { doc.getElementById(id).value = v; };
     const check = msg => {
         assert.equal(w.validateConfigForm(), false);
-        assert.ok(doc.getElementById('tab-replay').classList.contains('active'));
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, 'tab-replay', 'focus moves to the setting to fix');
         assert.match(doc.getElementById('configInlineError').textContent, msg);
     };
     set('workloadRecordEnabled', 'true');
@@ -169,7 +172,7 @@ test('incomplete outcome capture settings block the run on the Record & Replay t
     const set = (id, v) => { doc.getElementById(id).value = v; };
     const check = msg => {
         assert.equal(w.validateConfigForm(), false);
-        assert.ok(doc.getElementById('tab-replay').classList.contains('active'));
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, 'tab-replay', 'focus moves to the setting to fix');
         assert.match(doc.getElementById('configInlineError').textContent, msg);
     };
     set('workloadRecordResultChecksums', 'true');

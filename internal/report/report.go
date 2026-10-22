@@ -196,6 +196,11 @@ type ReportData struct {
 	DurationSeconds float64
 	TotalOps        int64
 	AvgOpsPerSec    float64
+	// DurationLabel, OpsLabel, and ThroughputLabel replace the numeric cards
+	// when a stored run does not have that measurement. Empty means show the numbers.
+	DurationLabel   string
+	OpsLabel        string
+	ThroughputLabel string
 
 	ConfigItems        []KV
 	LoadProfileItems   []KV

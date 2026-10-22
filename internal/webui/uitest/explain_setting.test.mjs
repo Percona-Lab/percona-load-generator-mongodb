@@ -74,14 +74,17 @@ test('explain settings have their own tab; other settings moved to related tabs'
     assert.deepEqual(errors, []);
 });
 
-test('invalid explain settings open the Query Analysis tab', async () => {
+test('invalid explain settings open the Query analysis category and focus the field', async () => {
     const { w, doc, errors } = await page(true);
     w.HTMLElement.prototype.scrollIntoView = () => {};
-    doc.querySelector('[name="insights_explain_top_n"]').value = '0';
+    w.selectMode('generic');
+    const topN = doc.querySelector('[name="insights_explain_top_n"]');
+    topN.value = '0';
     assert.equal(w.validateConfigForm(), false);
-    assert.ok(doc.getElementById('tab-query-analysis').classList.contains('active'));
-    const active = doc.querySelector('.tab-btn.active');
-    assert.equal(active.textContent, 'Query Analysis (Explain)');
+    assert.equal(doc.body.classList.contains('tier-expert-open'), true, 'the expert level holding the field opens');
+    assert.equal(doc.getElementById('snav-explain').getAttribute('aria-selected'), 'true');
+    assert.equal(doc.activeElement, topN);
+    assert.equal(topN.getAttribute('aria-invalid'), 'true');
     assert.deepEqual(errors, []);
 });
 

@@ -58,9 +58,9 @@ const reportTemplate = `<!DOCTYPE html>
   </header>
 
   <div class="cards">
-    <div class="card"><div class="label">Duration</div><div class="value">{{fmtFloat .DurationSeconds}}s</div></div>
-    <div class="card"><div class="label">Total Ops</div><div class="value">{{.TotalOps}}</div></div>
-    <div class="card"><div class="label">Avg Throughput</div><div class="value">{{fmtFloat .AvgOpsPerSec}}<span class="muted" style="font-size:12px"> ops/s</span></div></div>
+    <div class="card"><div class="label">Duration</div><div class="value">{{if .DurationLabel}}{{.DurationLabel}}{{else}}{{fmtFloat .DurationSeconds}}s{{end}}</div></div>
+    <div class="card"><div class="label">Total Ops</div><div class="value">{{if .OpsLabel}}{{.OpsLabel}}{{else}}{{.TotalOps}}{{end}}</div></div>
+    <div class="card"><div class="label">Avg Throughput</div><div class="value">{{if .ThroughputLabel}}{{.ThroughputLabel}}{{else}}{{fmtFloat .AvgOpsPerSec}}<span class="muted" style="font-size:12px"> ops/s</span>{{end}}</div></div>
   </div>
 
   {{if .Warnings}}

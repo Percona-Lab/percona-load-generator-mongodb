@@ -214,6 +214,7 @@ func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context,
 	s.runWG.Add(1)
 	go func() {
 		defer s.runWG.Done()
+		defer s.persistDashboard()
 		if replayUpload != "" {
 			defer s.removeReplayUpload(replayUpload)
 		}

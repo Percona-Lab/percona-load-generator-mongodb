@@ -5,6 +5,59 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v6.0.0 - Revamped Web UI, Settings Categories, and Completed Run Dashboards
+
+This release redesigns Web UI setup around what you want to do. You pick a task first (generic workload, custom workload, stress test, record, or replay), and the page shows only the settings that task uses. Basic settings are always on screen; Advanced and Expert settings are grouped into categories, so you no longer scroll through one long page. Launch checks every setting the run uses, including ones that are not on screen, and takes you to the field that needs fixing. Finished runs are now saved, so you can reopen their dashboards and HTML reports after the browser or PLGM is closed.
+
+The CLI, `config.yaml`, and environment variables are unchanged. 
+
+**Highlights**
+
+**New: Choose a task first**
+- Setup starts by asking what to run: **Run a generic workload**, **Run a custom workload**, **Stress test** (raw injector), **Record a workload**, or **Replay a recorded workload**. Each task is a card with an icon and a one-sentence description. A sixth tile opens completed runs.
+- After a task is chosen, the cards shrink to a compact switcher above the settings. Selecting another card keeps the values that still apply. The cards lock while a workload is running.
+- Each task shows only the settings it uses. Choosing **Record a workload**, **Replay a recorded workload**, or **Stress test** turns on Record Workload, Replay Workload, or Raw Injector Mode for you. Settings the task cannot use are not applied to the run, and they are restored if you switch back.
+- When recording, **Workload to record** chooses the built-in workload or your own definitions.
+
+**New: Settings levels and categories**
+- **Settings level** shows **Basic** settings. Turn on **Advanced** and/or **Expert** to add more. Each added section carries a small level marker. Values you change keep applying when a level is turned off again.
+- With **Advanced** or **Expert** on, a **Categories** list appears beside the settings: **Basic settings**, **Connection**, **Workload execution**, **Record & replay**, **Data & queries**, **Metrics & reporting**, **Query analysis**, and **Trends & history**. Only the selected category is shown. Only categories with settings for the current task and levels are listed. Opening a level moves to the first category it adds. If the selected category disappears, **Basic settings** is selected. Switching categories, levels, or tasks never changes a value.
+- The category list is a keyboard tablist (arrow keys, Home, End). On narrow screens it wraps into rows above the settings.
+- Settings that depend on another category link to it. **Post-Run Explain** says when it needs **Post-Run Insights** on and links there. The note under **Deterministic traffic** links to the Basic settings it switches.
+
+**New: Validation that finds the field**
+- **Launch Workload** checks every setting the run uses, including ones in closed levels and other categories. Each problem appears under its field, and each category that holds one gets a red dot (never a count). The levels that hold problems open, and the first field is selected and focused. Fixing a field removes its message and, when it was the last one, its category's dot.
+- If a problem is in a section the selected task does not use (for example a trend setting during a stress test), that section is shown with a note until the next launch or task change. The value is still checked, as before, so it can now be corrected.
+
+**New: Completed run dashboards**
+- Finished runs are saved as `rd-1` JSON files in `run_dashboards`, beside the trend baseline file (`~/.config/plgm/run_dashboards` on Linux, `~/Library/Application Support/plgm/run_dashboards` on macOS, or next to a custom `trend_baseline_store`). Multi-target runs are saved too.
+- **Completed Runs** in the header lists each run with its name, start time, duration, mode, status, and a short throughput and latency summary. **Open dashboard** shows the run's saved charts, latency, and configuration after the browser is closed and PLGM is started again with that storage. Opening one does not start a workload and does not need a live database. **HTML report** downloads the stored report, and **Pin** keeps a run when older ones are pruned.
+- Retention uses `trend_history_runs`, `trend_max_age_days`, and the 10-run pin limit. Up to 3600 chart samples are kept per run. Passwords, usernames, TLS paths, and URI userinfo are not stored. A measurement that was not stored is shown as unavailable, never as zero. A damaged file is listed with an error, and the other runs still open. A container must mount this directory; see `k8s_and_docker.md`.
+
+**Web UI**
+- A sticky launch bar at the bottom of the settings shows the configuration that will run, any validation message, and **Launch Workload**. It is the only launch control.
+- The changed-settings badges ("2 changed") and the "N settings changed" text are gone. Changed values are still kept and sent.
+- Long setting explanations open from a **?** button placed right after the label's last word (also when the label wraps), with a name like "Help: Runs to keep". Hover, keyboard focus, click, or tap opens it. Validation errors and execution warnings stay inline.
+- Inputs are sized by the values they accept (compact counts, durations, names, wide URIs and paths, full-width editors) instead of all being full width. Labels written without `for` are now tied to their control.
+- One token-based stylesheet covers setup, dashboards, completed runs, and dialogs (type scale, spacing, radii, buttons, tables, and focus, disabled, and invalid states). The Google Fonts request was removed: the UI uses the system font stack and loads nothing from a CDN.
+- Setup, the live dashboard, and completed runs share one visual system: a light app bar, one filled primary action, and quieter secondary controls.
+- **Sharding Strategy** is now shown for replay runs, which set up sharding for their collections before replaying.
+
+**API**
+- `POST /api/start` accepts `operation_mode` (`generic`, `custom`, `record`, `replay`, or `raw`). It forces the flags that define the task and clears settings the task cannot use. Omitting it keeps the previous behavior: every submitted field applies. There is no `config.yaml` key and no migration. `record_workload_source` is not stored; it only chooses built-in or custom definitions while recording.
+- `GET /api/run-history` lists completed runs and the storage settings. `GET /api/run-history/<id>` returns one run, `GET /api/run-history/<id>/report` returns its HTML report, and `PATCH /api/run-history/<id>` with `{"pinned": true|false}` pins or unpins it.
+
+**Fixes**
+- Browser checks (minimum, maximum, required) on a setting that was hidden could block **Launch Workload** silently, with no message. They are now reported under the field like any other validation error.
+- **MongoDB URI** was marked required in the browser even when replay targets were listed, which blocked a multi-target launch without a message. The URI is now required only when no targets are listed, as the server already did.
+- Validation errors no longer turn on every settings level to show one field.
+
+**Testing & Docs**
+- New `docs/web-ui-design-system.md` with the tokens, field widths, label and help component, settings categories, and field-error conventions.
+- `docs/web-ui.md` describes task selection, settings levels, the settings categories and what each holds, cross-category validation, and completed runs. The other guides (`docs/` workloads, load modeling, performance tuning, record and replay, query analysis, trends and history, reports and exports, raw injector, plus README and INSIGHTS) now write each setting's place as **Category > Section** with the level that adds it, and their Web UI steps start from the task cards.
+- `docs/trends-and-history.md` and `k8s_and_docker.md` cover the completed-run directory, its retention, and the volume a container needs.
+- New Go tests for `operation_mode` and run history storage. New jsdom tests cover setup modes, help placement and keyboard use, field widths, settings categories (per task and level, keyboard navigation, values kept across categories, levels, and tasks, cross-category validation and focus, dependency links, and the section shown for an error the task does not use), and completed runs.
+
 ## v5.1.0 - Runs Last for Duration, and the Web UI Stays With the Run
 
 This release keeps a workload going for the time you configured, and keeps the Web UI attached to that run. Deterministic traffic no longer stops when the first pass of operations finishes. Checking that box also sets Drop Collections, Skip Seed, and a fixed load profile for you. The header clock moves during seeding, explains a total that includes pauses between iterations, and a reload returns you to the run that is already going.

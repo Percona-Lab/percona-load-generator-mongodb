@@ -35,7 +35,7 @@ async function historyPage(routes = {}, cfg = {}) {
 }
 
 async function openHistoryTab(doc) {
-    doc.querySelector(`.tab-btn[onclick*="'tab-trends'"]`).click();
+    doc.defaultView.revealSetting('trendHistoryRuns', { focus: false });
     await settle();
 }
 
@@ -59,7 +59,6 @@ test('the Trends & History tab holds every trend setting with its default and co
     assert.ok(doc.getElementById('tab-trends').textContent.includes('Default 5, 1–50'));
     assert.ok(doc.getElementById('tab-trends').textContent.includes('0 = never'));
     assert.ok(doc.getElementById('tab-trends').textContent.includes('off'));
-    assert.equal(doc.querySelector('.tab-btn[onclick*="tab-trends"]').textContent, 'Trends & History');
     assert.notEqual(doc.getElementById('queryAnalysisTabTrends').closest('#tab-trends'), doc.getElementById('tab-trends'), 'results view is separate');
     assert.deepEqual(errors, []);
 });
@@ -89,7 +88,8 @@ test('invalid trend settings block the run and open the Trends & History tab', a
         const before = el.value;
         el.value = value;
         assert.equal(w.validateConfigForm(), false, `${name}=${value}`);
-        assert.ok(doc.getElementById('tab-trends').classList.contains('active'));
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, 'tab-trends', 'focus moves to the setting to fix');
+        assert.equal(doc.activeElement.getAttribute('aria-invalid'), 'true');
         assert.match(doc.getElementById('configInlineError').textContent, msg);
         el.value = before;
     }

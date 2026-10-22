@@ -53,20 +53,20 @@ The `query_analysis_demo` workload is built to show the [query and index analysi
 
 The Web UI saves reusable query and collection definition files so you do not need to upload them every time you start a workload.
 
-1. Start the UI with `./plgm --webui` and open the **Data / Query Mix** tab.
-2. The **Data & Query Definitions** section has two cards, **Collection Definitions** and **Query Definitions**. Each has a **Saved Definition Library** dropdown, which is the main way to choose what runs.
+1. Start the UI with `./plgm --webui` and choose **Run a custom workload** (the library is also shown when replaying, or recording custom definitions).
+2. The **Data & Query Definitions** section in **Basic settings** has two cards, **Collection Definitions** and **Query Definitions**. Each has a **Saved Definition Library** dropdown, which is the main way to choose what runs.
 3. To add your own file: open **Import a collection JSON file** (or **Import a query JSON file**), choose the file, and click **Save to Library**. PLGM validates it, stores it, and selects it for the run.
 4. To edit queries in the browser: open **Create or edit a query definition**. Change the JSON in the **Query JSON Editor**, set a **Query Definition Name** and **Description**, then click **Save to Library** to update the selected definition or **Save As New** to create a copy. **New** starts an empty definition; **Delete** removes one. Built-in defaults are read-only, so editing one and saving creates a new custom definition.
 5. To use a file once without saving it: choose it in the import section and launch without clicking **Save to Library**. An unsaved imported file is used for that run only and overrides the library selection.
 6. A short summary under each card shows which definition is selected for the run.
 
-The same tab also holds [seeding and transactions](#seeding-the-initial-data), the [operation mix](#operation-mix-and-transactions), and [schema inference](./load-modeling.md#schema-inference-from-query-logs). Here the `query_analysis_demo` files have been saved to the library and selected:
+**Basic settings** also holds [seeding and transactions](#seeding-the-initial-data) and the [operation mix](#operation-mix-and-transactions); [schema inference](./load-modeling.md#schema-inference-from-query-logs) is in **Data & queries** (Advanced). Here the `query_analysis_demo` files have been saved to the library and selected:
 
-![Data / Query Mix tab: Saved Definition Library, imports, seeding, operation mix, and schema inference](../images/settings_data_mix.png)
+![Data & Query Definitions: Saved Definition Library, imports, seeding, operation mix, and schema inference](../images/settings_data_mix.png)
 
 Uploaded and edited definitions are validated before they are saved. PLGM rejects empty files, malformed JSON, invalid workload schemas, duplicate namespaces in collection definitions, duplicate query names in a query definition, duplicate saved definition names, and duplicate saved content.
 
-Prefer to start from your production logs? Use [Schema Inference from Query Logs](./load-modeling.md#schema-inference-from-query-logs) on the same tab.
+Prefer to start from your production logs? Use [Schema Inference from Query Logs](./load-modeling.md#schema-inference-from-query-logs) in **Data & queries** (Advanced).
 
 ## Custom Workloads
 
@@ -113,7 +113,7 @@ To run your own workload against your own schema:
     ]
     ```
 
-3.  **Run:** in the Web UI, import both files on **Data / Query Mix** (see above). From the CLI:
+3.  **Run:** in the Web UI, import both files in **Data & Query Definitions** (see above). From the CLI:
     ```bash
     export PLGM_COLLECTIONS_PATH=./my_collection.json
     export PLGM_QUERIES_PATH=./my_queries.json
@@ -244,14 +244,14 @@ Before the workload starts, PLGM can drop the collections, create indexes, and i
 
 **In the Web UI:**
 
-1. **Data / Query Mix > Seeding & Transactions**:
+1. **Basic settings > Data & Query Definitions > Seeding & Transactions**:
    - **Seed Document Count**: documents to insert per collection.
    - **Drop Collections First**: drop and recreate the collections before seeding.
    - **Skip Seed Phase**: on to run against data that is already there (for example a restored snapshot).
-2. **Execution / Runtime > Execution / Runtime Tuning**:
+2. **Workload execution > Execution / Runtime Tuning** (Expert):
    - **Seed Batch Size**: documents per `InsertMany` call (1000 is a good default).
    - **Seed Concurrency**: parallel insert writers during seeding (see below).
-3. Optional, for identical data on every run or every server: **Record & Replay > Seed & Determinism > Random Seed** (see [Deterministic Generation](#deterministic-generation)).
+3. Optional, for identical data on every run or every server: **Record & replay > Seed & Deterministic Traffic > Random Seed** (Advanced) (see [Deterministic Generation](#deterministic-generation)).
 
 | Config Setting | Environment Variable | Description | Example |
 | :--- | :--- | :--- | :--- |
@@ -288,7 +288,7 @@ new batches, cancels in-flight writes, and waits for all writers before returnin
 Already accepted writes (including a partially successful batch) are not rolled back.
 
 ### Deterministic Generation
-Set `random_seed` (or `PLGM_RANDOM_SEED`, UI: **Record & Replay > Seed & Determinism > Random Seed**) to a non-zero value to seed random generation.
+Set `random_seed` (or `PLGM_RANDOM_SEED`, UI: **Record & replay > Seed & Deterministic Traffic > Random Seed**, Advanced) to a non-zero value to seed random generation.
 The same seed, `documents_count`, and collection definitions seed identical documents on
 any instance: generated ObjectIds come from the seeded random stream, generated dates use a
 fixed reference time (2025-01-01 UTC) instead of the clock, and with `drop_collections` on
@@ -308,8 +308,8 @@ Leave `0` for time-based, non-deterministic generation.
 
 **In the Web UI:**
 
-1. **Data / Query Mix > Operation Mix Allocation**: set **Find (%)**, **Update (%)**, **Delete (%)**, **Insert (%)**, **Bulk Insert (%)**, **Aggregate (%)**, and **Transaction (%)**. The live total must reach 100%.
-2. For transactions: **Data / Query Mix > Seeding & Transactions**: turn on **Use Transactions** and set **Max Transaction Ops**.
+1. **Basic settings > Operation Mix Allocation**: set **Find (%)**, **Update (%)**, **Delete (%)**, **Insert (%)**, **Bulk Insert (%)**, **Aggregate (%)**, and **Transaction (%)**. The live total must reach 100%.
+2. For transactions: **Basic settings > Data & Query Definitions > Seeding & Transactions**: turn on **Use Transactions** and set **Max Transaction Ops** (shown when **Advanced** is on).
 3. During the run, the **Workload Anatomy** chart on the dashboard confirms the database is executing the mix you asked for.
 
 By default, the tool comes preconfigured with the following workload distribution:
@@ -345,7 +345,7 @@ Please note:
 
 ## Sharding Strategy
 
-**In the Web UI:** open **Workload Configuration > Sharding Strategy**.
+**In the Web UI:** turn on **Expert** and open **Workload execution > Sharding Strategy** (generic, custom, record, and replay runs).
 
 - **Sharding Mode**: **Auto Detect** (recommended) decides per collection; **Force On** and **Force Off** override it.
 - **Skip Generic Setup When shardConfig Is Missing**: recommended for mixed sharded and non-sharded workloads, so only collections with a `shardConfig` are sharded.

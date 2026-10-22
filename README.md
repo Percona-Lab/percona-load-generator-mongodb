@@ -62,7 +62,7 @@ Download [`config.yaml`](./config.yaml) and set your connection string. The buil
 ./bin/plgm
 ```
 
-In the UI, enter your **MongoDB URI** on **Execution / Runtime**, keep the built-in workload on **Data / Query Mix**, and click **Launch Workload**. See [The Web UI](./docs/web-ui.md#your-first-run) for a step-by-step first run.
+In the UI, choose **Run a generic workload**, enter your **MongoDB URI**, and click **Launch Workload**. See [The Web UI](./docs/web-ui.md#your-first-run) for a step-by-step first run.
 
 ---
 
@@ -72,7 +72,7 @@ Each guide explains a feature, shows how to set it up in the Web UI step by step
 
 | Guide | What it covers |
 | :--- | :--- |
-| [Web UI](./docs/web-ui.md) | Starting the UI, HTTPS, remote access over SSH, your first run, the settings tabs, the live dashboard, and the Time Machine |
+| [Web UI](./docs/web-ui.md) | Starting the UI, HTTPS, remote access over SSH, your first run, the settings categories, the live dashboard, and the Time Machine |
 | [Running from the Command Line](./docs/cli.md) | CLI configuration, flags, `--help` output, and how to read the console output |
 | [Workloads](./docs/workloads.md) | Default and custom workloads, the saved definition library, data types, indexes and shard keys, seeding, operation mix, transactions, and sharding |
 | [Load Modeling](./docs/load-modeling.md) | Load profiles, think time, access-pattern skew, the latency heatmap, and schema inference from query logs |

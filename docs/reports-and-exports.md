@@ -16,13 +16,13 @@ When CSV export is enabled, PLGM writes a new row to the file every time the `st
 
 **In the Web UI:**
 
-1. Open **Metrics & Insights > Export & Reporting**.
+1. Turn on **Expert** and open **Metrics & reporting > Export & Reporting**.
 2. Turn on **Enable Real-Time CSV Metrics Export**.
 3. Set **CSV Export Path & Filename**, for example `/tmp/plgm_metrics_export.csv`.
 4. Optional: turn on **Append to existing file (do not overwrite)** to collect several runs in one file.
 5. Click **Launch Workload**.
 
-![Metrics & Insights tab: Export & Reporting (CSV) and Insights Capture](../images/settings_metrics_insights.png)
+![Export & Reporting (CSV) and Insights Capture](../images/settings_metrics_insights.png)
 
 **In `config.yaml`:**
 

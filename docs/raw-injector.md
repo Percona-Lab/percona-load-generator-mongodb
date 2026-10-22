@@ -14,9 +14,9 @@ Unlike the other workloads PLGM supports, this mode is not a workload simulator:
 
 ## Run it from the Web UI
 
-1. Start the UI with `./plgm --webui` and set your **MongoDB URI** on **Execution / Runtime**.
-2. Open **Expert / Debug > Expert / Experimental Execution**.
-3. Turn on **Enable Raw Injector Mode (Overrides Standard Workload)**.
+1. Start the UI with `./plgm --webui` and choose **Stress test**. This turns on **Enable Raw Injector Mode (Overrides Standard Workload)**.
+2. In **Basic settings**, set your **MongoDB URI** under **Target Connection**.
+3. Open **Expert / Experimental Execution** (also in **Basic settings**).
 4. Set:
    - **Operation Type**: Insert, Upsert, Update, Find, Delete, or Mixed. Run Insert first to create the data the other types work on.
    - **Document Size (bytes)**: size of the random binary payload.
@@ -24,10 +24,10 @@ Unlike the other workloads PLGM supports, this mode is not a workload simulator:
    - **Max Documents**: total documents to generate or query.
    - **Database Name** and **Collection Name**.
    - **Drop Collection on Start**: on for a clean insert test.
-5. Set **Duration** and **Concurrency (Active Workers)** on **Workload Configuration**.
+5. Set **Duration** and **Concurrency (Active Workers)** in **Workload Control**.
 6. Click **Launch Workload**.
 
-![Expert / Debug tab with Raw Injector Mode enabled](../images/settings_raw_injector.png)
+![Expert / Experimental Execution with Raw Injector Mode enabled](../images/settings_raw_injector.png)
 
 ## Understanding Raw Injector Throughput (Ops/Sec)
 

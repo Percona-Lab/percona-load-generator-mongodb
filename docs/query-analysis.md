@@ -16,25 +16,25 @@ This page covers setup and the views. The full reference (explain support matrix
 
 ## Set up the analysis in the Web UI
 
-> **Post-Run Explain Sampling is required for the full query analysis.** Scan efficiency, execution overhead (sorts and disk spills), plan-based index recommendations, and efficiency trends are built from explain output collected after the workload finishes. The setting (`insights_explain_enabled`, Web UI settings tab: `Query Analysis (Explain)`) is on by default. With it off, the analysis reports only latency and workload impact, and the dashboard and HTML report state that explain was turned off. Explain does not run during the measured workload, so benchmark results are unaffected.
+> **Post-Run Explain Sampling is required for the full query analysis.** Scan efficiency, execution overhead (sorts and disk spills), plan-based index recommendations, and efficiency trends are built from explain output collected after the workload finishes. The setting (`insights_explain_enabled`, Web UI: **Query analysis** category, Advanced) is on by default. With it off, the analysis reports only latency and workload impact, and the dashboard and HTML report state that explain was turned off. Explain does not run during the measured workload, so benchmark results are unaffected.
 
-1. Start the UI with `./plgm --webui`.
-2. **Metrics & Insights > Insights Capture (Sampling & Retention)**:
+1. Start the UI with `./plgm --webui`, choose a task, and turn on **Advanced** (and **Expert** for the explain limits and latency targets).
+2. **Metrics & reporting > Insights Capture (Sampling & Retention)**:
    - **Enable Post-Run Insights Analysis**: on.
    - **Insights Sampling Rate (0-1)**: share of operations captured for analysis (default `0.10`).
    - **Slow Threshold (ms)**: operations above this are classified as slow (default `200`).
    - **Max Retained Events** and **Max Group Entries**: memory limits for captured events and shape groups.
-3. **Query Analysis (Explain)**:
+3. **Query analysis**:
    - **Enable Post-Run Explain Sampling**: keep it on (the default).
-   - **Which Queries Are Explained**: **Explain Top N Shapes**, **Explain Severity Mode** (High Only is recommended), and **Explain Efficiency Slots** (Impact + latency tiers is recommended; it also explains fast shapes with high workload impact).
-   - **Explain Execution Limits**: **Explain Verbosity** (`executionStats` is recommended; `queryPlanner` is lighter), **Explain Max Time (ms)**, **Explain Workers (Post-Run)**, **Explain Timeout Retries**, and **Explain Retry Backoff (ms)**.
-   - **Query Latency Targets**: optional **Latency Target Avg / p95 / p99 (ms)**. Each shape is then marked as within or above target. Leave them at `0` and no rating is made up.
-4. Optional: configure run history on **Trends & History**. See [Trends and History](./trends-and-history.md).
+   - **Which Queries Are Explained** (Expert): **Explain Top N Shapes**, **Explain Severity Mode** (High Only is recommended), and **Explain Efficiency Slots** (Impact + latency tiers is recommended; it also explains fast shapes with high workload impact).
+   - **Explain Execution Limits** (Expert): **Explain Verbosity** (`executionStats` is recommended; `queryPlanner` is lighter), **Explain Max Time (ms)**, **Explain Workers (Post-Run)**, **Explain Timeout Retries**, and **Explain Retry Backoff (ms)**.
+   - **Query Latency Targets** (Expert): optional **Latency Target Avg / p95 / p99 (ms)**. Each shape is then marked as within or above target. Leave them at `0` and no rating is made up.
+4. Optional: configure run history in **Trends & history**. See [Trends and History](./trends-and-history.md).
 5. Click **Launch Workload**.
 
-![Metrics & Insights tab: Insights Capture (Sampling & Retention)](../images/settings_metrics_insights.png)
+![Insights Capture (Sampling & Retention)](../images/settings_metrics_insights.png)
 
-![Query Analysis (Explain) tab: post-run explain, which queries are explained, explain limits, and latency targets](../images/settings_query_analysis.png)
+![Query analysis: post-run explain, which queries are explained, explain limits, and latency targets](../images/settings_query_analysis.png)
 
 ## Read the results
 
@@ -70,14 +70,14 @@ The **Insights** tab adds **Overview**, **Iterations**, and **Timeline** views: 
 
 The analysis is also included in the **Download Summary** JSON (`insights` section) and the **Export HTML Report**. See [Reports and Exports](./reports-and-exports.md).
 
-The analysis covers reads and writes. Updates, deletes, and `$out`/`$merge` pipelines are explained without being applied. Mixed sharded and non-sharded runs are supported, with per-collection detection and explicit sharding strategy controls (**Workload Configuration > Sharding Strategy**).
+The analysis covers reads and writes. Updates, deletes, and `$out`/`$merge` pipelines are explained without being applied. Mixed sharded and non-sharded runs are supported, with per-collection detection and explicit sharding strategy controls (**Workload execution > Sharding Strategy**, Expert).
 
 ## Try it with the demo workload
 
 The repo ships a demo in [`resources/collections/query_analysis_demo.json`](../resources/collections/query_analysis_demo.json) and [`resources/queries/query_analysis_demo.json`](../resources/queries/query_analysis_demo.json): an orders collection with some queries backed by good indexes, some clearly not (a lookup by customer email with no index, a sort that doesn't match any index, an update that scans), and one report that is meant to read the whole collection.
 
-1. **Data / Query Mix**: import both files with **Save to Library** and select them in the **Saved Definition Library** dropdowns.
-2. Set **Seed Document Count** to `100000`, and on **Workload Configuration** set **Duration** to `60s`.
+1. Choose **Run a custom workload**. In **Data & Query Definitions**, import both files with **Save to Library** and select them in the **Saved Definition Library** dropdowns.
+2. Set **Seed Document Count** to `100000`, and in **Workload Control** set **Duration** to `60s`.
 3. Click **Launch Workload**, and open **Query & Index Analysis** when it finishes.
 
 This walkthrough shows the full flow, from configuration to the post-run analysis:

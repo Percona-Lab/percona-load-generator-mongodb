@@ -312,3 +312,21 @@ You can override almost any setting in `config.yaml` using these Environment Var
 
 3.  **Read Preference:**
     If your Primary node is at 100% but Secondaries are idle, ensure your URI includes `readPreference=nearest` or `secondaryPreferred`.
+
+## 6. Keep completed-run dashboards
+
+The Web UI writes each finished run to `run_dashboards` next to the trend baseline file. On Linux that is `/root/.config/plgm/run_dashboards` for a container running as root, or the user's config directory otherwise. A custom `PLGM_TREND_BASELINE_STORE=/data/trends.json` uses `/data/run_dashboards` instead. `PLGM_TREND_BASELINE_STORE=off` disables trend comparison only; dashboards still use the default config directory.
+
+Mount that directory (or its parent) if the dashboards should survive a new container. The writable layer of the image does not.
+
+```yaml
+volumeMounts:
+  - name: plgm-history
+    mountPath: /root/.config/plgm
+volumes:
+  - name: plgm-history
+    persistentVolumeClaim:
+      claimName: plgm-history
+```
+
+The files contain workload results and a redacted configuration. They do not contain passwords, usernames, or TLS paths. Retention follows `PLGM_TREND_HISTORY_RUNS` (default 5 unpinned) and `PLGM_TREND_MAX_AGE_DAYS` (default 30). See [Completed run dashboards](./docs/trends-and-history.md#completed-run-dashboards).

@@ -59,7 +59,7 @@ test('invalid multi-target settings block the run on the Record & Replay tab', a
     const set = (id, v) => { doc.getElementById(id).value = v; };
     const check = msg => {
         assert.equal(w.validateConfigForm(), false);
-        assert.ok(doc.getElementById('tab-replay').classList.contains('active'));
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, 'tab-replay', 'focus moves to the setting to fix');
         assert.match(doc.getElementById('configInlineError').textContent, msg);
     };
     set('workloadReplayOps', 'reads_only');

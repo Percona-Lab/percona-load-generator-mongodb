@@ -20,36 +20,34 @@ Every setting on this page is off by default. With the defaults, runs, recording
 
 ## Quick start in the Web UI
 
-Start the UI with `./plgm --webui`. All settings below are on the **Record & Replay** settings tab, split into six sub-tabs: **Seed & Determinism**, **Record**, **Replay**, **Multi-Target**, **Outcomes**, and **Import Traffic**. Every setting shows what happens when it is on and when it is off, along with its `config.yaml` key and environment variable.
+Start the UI with `./plgm --webui`. Choosing **Record a workload** or **Replay a recorded workload** shows the **Record** or **Replay** section in **Basic settings**. The other sections are in the **Record & replay** category once **Advanced** is on: **Seed & Deterministic Traffic**, **Multi-Target Replay & Starting Data**, **Outcome Capture**, and (when replaying) **Import Captured Traffic**. Every setting shows what happens when it is on and when it is off, along with its `config.yaml` key and environment variable.
 
 The test takes three runs: record on the current server, replay on the new server, and compare.
 
 ### Step 1: Record on the current instance
 
-1. **Execution / Runtime**: set **MongoDB URI** to the current server.
-2. **Data / Query Mix**: pick your collection and query definitions, set **Seed Document Count**, turn **Drop Collections First** on, and turn **Skip Seed Phase** off.
-3. **Record & Replay > Seed & Determinism**: set **Random Seed** to any non-zero value (for example `42`). The same seed gives both servers identical starting documents.
-4. **Record & Replay > Record**:
-   - **Record Workload**: On.
+1. Choose **Record a workload**. In **Basic settings**, set **MongoDB URI** (Target Connection) to the current server.
+2. Set **Workload to record** (above the settings level) to **Custom definitions**. In **Basic settings > Data & Query Definitions**, pick your collection and query definitions, set **Seed Document Count**, turn **Drop Collections First** on, and turn **Skip Seed Phase** off.
+3. Turn on **Advanced**. **Record & replay > Seed & Deterministic Traffic**: set **Random Seed** to any non-zero value (for example `42`). The same seed gives both servers identical starting documents.
+4. **Basic settings > Record** (**Record Workload** is already On in this mode):
    - **Recording File (server path)**: for example `rec.ndjson.zst`.
    - **Recording Compression**: `zstd`.
    - For long or busy runs, set **When the Writer Falls Behind** to **Block workers** so every operation is captured.
-5. **Record & Replay > Multi-Target**: set **Starting-Data Fingerprint** to **Counts and indexes**. Every replay then checks that its target starts with the same data.
-6. **Record & Replay > Outcomes**: **Record Outcomes**: On. Optionally turn on **Result Checksums** to compare the actual documents returned.
+5. **Record & replay > Multi-Target Replay & Starting Data**: set **Starting-Data Fingerprint** to **Counts and indexes**. Every replay then checks that its target starts with the same data.
+6. **Record & replay > Outcome Capture**: **Record Outcomes**: On. Optionally turn on **Result Checksums** to compare the actual documents returned.
 7. Click **Launch Workload** (bottom right).
 
-![Record & Replay tab, Record sub-tab: Record Workload on, a zstd recording file, and the writer settings](../images/settings_record_replay.png)
+![Record section: Record Workload on, a zstd recording file, and the writer settings](../images/settings_record_replay.png)
 
 ### Step 2: Replay on the new instance
 
-1. **Execution / Runtime**: change **MongoDB URI** to the new server. Leave the seed and data settings unchanged.
-2. **Record & Replay > Record**: **Record Workload**: Off. Record and replay cannot both be on.
-3. **Record & Replay > Replay**:
-   - **Replay Workload**: On.
+1. Choose **Replay a recorded workload** (this turns Record Workload off and Replay Workload on; they cannot both be on). In **Basic settings**, change **MongoDB URI** to the new server. Leave the data settings unchanged.
+2. Keep the same collection and query definitions selected in **Data & Query Definitions**.
+3. **Basic settings > Replay**:
    - **Recording to Replay (server path)**: the file from step 1, or use **or upload a recording**.
    - **Replay Mode**: **Per worker** sends operations as fast as possible; **Timed** keeps the recorded pacing and reports lag.
    - **Replay Operations**: **Reads only** if writes must not change the target's data.
-4. **Record & Replay > Outcomes**: keep **Record Outcomes** On and set **Replay Outcome File (server path)**, for example `outcomes-new.ndjson`.
+4. **Record & replay > Outcome Capture** (Advanced): keep **Record Outcomes** On and set **Replay Outcome File (server path)**, for example `outcomes-new.ndjson`.
 5. Click **Launch Workload**.
 
 ### Step 3: Compare
@@ -66,11 +64,11 @@ The screenshot shows a recording made on MongoDB 8.0 (side A) compared with its 
 
 ### Shortcut: replay on several servers in one run
 
-Instead of step 2, open **Record & Replay > Multi-Target**, click **Add target** for each server (2 to 8, each with a label such as `m8` and a URI), choose **Sequential** or **Concurrent** in **Targets Mode**, and set the **Replay Outcome File**. One launch replays on every target and compares each one with the first. The UI asks for confirmation before a run that replays writes, drops, or seeds targets.
+Instead of step 2, open **Record & replay > Multi-Target Replay & Starting Data** (Advanced), click **Add target** for each server (2 to 8, each with a label such as `m8` and a URI), choose **Sequential** or **Concurrent** in **Targets Mode**, and set the **Replay Outcome File**. One launch replays on every target and compares each one with the first. The UI asks for confirmation before a run that replays writes, drops, or seeds targets.
 
 ### Replaying real application traffic
 
-Use **Record & Replay > Import Traffic**: choose your mongod JSON logs or `system.profile` export in **Captured Traffic Files**, click **Convert**, then **Use for replay**. Continue with step 2. See [Import Captured Traffic](#import-captured-traffic).
+Choose **Replay a recorded workload**, turn on **Advanced**, and use **Record & replay > Import Captured Traffic**: choose your mongod JSON logs or `system.profile` export in **Captured Traffic Files**, click **Convert**, then **Use for replay**. Continue with step 2. See [Import Captured Traffic](#import-captured-traffic).
 
 > **Handle these files like production data.** Recordings, outcome files, comparison reports, and trend stores with query values enabled contain real query values.
 
@@ -143,9 +141,9 @@ improved/regressed labels never change.
 
 ## Record and Replay settings
 Run the exact same operations, with the same values, on two instances: record on one,
-replay on the other. All settings are on the Web UI's **Record & Replay** tab (sub-tabs
-**Seed & Determinism**, **Record**, **Replay**, **Multi-Target**, **Outcomes**, and
-**Import Traffic**) and are off by default. Record and replay cannot both be on for the
+replay on the other. In the Web UI, **Record** and **Replay** are in **Basic settings** of the matching task; seed,
+multi-target, outcome, and import settings are in the **Record & replay** category (Advanced).
+All are off by default. Record and replay cannot both be on for the
 same run, and neither works with the raw injector.
 
 - **Random seed** (`random_seed`, UI: Seed & Determinism > **Random Seed**). Set (non-zero): seeds data and query generation, so the
@@ -213,7 +211,7 @@ Use this when you want the same generated workload, with the same values, on two
 instances, for a set amount of time, without saving a recording file. A typical case is
 a 30-second comparison of two MongoDB versions that start from the same seeded data.
 
-Settings are on **Record & Replay > Seed & Determinism** and are off by default.
+Settings are on **Record & replay > Seed & Deterministic Traffic** (Advanced; generic, custom, and record runs) and are off by default.
 
 **Duration is how long the measured run lasts.** **Operations per Worker** is one pass
 of that workload, not a reason to stop early. Each worker sends that many operations,
@@ -228,9 +226,9 @@ continue until the clock reaches 30 seconds. The run is one run, not a new launc
 
 **In the Web UI:**
 
-1. **Workload Configuration**: set **Duration** (for example `30s`) and a fixed **Concurrency**.
-2. **Record & Replay > Seed & Determinism**: set **Random Seed** (non-zero), turn on **Deterministic traffic**, and set **Operations per Worker**. Turning **Deterministic traffic** on also turns **Drop Collections First** on, turns **Skip Seed Phase** off, and sets **Load Profile** to **Fixed**. Turning it off restores the previous values.
-3. Optional, to compare later: **Record & Replay > Outcomes**: turn on **Record Outcomes** and set **Deterministic Outcome File (server path)**.
+1. **Basic settings > Workload Control**: set **Duration** (for example `30s`) and a fixed **Concurrency**.
+2. Turn on **Advanced**. **Record & replay > Seed & Deterministic Traffic**: set **Random Seed** (non-zero), turn on **Deterministic traffic**, and set **Operations per Worker**. Turning **Deterministic traffic** on also turns **Drop Collections First** on, turns **Skip Seed Phase** off, and sets **Load Profile** to **Fixed**. Turning it off restores the previous values. The note under the setting links to those Basic settings.
+3. Optional, to compare later: **Record & replay > Outcome Capture**: turn on **Record Outcomes** and set **Deterministic Outcome File (server path)**.
 4. Click **Launch Workload**. Repeat on the second instance with the same settings, including the same Duration.
 
 **How to read the dashboard**
@@ -251,7 +249,7 @@ Only hashes are stored, never query values. In Trends, two complete runs with th
 
 Turning **Deterministic traffic** on in the Web UI sets `drop_collections`, clears `skip_seed`, and selects a fixed load profile.
 
-Requirements, checked before the run starts (the Web UI opens the Workload tab): a non-zero
+Requirements, checked before the run starts (the Web UI opens the category of the setting to fix and focuses it): a non-zero
 `random_seed`; `operations_per_worker` > 0; `drop_collections` on and `skip_seed` off, so the
 records a query looks up are the seeded documents, regenerated from the seed instead of read
 from the database (or the worker's own inserts, with deterministic `_id`s); a fixed worker
@@ -268,7 +266,7 @@ version or to the collection or query definitions, which changes the fingerprint
 
 ## Operation Outcomes
 Keep what every operation returned so two executions of the same traffic can be compared
-offline. Settings are on **Record & Replay > Outcomes** and are off by default.
+offline. Settings are on **Record & replay > Outcome Capture** (Advanced) and are off by default.
 
 - **Record outcomes** (`workload_record_outcomes`, UI: **Record Outcomes**). Each operation gets an `outcome`: client
   latency (`latency_us`), `ok`, or the server error code and code name (`error_code`,
@@ -349,7 +347,7 @@ each with the first, in one run.
 **In the Web UI:**
 
 1. Set up the replay (or deterministic traffic) and outcomes as in the [quick start](#quick-start-in-the-web-ui).
-2. **Record & Replay > Multi-Target**: click **Add target** for each instance (2 to 8). Give each a short label (for example `m8`) and its URI. The **MongoDB URI** on Execution / Runtime is not used.
+2. **Record & replay > Multi-Target Replay & Starting Data** (Advanced): click **Add target** for each instance (2 to 8). Give each a short label (for example `m8`) and its URI. The **MongoDB URI** in Target Connection is not used.
 3. **Targets Mode**: **Sequential** (one after another) or **Concurrent** (all at once from this host).
 4. **Starting-Data Fingerprint**: **Counts and indexes** to check every target before the first operation.
 5. Click **Launch Workload** and confirm. The comparisons appear in **Query & Index Analysis > Replay Comparison**.
@@ -423,12 +421,12 @@ and [Compare Replays](#compare-replays).
 
 **In the Web UI:**
 
-1. Open **Record & Replay > Import Traffic**.
+1. Choose **Replay a recorded workload**, turn on **Advanced**, and open **Record & replay > Import Captured Traffic**.
 2. Choose one or more files in **Captured Traffic Files**.
 3. Optional: set **Import Workers** (maps connections onto N workers), **Default Database**, **Imported Recording Compression**, and **Skip server-generated values**.
 4. Click **Convert**. The import report lists what was converted, skipped, and flagged.
 5. Click **Use for replay** to set the replay path to the converted file, or **Download recording** to save it.
-6. Because the recording runs against data you restored yourself, turn **Skip Seed Phase** on and **Drop Collections First** off on **Data / Query Mix**, then replay as in [step 2 of the quick start](#step-2-replay-on-the-new-instance).
+6. Because the recording runs against data you restored yourself, turn **Skip Seed Phase** on and **Drop Collections First** off in **Basic settings > Data & Query Definitions**, then replay as in [step 2 of the quick start](#step-2-replay-on-the-new-instance).
 
 The server keeps the newest 5 converted files (mode 0600) and deletes them when it is shut down from the UI.
 

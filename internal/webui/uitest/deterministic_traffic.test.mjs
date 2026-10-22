@@ -44,9 +44,10 @@ test('loaded config values fill the deterministic controls', async () => {
 test('incomplete deterministic settings block the run on the Record & Replay tab', async () => {
     const { w, doc, errors } = await page();
     const set = (id, v) => { doc.getElementById(id).value = v; };
-    const check = msg => {
+    // Prerequisites in Workload Control (Basic settings) are focused there.
+    const check = (msg, tab = 'tab-replay') => {
         assert.equal(w.validateConfigForm(), false);
-        assert.ok(doc.getElementById('tab-replay').classList.contains('active'));
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, tab, `focus moves to the setting to fix: ${msg}`);
         assert.match(doc.getElementById('configInlineError').textContent, msg);
     };
     set('operationsPerWorker', '-2');
@@ -63,13 +64,13 @@ test('incomplete deterministic settings block the run on the Record & Replay tab
     doc.getElementById('dropColl').checked = true;
     doc.getElementById('skipSeed').checked = false;
     set('loadProfileKind', 'ramp');
-    check(/fixed worker count/);
+    check(/fixed worker count/, 'tab-workload');
     set('loadProfileKind', 'fixed');
     doc.getElementById('dropColl').checked = false;
-    check(/Drop Collections on and Skip Seed off/);
+    check(/Drop Collections on and Skip Seed off/, 'tab-mix');
     doc.getElementById('dropColl').checked = true;
     doc.getElementById('skipSeed').checked = true;
-    check(/Drop Collections on and Skip Seed off/);
+    check(/Drop Collections on and Skip Seed off/, 'tab-mix');
     doc.getElementById('skipSeed').checked = false;
     set('workloadReplayEnabled', 'true');
     set('workloadReplayPath', 'in.ndjson');

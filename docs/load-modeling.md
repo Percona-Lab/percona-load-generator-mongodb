@@ -22,7 +22,7 @@ active worker counts are exposed in `/api/stats` (`concurrencyTarget`,
 
 **In the Web UI:**
 
-1. Open **Workload Configuration > Workload Control**.
+1. Choose **Run a generic workload** or **Run a custom workload**, then find **Workload Control** in **Basic settings**.
 2. Set **Duration (e.g. 60s, 5m)** for the whole run.
 3. Pick a **Load Profile**. The fields for that profile appear:
    - **Fixed**: **Concurrency (Active Workers)**.
@@ -32,9 +32,9 @@ active worker counts are exposed in `/api/stats` (`concurrencyTarget`,
    - **Sine**: **Min Workers**, **Max Workers**, **Period (e.g. 30s)**.
 4. Click **Launch Workload**. The dashboard shows the target and active worker counts as the profile runs.
 
-The same tab also holds [Think Time / Pacing](#think-time--pacing) and the [Access Pattern](#access-pattern-skew). Here a ramp from 2 to 8 workers over 20 seconds is combined with 1 ms think time plus up to 2 ms jitter and Zipfian access:
+[Think Time / Pacing](#think-time--pacing) and the [Access Pattern](#access-pattern-skew) are in **Workload execution > Client Pacing & Access Pattern** (Advanced). Here a ramp from 2 to 8 workers over 20 seconds is combined with 1 ms think time plus up to 2 ms jitter and Zipfian access:
 
-![Workload Configuration tab: ramp load profile, think time, and Zipfian access pattern](../images/settings_workload.png)
+![Workload Control and Client Pacing & Access Pattern: ramp load profile, think time, and Zipfian access pattern](../images/settings_workload.png)
 
 **In `config.yaml`:**
 
@@ -102,7 +102,7 @@ Add a per-worker delay between operations to emulate realistic clients or hold a
 steady, sub-saturation request rate. Pacing time is excluded from measured
 operation latency.
 
-**In the Web UI:** open **Workload Configuration > Client Pacing & Access Pattern > Think Time / Pacing** and set **Think Time (ms)** and, optionally, **Think Jitter (ms)**.
+**In the Web UI:** turn on **Advanced** and open **Workload execution > Client Pacing & Access Pattern > Think Time / Pacing** and set **Think Time (ms)** and, optionally, **Think Jitter (ms)**.
 
 ```yaml
 think_time_ms: 0     # fixed delay between operations
@@ -117,7 +117,7 @@ Control which existing records are selected for find/update/delete targeting.
 Skewed access exposes cache pressure and lock/hot-shard contention that uniform
 access hides.
 
-**In the Web UI:** open **Workload Configuration > Client Pacing & Access Pattern > Access Pattern** and choose a **Pattern**:
+**In the Web UI:** turn on **Advanced** and open **Workload execution > Client Pacing & Access Pattern > Access Pattern** and choose a **Pattern**:
 
 - **Uniform**: every record equally likely.
 - **Zipfian**: power-law skew. Set **Zipfian Exponent (≥ 1.0)**; higher means more skew.
@@ -194,7 +194,7 @@ rather than failing the whole inference.
 
 **In the Web UI:**
 
-1. Open **Data / Query Mix > Schema Inference from Query Logs**.
+1. Choose **Run a custom workload** (or **Record a workload** with custom definitions), turn on **Advanced**, and open **Data & queries > Schema Inference from Query Logs**.
 2. Paste the log lines or documents into the text box.
 3. Click **Infer Schema** and review the suggested collections, queries, and mix.
 4. Click **Apply Suggested Mix** to fill the **Operation Mix Allocation** fields.

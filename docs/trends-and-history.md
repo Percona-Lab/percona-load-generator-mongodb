@@ -9,6 +9,7 @@ Trends need the post-run query analysis. See [Query and Index Analysis](./query-
 - [Configure trend history in the Web UI](#configure-trend-history-in-the-web-ui)
 - [Compare runs in the Web UI](#compare-runs-in-the-web-ui)
 - [Where history is stored](#where-history-is-stored)
+- [Completed run dashboards](#completed-run-dashboards)
 - [History, labels, and pinning](#history-labels-and-pinning)
 - [Comparison](#comparison)
 - [Sharing](#sharing)
@@ -21,7 +22,7 @@ Trends need the post-run query analysis. See [Query and Index Analysis](./query-
 
 ## Configure trend history in the Web UI
 
-1. Start the UI with `./plgm --webui` and open the **Trends & History** settings tab.
+1. Start the UI with `./plgm --webui`, choose a task, turn on **Advanced**, and open the **Trends & history** category.
 2. Under **Trend History**, set:
    - **Runs to keep**: how many unpinned runs to keep (default 5, up to 50).
    - **Age expiry (days)**: unpinned runs older than this are shown as outdated and not compared (default 30, `0` = never).
@@ -29,14 +30,14 @@ Trends need the post-run query analysis. See [Query and Index Analysis](./query-
    - **Run label**: a name for the runs you start with these settings, for example `7.0-baseline`. Leave empty to use `mongo-<server version>`.
    - **Store path**: leave empty for the default location, enter a file path to use another file, or `off` to turn history off.
    - **Store query values**: leave off unless you need to check whether two runs used the same values. See [Store query values](#store-query-values).
-3. Make sure **Query Analysis (Explain) > Enable Post-Run Explain Sampling** is on (the default).
+3. Make sure **Query analysis > Post-Run Explain > Enable Post-Run Explain Sampling** is on (the default).
 4. Click **Launch Workload**. When the run finishes, it is added to the history.
 
-![Trends & History settings tab: Trend History settings and the Stored Runs list with rename, pin, and delete](../images/settings_trends.png)
+![Trends & history: Trend History settings and the Stored Runs list with rename, pin, and delete](../images/settings_trends.png)
 
 ### Manage stored runs
 
-The **Stored Runs** list on the same tab shows every run with its label, server version, age, and source.
+The **Stored Runs** list in the same category shows every run with its label, server version, age, and source.
 
 - **Rename** a run: edit the label and click **Rename**.
 - **Pin** a run you want to keep as a reference, for example "7.0 baseline" or "before the new index". Pinned runs never get cleaned up. You can pin up to 10.
@@ -75,6 +76,27 @@ export PLGM_TREND_BASELINE_STORE=/path/to/plgm-trend-baselines.json
 export PLGM_TREND_BASELINE_STORE=off   # no history and no trend comparison
 ```
 
+## Completed run dashboards
+
+The **Completed Runs** list is the dashboard for a finished run: charts, latency, operation counts, the redacted configuration, and the query-analysis report when that report was built before the process exited. It is not the trend-baseline file. Trend comparison still uses `trend_baselines.json`.
+
+Dashboards are one JSON file per run, schema `rd-1`, mode `0600`, in a `run_dashboards` directory next to the trend file:
+
+```bash
+~/.config/plgm/run_dashboards/                         # Linux
+~/Library/Application Support/plgm/run_dashboards/     # macOS
+```
+
+A custom `trend_baseline_store` such as `/data/trends.json` uses `/data/run_dashboards`. Setting the trend store to `off` turns off trend comparison only. Dashboards still use the default directory above. The list reports the directory it is using.
+
+The same retention settings apply: `trend_history_runs` (default 5, range 1–50) is how many unpinned dashboards are kept, newest first. Up to 10 pinned dashboards are kept beyond that. `trend_max_age_days` (default 30, `0` = never) marks an unpinned dashboard outdated; age alone does not delete it. Count pruning deletes unpinned files past the keep limit. A damaged or older file stays on disk, is listed with an error, and is not deleted and not counted as a good run. Remove that file yourself if you do not want it in the list.
+
+Files do not include the password, username, TLS file paths, or userinfo embedded in a URI. Target URIs are omitted; the file keeps target labels and a count. Query values are included only when **Store query values** is on, because that is the insights document already stored for trends. Chart samples keep the newest 3600 points (about 30 minutes at the default 500ms refresh). A run that ends before query analysis is built reopens without that analysis; the gap is labeled, not filled with zeros. A run that never started execution has no duration.
+
+`GET /api/run-history` lists runs. `GET /api/run-history/{id}` returns one dashboard. `GET /api/run-history/{id}/report` is the HTML report from the stored snapshot. `PATCH /api/run-history/{id}` with `{"pinned": true}` or `{"pinned": false}` changes the pin. These routes do not start a workload.
+
+In Docker or Kubernetes, mount the `plgm` config directory, or the parent of a custom trend-store path, on a volume. The container's writable layer is discarded when the container is removed, and the dashboard files go with it. See [Docker and Kubernetes](../k8s_and_docker.md#6-keep-completed-run-dashboards).
+
 ## History, labels, and pinning
 
 The store keeps the newest `trend_history_runs` unpinned runs (default 5); older runs and their snapshots are pruned. Every run has a label: `trend_run_label` if set, otherwise `mongo-<server version>`, or `run-<UTC time>` when the version is unknown. Rename a run later in **Trends & History**. Pin a run to keep it as a reference: pinned runs (at most 10) do not count toward `trend_history_runs`, are never pruned, and never expire. Unpinned runs older than `trend_max_age_days` (default 30; `0` = never) stay stored but are reported as `outdated` instead of compared.
@@ -87,7 +109,7 @@ Trends compare shapes across runs heuristically; they cannot tell whether two ru
 
 ## Sharing
 
-Export selected runs (or all) from **Trends & History**, or with `GET /api/trend-baselines/export?runs=<id>,<id>&source=<label>`. Import a file in the same tab (or `POST /api/trend-baselines/import`, multipart field `file` or a raw JSON body). Imports must use the current schema (`tb-2`) and stay within the limits (32 MiB, 64 runs, 500 shapes). Runs are merged by `run_id`: duplicates are skipped, and the result lists what was added, skipped, or not kept (pruned by `trend_history_runs`). Imported runs show their source label. Only the redacted trend fields are read; anything else in the file is ignored and reported. Run ids combine a UTC timestamp, a run counter, and 64 random bits, so they stay unique across machines.
+Export selected runs (or all) from **Trends & history** (settings), or with `GET /api/trend-baselines/export?runs=<id>,<id>&source=<label>`. Import a file in the same place (or `POST /api/trend-baselines/import`, multipart field `file` or a raw JSON body). Imports must use the current schema (`tb-2`) and stay within the limits (32 MiB, 64 runs, 500 shapes). Runs are merged by `run_id`: duplicates are skipped, and the result lists what was added, skipped, or not kept (pruned by `trend_history_runs`). Imported runs show their source label. Only the redacted trend fields are read; anything else in the file is ignored and reported. Run ids combine a UTC timestamp, a run counter, and 64 random bits, so they stay unique across machines.
 
 Several instances can share one store file (for example on a shared volume). Every write takes a lock file (`<store>.lock`), re-reads the file, merges its change, and replaces the file atomically. A lock older than 30 seconds is treated as stale.
 
@@ -97,7 +119,7 @@ Snapshots average about 0.75 KB per shape per run, so a full 500-shape store wit
 
 ## Settings reference
 
-| Setting | config.yaml | Environment | Default | UI (Trends & History) |
+| Setting | config.yaml | Environment | Default | UI (Trends & history) |
 |---|---|---|---|---|
 | Runs to keep (unpinned) | `trend_history_runs` | `PLGM_TREND_HISTORY_RUNS` | `5` (1–50) | Runs to keep |
 | Age expiry in days | `trend_max_age_days` | `PLGM_TREND_MAX_AGE_DAYS` | `30` (`0` = never, max 3650) | Age expiry (days) |
@@ -116,4 +138,4 @@ Runs replayed from the same recording, or generated with the same deterministic 
 
 ## Reset, delete, and migration
 
-Use **Reset baselines** (Trends view or Trends & History, or `DELETE /api/trend-baselines`) to clear all runs; `DELETE /api/trend-baselines/runs/<id>` removes one, and `PATCH` with `{"label": "...", "pinned": true}` renames or pins it. A `tb-1` file from an earlier version is migrated on load: each stored snapshot becomes the first history entry, and the file is rewritten as `tb-2` on the next save. An unreadable or unsupported file is moved aside (renamed with a `.corrupt-` or `.unsupported-` suffix), never deleted.
+Use **Reset baselines** (Trends view or the Trends & history settings, or `DELETE /api/trend-baselines`) to clear all runs; `DELETE /api/trend-baselines/runs/<id>` removes one, and `PATCH` with `{"label": "...", "pinned": true}` renames or pins it. A `tb-1` file from an earlier version is migrated on load: each stored snapshot becomes the first history entry, and the file is rewritten as `tb-2` on the next save. An unreadable or unsupported file is moved aside (renamed with a `.corrupt-` or `.unsupported-` suffix), never deleted.

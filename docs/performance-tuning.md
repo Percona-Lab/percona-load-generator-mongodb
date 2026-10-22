@@ -31,7 +31,7 @@ export GOMAXPROCS=2
 
 ## Concurrency & Workers
 
-**Web UI:** **Workload Configuration > Workload Control > Concurrency (Active Workers)**. To vary the worker count during the run, see [Load Profiles](./load-modeling.md#load-profiles-load-shaping).
+**Web UI:** **Basic settings > Workload Control > Concurrency (Active Workers)**. To vary the worker count during the run, see [Load Profiles](./load-modeling.md#load-profiles-load-shaping).
 
 * **`concurrency`**: Controls the number of "Active Workers" continuously executing operations against the database.
     * *Tip:* Increase this to generate higher load. If set too high on a weak client, you may see increased client-side latency.
@@ -39,9 +39,9 @@ export GOMAXPROCS=2
 
 ## Connection Pooling
 
-**Web UI:** **Execution / Runtime > Runtime Transport & Pooling**: **Max Pool Size**, **Min Pool Size**, **Max Idle Time (m)**, and **Direct Connection (Bypass Topology)**.
+**Web UI:** turn on **Expert**, then **Connection > Runtime Transport & Pooling**: **Max Pool Size**, **Min Pool Size**, **Max Idle Time (m)**, and **Direct Connection (Bypass Topology)**.
 
-![Execution / Runtime tab: Runtime Transport & Pooling and Execution / Runtime Tuning](../images/settings_execution.png)
+![Runtime Transport & Pooling and Execution / Runtime Tuning settings](../images/settings_execution.png)
 
 These settings control the MongoDB driver's connection pool. Proper sizing prevents workers from waiting for available connections.
 
@@ -57,7 +57,7 @@ These settings control the MongoDB driver's connection pool. Proper sizing preve
 
 ## Operation Optimization
 
-**Web UI:** **Execution / Runtime > Execution / Runtime Tuning**: **Find Batch Size**, **Find Limit**, **Insert Batch Size**, **Seed Batch Size**, **Seed Concurrency**, **Insert Cache Size**, **Op Timeout (ms)**, and **Use `FindOne` when limit is 1** (recommended).
+**Web UI:** turn on **Expert**, then **Workload execution > Execution / Runtime Tuning** (generic, custom, and record runs): **Find Batch Size**, **Find Limit**, **Insert Batch Size**, **Seed Batch Size**, **Seed Concurrency**, **Insert Cache Size**, **Op Timeout (ms)**, and **Use `FindOne` when limit is 1** (recommended).
 
 These settings affect the efficiency of individual database operations and memory usage.
 
@@ -79,7 +79,7 @@ These settings affect the efficiency of individual database operations and memor
 
 ## Timeouts & Reliability
 
-**Web UI:** **Op Timeout (ms)** is on **Execution / Runtime > Execution / Runtime Tuning**. Retries are on **Expert / Debug**: open **Show Expert Retry Controls** and set **Retry Attempts** and **Retry Backoff (ms)**.
+**Web UI (Expert):** **Op Timeout (ms)** is on **Workload execution > Execution / Runtime Tuning**. Retries are on **Workload execution > Debug / Experimental**: open **Show Expert Retry Controls** and set **Retry Attempts** and **Retry Backoff (ms)**.
 
 Control how PLGM reacts to network lag or database pressure.
 
@@ -92,7 +92,7 @@ Control how PLGM reacts to network lag or database pressure.
 
 ## Workload Iterations & Scheduling
 
-**Web UI:** **Workload Configuration > Iterations**: **Iterations (Run Count)** and **Interval Delay (e.g. 5s, 1m)**.
+**Web UI:** turn on **Advanced**; **Iterations (Run Count)** and **Interval Delay (e.g. 5s, 1m)** appear in **Basic settings > Workload Control**.
 
 Control how PLGM repeats a given workload and schedules the time between runs.
 
@@ -128,7 +128,7 @@ If your target MongoDB cluster enforces TLS/SSL, configure the TLS client files.
 
 **Web UI:**
 
-1. Open **Execution / Runtime > TLS Client Settings**.
+1. Turn on **Expert** and open **Connection > TLS Client Settings**.
 2. Use the file pickers to choose the **TLS CA File** and the **TLS Certificate Key File** (combined certificate and key PEM).
 3. Click **Launch Workload**. The files are saved to temporary paths and used for the connection.
 

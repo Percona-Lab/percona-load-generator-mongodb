@@ -12,6 +12,9 @@ import (
 // older samples are dropped.
 const defaultMaxUIChartPoints = 3600
 
+// UIChartPointCap is the number of dashboard samples kept for a run.
+func UIChartPointCap() int { return defaultMaxUIChartPoints }
+
 // UIChartOps is one throughput or cumulative-total sample, in operations.
 type UIChartOps struct {
 	Total     float64 `json:"total"`

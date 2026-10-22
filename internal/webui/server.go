@@ -94,6 +94,11 @@ type WebServer struct {
 	// multiTargetRefInsights is its reference target's final insights.
 	multiTarget            *multitarget.Plan
 	multiTargetRefInsights *stats.InsightsReport
+	// runHistory stores completed dashboards. It is nil in unit tests unless a
+	// test assigns a temp store, so tests do not write the user config directory.
+	runHistory    *RunHistory
+	dashboardID   string
+	dashboardMode string
 }
 
 type lifecycleEvent struct {
@@ -125,11 +130,16 @@ func NewServer(cfg *config.AppConfig) *WebServer {
 	if err != nil {
 		log.Printf("Warning: definition library disabled: %v", err)
 	}
+	var history *RunHistory
+	if !runningUnderTest() {
+		history = OpenRunHistory(runDashboardDir(cfg))
+	}
 	s := &WebServer{
 		AppConfig:       cfg,
 		TrendStore:      openTrendStoreFor(cfg),
 		LifecyclePhase:  "idle",
 		DefinitionStore: defStore,
+		runHistory:      history,
 	}
 	if cfg != nil {
 		s.trendStoreSetting = cfg.TrendBaselineStore
@@ -277,6 +287,8 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/import-traffic", s.handleImportTraffic)
 	mux.HandleFunc("/api/import-traffic/", s.handleImportTrafficItem)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
+	mux.HandleFunc("/api/run-history", s.handleRunHistory)
+	mux.HandleFunc("/api/run-history/", s.handleRunHistoryItem)
 	mux.HandleFunc("/api/query-definitions", s.handleQueryDefinitions)
 	mux.HandleFunc("/api/query-definitions/", s.handleQueryDefinitionItem)
 	mux.HandleFunc("/api/collection-definitions", s.handleCollectionDefinitions)
@@ -971,6 +983,19 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		cfg.RawInjector.CollectionName = coln
 	}
 
+	mode := strings.TrimSpace(r.FormValue("operation_mode"))
+	if err := applyOperationMode(cfg, mode); err != nil {
+		s.abortRun(err.Error())
+		writeStartError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if mode == "" {
+		mode = inferDashboardMode(cfg)
+	}
+	s.mu.Lock()
+	s.dashboardMode = mode
+	s.mu.Unlock()
+
 	var customCollections *config.CollectionsFile
 	var customQueries *config.QueriesFile
 
@@ -1186,6 +1211,10 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.mu.Lock()
+	s.dashboardID = newDashboardID(s.RunID)
+	s.mu.Unlock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// -----------------------------------------------------------------------
@@ -1229,6 +1258,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.runWG.Add(1)
 		go func() {
 			defer s.runWG.Done()
+			defer s.persistDashboard()
 			defer func() {
 				if r := recover(); r != nil {
 					msg := fmt.Sprintf("Raw Injector crashed unexpectedly: %v", r)
@@ -1415,6 +1445,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	replayHandedOff = true
 	go func() {
 		defer s.runWG.Done()
+		defer s.persistDashboard()
 		if replayUpload != "" {
 			defer s.removeReplayUpload(replayUpload)
 		}
@@ -2309,6 +2340,14 @@ func (s *WebServer) finalInsightsReport() (*stats.InsightsReport, string) {
 	s.mu.Unlock()
 	if record {
 		recordTrendRun(trendStore, rep, run, policy)
+		if raw, err := json.Marshal(rep); err == nil && s.runHistory != nil {
+			s.mu.Lock()
+			id := s.dashboardID
+			s.mu.Unlock()
+			if err := s.runHistory.AttachInsights(id, raw, rep.Metadata.Status); err != nil {
+				logDashboard(err)
+			}
+		}
 	}
 	return &rep, "ready"
 }

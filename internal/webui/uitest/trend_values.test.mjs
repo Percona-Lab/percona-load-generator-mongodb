@@ -154,7 +154,7 @@ async function historyPage(runs, exp) {
         '/api/trend-baselines': async () => ({ body: { settings: {}, store: { status: 'ok' }, runs } }),
     });
     await settle();
-    p.doc.querySelector(`.tab-btn[onclick*="'tab-trends'"]`).click();
+    p.w.revealSetting('trendHistoryRuns', { focus: false });
     await settle();
     return { ...p, calls };
 }
