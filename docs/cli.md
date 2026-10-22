@@ -147,8 +147,8 @@ Environment Variables (Overrides):
   PLGM_WORKLOAD_REPLAY_TARGETS_MODE   sequential (default) or concurrent
   PLGM_WORKLOAD_REPLAY_OPS            all (default) or reads_only (skip and count writes)
   PLGM_WORKLOAD_DATA_FINGERPRINT      off (default), counts, or dbhash: starting-data check
-  PLGM_WORKLOAD_DETERMINISTIC         Same seed = same generated operations, no recording (true/false)
-  PLGM_OPERATIONS_PER_WORKER          Fixed op budget per worker (required when deterministic)
+  PLGM_WORKLOAD_DETERMINISTIC         Same generated workload for Duration, no recording (true/false)
+  PLGM_OPERATIONS_PER_WORKER          One pass per worker; the workload then continues until Duration (required when deterministic)
   PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH Deterministic outcome file (needs outcomes on)
 
  [Raw Injector Mode] (High Performance Hardware Test)

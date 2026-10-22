@@ -59,7 +59,7 @@ func TestWorkloadOutcomesIntegration(t *testing.T) {
 	}
 	dir := t.TempDir()
 	base := config.AppConfig{
-		Duration: "60s", StatusRefreshRateSec: 1, Concurrency: 1, RandomSeed: 2026, DropCollections: true,
+		Duration: "3s", StatusRefreshRateSec: 1, Concurrency: 1, RandomSeed: 2026, DropCollections: true,
 		WorkloadDeterministic: true, OperationsPerWorker: 300,
 		DocumentsCount: 300, SeedBatchSize: 50, SeedConcurrency: 1,
 		FindPercent: 40, AggregatePercent: 10, UpdatePercent: 20, DeletePercent: 5, InsertPercent: 15, BulkInsertPercent: 10,
@@ -106,12 +106,21 @@ func TestWorkloadOutcomesIntegration(t *testing.T) {
 
 	outA, recA, gA := runDet("a", true)
 	outB, _, gB := runDet("b", false)
-	if gA.Fingerprint != gB.Fingerprint {
-		t.Fatal("outcome capture or recording changed the generated traffic")
+	if gA.Fingerprint != gB.Fingerprint || gA.OpsGenerated <= gA.OpsPlanned || gB.OpsGenerated <= gB.OpsPlanned {
+		t.Fatalf("outcome capture or recording changed the generated traffic: %+v %+v", gA, gB)
 	}
-	a, b := byKey(outA), byKey(outB)
+	firstPass := func(m map[string]workloadrec.OutcomeLine) map[string]workloadrec.OutcomeLine {
+		out := make(map[string]workloadrec.OutcomeLine, len(m))
+		for k, l := range m {
+			if l.WorkerSeq <= uint64(base.OperationsPerWorker) {
+				out[k] = l
+			}
+		}
+		return out
+	}
+	a, b := firstPass(byKey(outA)), firstPass(byKey(outB))
 	if len(a) == 0 || len(a) != len(b) {
-		t.Fatalf("outcome counts differ: %d vs %d", len(a), len(b))
+		t.Fatalf("first-pass outcome counts differ: %d vs %d", len(a), len(b))
 	}
 	for k, la := range a {
 		if lb, ok := b[k]; !ok || resultFields(la.Outcome) != resultFields(lb.Outcome) || la.Shape != lb.Shape {

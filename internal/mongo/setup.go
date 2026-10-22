@@ -20,6 +20,30 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// SeedProgressFunc reports how many documents of one collection have been
+// inserted. inserted is between 1 and total and may arrive out of order when
+// several writers finish batches together. total is that collection's count.
+type SeedProgressFunc func(inserted, total int)
+
+type seedProgressKey struct{}
+
+// WithSeedProgress attaches a per-collection insert callback to ctx.
+func WithSeedProgress(ctx context.Context, fn SeedProgressFunc) context.Context {
+	if fn == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, seedProgressKey{}, fn)
+}
+
+// SeedProgressFrom returns the callback attached by WithSeedProgress, or nil.
+func SeedProgressFrom(ctx context.Context) SeedProgressFunc {
+	if ctx == nil {
+		return nil
+	}
+	fn, _ := ctx.Value(seedProgressKey{}).(SeedProgressFunc)
+	return fn
+}
+
 func InsertRandomDocuments(ctx context.Context, db *mongo.Database, col config.CollectionDefinition, count int, cfg *config.AppConfig) error {
 	collection := db.Client().Database(col.DatabaseName).Collection(col.Name)
 	return insertRandomDocuments(ctx, col, count, cfg, func(ctx context.Context, batch []interface{}) error {
@@ -62,6 +86,7 @@ func insertRandomDocuments(ctx context.Context, col config.CollectionDefinition,
 	modu := max(1, count/10)
 	nextLogTarget := modu
 	totalInserted := 0
+	onProgress := SeedProgressFrom(ctx)
 	var progressMu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -82,13 +107,18 @@ func insertRandomDocuments(ctx context.Context, col config.CollectionDefinition,
 					cancel(fmt.Errorf("insert batch into %s.%s: %w", col.DatabaseName, col.Name, err))
 					return
 				}
+				var inserted int
 				progressMu.Lock()
 				totalInserted += len(batch)
+				inserted = totalInserted
 				if totalInserted >= nextLogTarget || totalInserted == count {
 					logger.Info("-- Inserted %d documents...", totalInserted)
 					nextLogTarget = totalInserted + modu
 				}
 				progressMu.Unlock()
+				if onProgress != nil {
+					onProgress(inserted, count)
+				}
 			}
 		}()
 	}

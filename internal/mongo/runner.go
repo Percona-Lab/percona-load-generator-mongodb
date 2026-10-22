@@ -1512,8 +1512,9 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 		}()
 	}
 
-	// A deterministic run ends when every worker sent its budget; its
-	// duration is only a safety timeout.
+	// Deterministic workers repeat their operation budget until duration
+	// ends. timedOut is set when that deadline wins before the workers
+	// notice; a run that never finished one budget is incomplete.
 	timedOut := false
 	if wCfg.det != nil {
 		allDone := make(chan struct{})

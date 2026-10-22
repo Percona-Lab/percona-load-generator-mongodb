@@ -17,6 +17,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/db"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/definitions"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/mongo"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 	driverMongo "go.mongodb.org/mongo-driver/v2/mongo"
 )
@@ -759,6 +760,156 @@ func TestHandleStats(t *testing.T) {
 		}
 	})
 
+	t.Run("initialization clock moves before execution", func(t *testing.T) {
+		s.CurrentStats = nil
+		s.IsRunning = true
+		s.LifecyclePhase = "initializing"
+		s.LifecycleMessage = "Seeding initial data"
+		s.InitStartedAt = time.Now().Add(-2 * time.Second)
+		s.ExecStartedAt = time.Time{}
+		s.InitDurationSec = 0
+		s.CompletedAt = time.Time{}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode stats: %v", err)
+		}
+		elapsed := payload["initializationElapsedSec"].(float64)
+		if elapsed < 1.5 || elapsed > 10 {
+			t.Fatalf("initializationElapsedSec = %v, want about 2s while seeding", elapsed)
+		}
+		if payload["executionElapsedSec"].(float64) != 0 {
+			t.Fatalf("executionElapsedSec = %v, want 0 until the measured run starts", payload["executionElapsedSec"])
+		}
+		lifecycle := payload["lifecycle"].(map[string]interface{})
+		if lifecycle["initialization_elapsed_sec"].(float64) < 1.5 {
+			t.Fatalf("lifecycle.initialization_elapsed_sec = %v", lifecycle["initialization_elapsed_sec"])
+		}
+	})
+
+	t.Run("initialization clock stops when execution starts", func(t *testing.T) {
+		s.CurrentStats = stats.NewCollector()
+		s.IsRunning = true
+		s.LifecyclePhase = "running"
+		s.InitStartedAt = time.Now().Add(-5 * time.Second)
+		s.ExecStartedAt = time.Now().Add(-1 * time.Second)
+		s.InitDurationSec = 4
+		s.AppConfig = &config.AppConfig{Duration: "20s"}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode stats: %v", err)
+		}
+		if payload["initializationElapsedSec"].(float64) != 4 {
+			t.Fatalf("initializationElapsedSec = %v, want the completed preparation time", payload["initializationElapsedSec"])
+		}
+		exec := payload["executionElapsedSec"].(float64)
+		if exec < 0.5 || exec > 5 {
+			t.Fatalf("executionElapsedSec = %v, want about 1s", exec)
+		}
+	})
+
+	t.Run("reports deterministic budget when the run ends", func(t *testing.T) {
+		c := stats.NewCollector()
+		c.SetGeneratedTraffic(&stats.GeneratedTrafficInfo{
+			Status: "complete", OperationsPerWorker: 100, Workers: 4,
+			OpsSent: 400, OpsPlanned: 400, SafetyTimeout: "30s",
+		})
+		s.CurrentStats = c
+		s.IsRunning = false
+		s.LifecyclePhase = "completed"
+		s.AppConfig = &config.AppConfig{Duration: "30s", WorkloadDeterministic: true, OperationsPerWorker: 100}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		var payload map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode stats: %v", err)
+		}
+		if payload["workloadDeterministic"] != true {
+			t.Fatalf("workloadDeterministic = %v", payload["workloadDeterministic"])
+		}
+		if payload["operationsPerWorker"].(float64) != 100 {
+			t.Fatalf("operationsPerWorker = %v", payload["operationsPerWorker"])
+		}
+		g, ok := payload["generatedTraffic"].(map[string]interface{})
+		if !ok || g["status"] != "complete" || g["ops_sent"].(float64) != 400 {
+			t.Fatalf("generatedTraffic = %+v", payload["generatedTraffic"])
+		}
+	})
+
+	t.Run("chart history survives another poll", func(t *testing.T) {
+		c := stats.NewCollector()
+		c.Track("find", 4*time.Millisecond)
+		s.CurrentStats = c
+		s.IsRunning = true
+		s.LifecyclePhase = "running"
+		s.CurrentIteration = 1
+		s.ExecStartedAt = time.Now().Add(-2 * time.Second)
+		s.InitStartedAt = s.ExecStartedAt.Add(-time.Second)
+		s.InitDurationSec = 1
+		s.AppConfig = &config.AppConfig{Duration: "30s"}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		payload := decodeJSONMap(t, rec.Body.Bytes())
+		history, _ := payload["chartHistory"].([]interface{})
+		if len(history) != 1 {
+			t.Fatalf("chartHistory = %#v, want the first sample", payload["chartHistory"])
+		}
+		first, _ := history[0].(map[string]interface{})
+		if first["marker"] != "Iter 1" || first["seq"].(float64) != 1 {
+			t.Fatalf("first sample = %#v", first)
+		}
+		if payload["intervalLatency"] == nil {
+			t.Fatal("expected intervalLatency alongside chart history")
+		}
+
+		c.FindOps += 40
+		req = httptest.NewRequest(http.MethodGet, "/api/stats?chartSince=1", nil)
+		rec = httptest.NewRecorder()
+		s.handleStats(rec, req)
+		payload = decodeJSONMap(t, rec.Body.Bytes())
+		history, _ = payload["chartHistory"].([]interface{})
+		if len(history) != 1 {
+			t.Fatalf("chartHistory since 1 = %#v, want only the new sample", payload["chartHistory"])
+		}
+		second, _ := history[0].(map[string]interface{})
+		if second["seq"].(float64) != 2 {
+			t.Fatalf("second seq = %#v", second["seq"])
+		}
+		totals, _ := second["totals"].(map[string]interface{})
+		if totals["find"].(float64) != 41 {
+			t.Fatalf("totals.find = %#v, want 41", totals["find"])
+		}
+	})
+
+	t.Run("initializing does not record chart samples", func(t *testing.T) {
+		s.CurrentStats = stats.NewCollector()
+		s.IsRunning = true
+		s.LifecyclePhase = "initializing"
+		s.ExecStartedAt = time.Time{}
+		s.InitStartedAt = time.Now().Add(-time.Second)
+		s.AppConfig = &config.AppConfig{Duration: "30s"}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec := httptest.NewRecorder()
+		s.handleStats(rec, req)
+		payload := decodeJSONMap(t, rec.Body.Bytes())
+		history, ok := payload["chartHistory"].([]interface{})
+		if !ok || len(history) != 0 {
+			t.Fatalf("chartHistory during seeding = %#v, want an empty list", payload["chartHistory"])
+		}
+	})
+
 	t.Run("exposes_last_error_for_runtime_failures", func(t *testing.T) {
 		c := stats.NewCollector()
 		s.CurrentStats = c
@@ -1390,6 +1541,53 @@ func TestApplyLatencyTargetFormSetsAndClearsTargets(t *testing.T) {
 	applyLatencyTargetForm(cfg, url.Values{"insights_latency_target_avg_ms": {"-3"}, "insights_latency_target_p95_ms": {"abc"}})
 	if cfg.InsightsLatencyTargetAvgMs != 0 || cfg.InsightsLatencyTargetP95Ms != 0 {
 		t.Fatalf("invalid targets must clear rather than rate against garbage: %+v", cfg)
+	}
+}
+
+func TestSeedProgressAdvancesWithinACollection(t *testing.T) {
+	type observation struct{ done, work int }
+	var mid []observation
+	finished := make(chan struct{})
+	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1})
+	waitForRunsOnCleanup(t, s)
+	withWebUISeams(t, webuiSeams{
+		connect:           func(context.Context, *config.AppConfig, string) (*db.Connection, error) { return &db.Connection{}, nil },
+		disconnect:        func(*db.Connection, context.Context) { close(finished) },
+		createCollections: func(context.Context, *driverMongo.Database, *config.CollectionsFile, bool) error { return nil },
+		createIndexes:     func(context.Context, *driverMongo.Database, *config.CollectionsFile) error { return nil },
+		insertRandomDocs: func(ctx context.Context, _ *driverMongo.Database, col config.CollectionDefinition, count int, _ *config.AppConfig) error {
+			fn := mongo.SeedProgressFrom(ctx)
+			if fn == nil {
+				t.Errorf("missing seed progress for %s", col.Name)
+				return nil
+			}
+			fn(10, count)
+			fn(40, count)
+			fn(20, count) // an older writer finishing late must not move the percent backward
+			s.mu.Lock()
+			mid = append(mid, observation{s.LifecycleStepDone, s.LifecycleStepWork})
+			s.mu.Unlock()
+			return nil
+		},
+		runWorkload: func(context.Context, *driverMongo.Database, []config.CollectionDefinition, []config.QueryDefinition, *config.AppConfig, ...*stats.Collector) error {
+			return nil
+		},
+	})
+	req, rec := newMultipartRequest(t, map[string]string{"documents_count": "100"}, map[string]string{
+		"collections_file": `{"collections":[{"database":"db","collection":"docs","fields":{}},{"database":"db","collection":"other","fields":{}}]}`,
+		"queries_file":     `{"queries":[{"name":"find_docs","collection":"docs","operation":"find","filter":{}}]}`,
+	})
+	s.handleStart(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not finish")
+	}
+	if len(mid) != 2 || mid[0] != (observation{40, 200}) || mid[1] != (observation{140, 200}) {
+		t.Fatalf("mid-collection progress = %+v, want 40/200 then 140/200", mid)
 	}
 }
 

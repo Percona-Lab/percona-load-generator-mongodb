@@ -299,6 +299,79 @@ func TestInsertRandomDocumentsCancellation(t *testing.T) {
 	}
 }
 
+func TestInsertRandomDocumentsReportsProgress(t *testing.T) {
+	var mu sync.Mutex
+	var got []int
+	ctx := WithSeedProgress(context.Background(), func(inserted, total int) {
+		if total != 10 {
+			t.Errorf("total = %d, want 10", total)
+		}
+		mu.Lock()
+		got = append(got, inserted)
+		mu.Unlock()
+	})
+	err := insertRandomDocuments(ctx, config.CollectionDefinition{}, 10,
+		&config.AppConfig{SeedBatchSize: 3, SeedConcurrency: 4},
+		func(context.Context, []interface{}) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) < 2 {
+		t.Fatalf("progress callbacks = %v, want several updates before the collection finishes", got)
+	}
+	maxInserted := 0
+	for _, n := range got {
+		if n > maxInserted {
+			maxInserted = n
+		}
+		if n <= 0 || n > 10 {
+			t.Fatalf("inserted = %d, want 1..10", n)
+		}
+	}
+	if maxInserted != 10 {
+		t.Fatalf("last progress = %v, want a callback at 10", got)
+	}
+	sawPartial := false
+	for _, n := range got {
+		if n < 10 {
+			sawPartial = true
+		}
+	}
+	if !sawPartial {
+		t.Fatalf("progress = %v, want an update before the collection finished", got)
+	}
+}
+
+func TestInsertRandomDocumentsProgressSkipsFailedBatch(t *testing.T) {
+	var mu sync.Mutex
+	var got []int
+	ctx := WithSeedProgress(context.Background(), func(inserted, total int) {
+		mu.Lock()
+		got = append(got, inserted)
+		mu.Unlock()
+	})
+	calls := 0
+	err := insertRandomDocuments(ctx, config.CollectionDefinition{DatabaseName: "db", Name: "docs"}, 5,
+		&config.AppConfig{SeedBatchSize: 1, SeedConcurrency: 1},
+		func(context.Context, []interface{}) error {
+			calls++
+			if calls == 2 {
+				return errors.New("insert failed")
+			}
+			return nil
+		})
+	if err == nil {
+		t.Fatal("expected insert failure")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 1 || got[0] != 1 {
+		t.Fatalf("progress = %v, want only the successful batch", got)
+	}
+}
+
 func TestInsertRandomDocumentsDefaultConfig(t *testing.T) {
 	calls := 0
 	err := insertRandomDocuments(context.Background(), config.CollectionDefinition{}, 1, nil,

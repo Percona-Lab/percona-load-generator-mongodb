@@ -221,7 +221,9 @@ func (c *Collector) workloadRunMetadataLocked(md *InsightsMetadata) {
 // GeneratedTrafficInfo is the traffic fingerprint of a deterministic run
 // (workload_deterministic). It holds hashes and counts, never literal
 // values. Two complete runs with the same Fingerprint sent the same
-// commands per worker, in the same order.
+// first pass of commands per worker, in the same order. Later passes
+// continue that sequence until duration ends and are not part of the
+// fingerprint, so the number of operations sent can differ.
 type GeneratedTrafficInfo struct {
 	// Fingerprint covers the header fields below and CommandsHash.
 	Fingerprint string `json:"fingerprint"`
@@ -241,8 +243,9 @@ type GeneratedTrafficInfo struct {
 	OpsGenerated        uint64            `json:"ops_generated"`
 	OpsSent             uint64            `json:"ops_sent"`
 	WorkerHashes        map[string]string `json:"worker_hashes"`
-	// SafetyTimeout is the configured duration, which only stops a run
-	// that has not finished its operations by then.
+	// SafetyTimeout is the configured duration. The run repeats its
+	// operation budget until this elapses. It is incomplete only when
+	// duration ends before every worker finishes one pass.
 	SafetyTimeout string `json:"safety_timeout,omitempty"`
 }
 

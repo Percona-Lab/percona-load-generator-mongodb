@@ -38,7 +38,7 @@ func detQueries() []config.QueryDefinition {
 
 func detCfg() *config.AppConfig {
 	cfg := &config.AppConfig{
-		Duration: "30s", Concurrency: 3, RandomSeed: 42, StatusRefreshRateSec: 1,
+		Duration: "250ms", Concurrency: 3, RandomSeed: 42, StatusRefreshRateSec: 1,
 		WorkloadDeterministic: true, OperationsPerWorker: 200, DropCollections: true, DocumentsCount: 50,
 		InsertBatchSize: 3, FindBatchSize: 4, FindLimit: 10, ExistingRecordHitRate: 60, RecordPoolMaxSize: 1000,
 		UseTransactions: true, MaxTransactionOps: 3,
@@ -91,21 +91,21 @@ func TestDeterministicRunsSendIdenticalTraffic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a == nil || a.Status != "complete" || a.OpsGenerated != 600 || a.OpsPlanned != 600 || a.OpsSent == 0 || a.OpsSent > 600 {
+	if a == nil || a.Status != "complete" || a.OpsPlanned != 600 || a.OpsGenerated <= a.OpsPlanned || a.OpsSent == 0 {
 		t.Fatalf("traffic info = %+v", a)
 	}
 	if a.Fingerprint != b.Fingerprint || a.CommandsHash != b.CommandsHash || !reflect.DeepEqual(a.WorkerHashes, b.WorkerHashes) || len(a.WorkerHashes) != 3 {
 		t.Fatalf("same seed and config gave different fingerprints:\n%+v\n%+v", a, b)
 	}
-	if !reflect.DeepEqual(ca.lines, cb.lines) {
-		t.Fatal("same seed and config sent different commands")
+	if !reflect.DeepEqual(firstPassLines(ca, cfgBudget(detCfg())), firstPassLines(cb, cfgBudget(detCfg()))) {
+		t.Fatal("same seed and config sent different commands in the first pass")
 	}
 	for _, kind := range []int{detStandard, detFastInsert, detFastFind, detTransaction} {
 		if ca.kinds[kind] == 0 {
 			t.Fatalf("no operation of kind %d was generated: %v", kind, ca.kinds)
 		}
 	}
-	for id, lines := range ca.lines {
+	for id, lines := range firstPassLines(ca, cfgBudget(detCfg())) {
 		h := workloadrec.NewStreamHash()
 		for _, l := range lines {
 			h.Add([]byte(l))
@@ -120,6 +120,23 @@ func TestDeterministicRunsSendIdenticalTraffic(t *testing.T) {
 }
 
 func itoa(i int) string { return strconv.Itoa(i) }
+
+func cfgBudget(cfg *config.AppConfig) int { return cfg.OperationsPerWorker }
+
+// firstPassLines is one worker's commands from the first operations_per_worker
+// pass. Later passes continue the sequence until duration ends.
+func firstPassLines(c *detCapture, budget int) map[int][]string {
+	out := map[int][]string{}
+	for id, ops := range c.ops {
+		for _, op := range ops {
+			if op.seq > uint64(budget) {
+				break
+			}
+			out[id] = append(out[id], string(op.hashLine))
+		}
+	}
+	return out
+}
 
 func TestDeterministicFingerprintChangesWithSeedAndWorkers(t *testing.T) {
 	base, _, err := runDeterministic(t, context.Background(), detCfg(), nil)
@@ -157,7 +174,8 @@ func TestDeterministicFailuresDoNotShiftLaterOps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(clean.lines, faulty.lines) {
+	budget := cfgBudget(detCfg())
+	if !reflect.DeepEqual(firstPassLines(clean, budget), firstPassLines(faulty, budget)) {
 		t.Fatal("failed operations changed the commands of later operations")
 	}
 	if failed.Status != "complete" {
@@ -275,7 +293,7 @@ func TestDeterministicIterationsShareOneFingerprint(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if first.Iterations != 1 || first.OpsPlanned != 600 {
+		if first.Iterations != 1 || first.OpsPlanned != 600 || first.OpsGenerated <= 600 || first.Status != "complete" {
 			t.Fatalf("after iteration 1: %+v", first)
 		}
 		second, c2, err := runDeterministic(t, ctx, cfg, nil)
@@ -285,15 +303,43 @@ func TestDeterministicIterationsShareOneFingerprint(t *testing.T) {
 		return second, c1, c2
 	}
 	a, a1, a2 := twoIterations()
-	if a.Iterations != 2 || a.OpsPlanned != 1200 || a.OpsGenerated != 1200 || a.Status != "complete" {
+	if a.Iterations != 2 || a.OpsPlanned != 1200 || a.OpsGenerated <= 1200 || a.Status != "complete" {
 		t.Fatalf("after iteration 2: %+v", a)
 	}
-	if reflect.DeepEqual(a1.lines, a2.lines) {
+	if reflect.DeepEqual(firstPassLines(a1, cfg.OperationsPerWorker), firstPassLines(a2, cfg.OperationsPerWorker)) {
 		t.Fatal("both iterations sent the same commands; the iteration must be part of the derivation")
 	}
 	b, _, _ := twoIterations()
 	if a.Fingerprint != b.Fingerprint {
 		t.Fatal("repeating a two-iteration run changed the fingerprint")
+	}
+}
+
+func TestDeterministicRepeatsUntilDuration(t *testing.T) {
+	cfg := detCfg()
+	cfg.Duration = "150ms"
+	cfg.OperationsPerWorker = 30
+	start := time.Now()
+	info, c, err := runDeterministic(t, context.Background(), cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) < 100*time.Millisecond {
+		t.Fatal("the run ended when the operation budget finished")
+	}
+	if info.Status != "complete" || info.OpsPlanned != 90 || info.OpsGenerated <= info.OpsPlanned {
+		t.Fatalf("repeated run: %+v", info)
+	}
+	continued := false
+	for _, ops := range c.ops {
+		for _, op := range ops {
+			if op.seq > uint64(cfg.OperationsPerWorker) {
+				continued = true
+			}
+		}
+	}
+	if !continued {
+		t.Fatal("the next operations of the same workload were not sent")
 	}
 }
 

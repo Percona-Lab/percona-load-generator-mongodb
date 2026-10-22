@@ -1494,14 +1494,34 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 
 		if !cfg.SkipSeed && cfg.DocumentsCount > 0 {
+			// Progress is in documents, not collections, so one large collection
+			// moves past 0% as batches land instead of jumping only when it finishes.
+			totalDocs := len(collectionsCfg.Collections) * cfg.DocumentsCount
+			if totalDocs < 1 {
+				totalDocs = 1
+			}
 			s.mu.Lock()
 			s.setLifecycleStepLocked("Seeding initial data", 5, 5)
-			s.setLifecycleStepProgressLocked(0, len(collectionsCfg.Collections))
+			s.setLifecycleStepProgressLocked(0, totalDocs)
 			s.addLifecycleEventLocked("init", fmt.Sprintf("Seeding up to %d documents per collection", cfg.DocumentsCount))
 			s.mu.Unlock()
-			seeded := 0
+			doneDocs := 0
 			for _, col := range collectionsCfg.Collections {
-				if err := insertRandomDocsFn(ctx, benchConn.Database, col, cfg.DocumentsCount, cfg); err != nil {
+				colCtx := mongo.WithSeedProgress(ctx, func(inserted, total int) {
+					if inserted < 0 {
+						inserted = 0
+					}
+					if total > 0 && inserted > total {
+						inserted = total
+					}
+					s.mu.Lock()
+					done := doneDocs + inserted
+					if done > s.LifecycleStepDone {
+						s.setLifecycleStepProgressLocked(done, totalDocs)
+					}
+					s.mu.Unlock()
+				})
+				if err := insertRandomDocsFn(colCtx, benchConn.Database, col, cfg.DocumentsCount, cfg); err != nil {
 					msg := fmt.Sprintf("Failed during data seeding: %v", err)
 					log.Println("UI Run Error:", msg)
 					s.mu.Lock()
@@ -1510,9 +1530,11 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 					s.mu.Unlock()
 					return
 				}
-				seeded++
+				doneDocs += cfg.DocumentsCount
 				s.mu.Lock()
-				s.setLifecycleStepProgressLocked(seeded, len(collectionsCfg.Collections))
+				if doneDocs > s.LifecycleStepDone {
+					s.setLifecycleStepProgressLocked(doneDocs, totalDocs)
+				}
 				s.mu.Unlock()
 			}
 			s.mu.Lock()
@@ -1655,12 +1677,16 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	durationStr := "0s"
 	loadProfileKind := "fixed"
 	configuredConcurrency := 0
+	workloadDeterministic := false
+	operationsPerWorker := 0
 	if s.AppConfig != nil {
 		durationStr = s.AppConfig.Duration
 		if k := strings.TrimSpace(s.AppConfig.LoadProfile.Kind); k != "" {
 			loadProfileKind = strings.ToLower(k)
 		}
 		configuredConcurrency = s.AppConfig.Concurrency
+		workloadDeterministic = s.AppConfig.WorkloadDeterministic
+		operationsPerWorker = s.AppConfig.OperationsPerWorker
 	}
 	curIter := s.CurrentIteration
 	totIter := s.TotalIterations
@@ -1750,6 +1776,16 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	if initDurationSec <= 0 && !initStartedAt.IsZero() && !execStartedAt.IsZero() {
 		initDurationSec = execStartedAt.Sub(initStartedAt).Seconds()
 	}
+	// The execution clock stays at zero until the measured run starts. During
+	// preparation the header still needs a clock that moves, so report time
+	// since initialization began separately.
+	initElapsedSec := initDurationSec
+	if lifecyclePhase == "initializing" && !initStartedAt.IsZero() {
+		initElapsedSec = now.Sub(initStartedAt).Seconds()
+	}
+	if initElapsedSec < 0 {
+		initElapsedSec = 0
+	}
 	stepProgressPct := 0.0
 	if lifecycleStepWork > 0 {
 		stepProgressPct = (float64(lifecycleStepDone) / float64(lifecycleStepWork)) * 100.0
@@ -1780,7 +1816,10 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 			"lifecycleStepProgressPct":  stepProgressPct,
 			"lifecycleRecentEvents":     lifecycleEvents,
 			"initializationDurationSec": initDurationSec,
+			"initializationElapsedSec":  initElapsedSec,
 			"executionElapsedSec":       execElapsedSec,
+			"workloadDeterministic":     workloadDeterministic,
+			"operationsPerWorker":       operationsPerWorker,
 			"lifecycle": map[string]interface{}{
 				"phase":                       lifecyclePhase,
 				"message":                     lifecycleMessage,
@@ -1791,6 +1830,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 				"step_work":                   lifecycleStepWork,
 				"step_progress_pct":           stepProgressPct,
 				"initialization_duration_sec": initDurationSec,
+				"initialization_elapsed_sec":  initElapsedSec,
 				"execution_elapsed_sec":       execElapsedSec,
 				"recent_events":               lifecycleEvents,
 			},
@@ -1806,6 +1846,13 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	// distribution. A 1s window keeps each bucket statistically meaningful.
 	collector.CaptureLatencyIntervalEvery(time.Second)
 	concTarget, concActive := collector.ConcurrencySnapshot()
+	// Snapshot the UI interval once, keep the point, and return only samples
+	// newer than chartSince so a reloaded page can redraw the run so far.
+	intervalLatency := collector.GetUILatencyTimelineAndReset()
+	if lifecyclePhase == "running" || lifecyclePhase == "completed" || lifecyclePhase == "failed" {
+		collector.RecordUIChartSample(execElapsedSec, curIter, isWait, intervalLatency)
+	}
+	chartHistory := collector.UIChartHistory(chartSinceParam(r))
 
 	statsResp := map[string]interface{}{
 		"isRunning":                 running,
@@ -1829,7 +1876,10 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"lifecycleStepProgressPct":  stepProgressPct,
 		"lifecycleRecentEvents":     lifecycleEvents,
 		"initializationDurationSec": initDurationSec,
+		"initializationElapsedSec":  initElapsedSec,
 		"executionElapsedSec":       execElapsedSec,
+		"workloadDeterministic":     workloadDeterministic,
+		"operationsPerWorker":       operationsPerWorker,
 		"lifecycle": map[string]interface{}{
 			"phase":                       lifecyclePhase,
 			"message":                     lifecycleMessage,
@@ -1840,6 +1890,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 			"step_work":                   lifecycleStepWork,
 			"step_progress_pct":           stepProgressPct,
 			"initialization_duration_sec": initDurationSec,
+			"initialization_elapsed_sec":  initElapsedSec,
 			"execution_elapsed_sec":       execElapsedSec,
 			"recent_events":               lifecycleEvents,
 		},
@@ -1865,13 +1916,25 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"distAgg":         collector.AggHist.GetStats(),
 		"distTrans":       collector.TransHist.GetStats(),
 		"distTotal":       collector.TotalHist.GetStats(),
-		"intervalLatency": collector.GetUILatencyTimelineAndReset(),
+		"intervalLatency": intervalLatency,
+		"chartHistory":    chartHistory,
 		"latencyHeatmap":  collector.LatencyHeatmap(),
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt
 	}
+	if g := collector.GeneratedTraffic(); g != nil {
+		statsResp["generatedTraffic"] = g
+	}
 	json.NewEncoder(w).Encode(statsResp)
+}
+
+func chartSinceParam(r *http.Request) int {
+	n, err := strconv.Atoi(r.URL.Query().Get("chartSince"))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // handleReport renders a self-contained HTML report for the current/last run.
@@ -1914,7 +1977,7 @@ func generatedTrafficItems(g *stats.GeneratedTrafficInfo) []report.KV {
 		{Key: "Commands Hash", Value: g.CommandsHash},
 	}
 	if g.SafetyTimeout != "" {
-		items = append(items, report.KV{Key: "Safety Timeout", Value: g.SafetyTimeout})
+		items = append(items, report.KV{Key: "Duration", Value: g.SafetyTimeout})
 	}
 	workers := make([]int, 0, len(g.WorkerHashes))
 	for k := range g.WorkerHashes {

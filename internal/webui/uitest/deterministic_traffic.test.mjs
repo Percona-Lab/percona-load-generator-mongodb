@@ -82,6 +82,56 @@ test('incomplete deterministic settings block the run on the Record & Replay tab
     assert.deepEqual(errors, []);
 });
 
+function setChecked(doc, id, on) {
+    const el = doc.getElementById(id);
+    el.checked = on;
+    el.dispatchEvent(new doc.defaultView.Event('change', { bubbles: true }));
+}
+
+test('selecting deterministic traffic sets drop, seed, and a fixed load profile', async () => {
+    const { doc, errors } = await page();
+    doc.getElementById('dropColl').checked = false;
+    doc.getElementById('skipSeed').checked = true;
+    const profile = doc.getElementById('loadProfileKind');
+    profile.value = 'ramp';
+    profile.dispatchEvent(new doc.defaultView.Event('change', { bubbles: true }));
+
+    setChecked(doc, 'workloadDeterministic', true);
+    assert.equal(doc.getElementById('dropColl').checked, true);
+    assert.equal(doc.getElementById('skipSeed').checked, false);
+    assert.equal(profile.value, 'fixed');
+    const note = doc.getElementById('workloadDeterministicAuto');
+    assert.equal(note.style.display, 'block');
+    assert.match(note.textContent, /Drop Collections First is on/);
+    const fd = new doc.defaultView.FormData(doc.getElementById('configForm'));
+    assert.equal(fd.get('drop_collections'), 'true');
+    assert.equal(fd.get('skip_seed'), null);
+    assert.equal(fd.get('load_profile_kind'), 'fixed');
+    assert.equal(fd.get('workload_deterministic'), 'true');
+
+    doc.getElementById('skipSeed').checked = true;
+    doc.getElementById('skipSeed').dispatchEvent(new doc.defaultView.Event('change', { bubbles: true }));
+    assert.equal(doc.getElementById('skipSeed').checked, false, 'skip seed stays off while deterministic traffic is on');
+
+    setChecked(doc, 'workloadDeterministic', false);
+    assert.equal(doc.getElementById('dropColl').checked, false);
+    assert.equal(doc.getElementById('skipSeed').checked, true);
+    assert.equal(profile.value, 'ramp');
+    assert.equal(note.style.display, 'none');
+    assert.deepEqual(errors, []);
+});
+
+test('a saved deterministic config applies the required settings on load', async () => {
+    const { doc, errors } = await page({ WorkloadDeterministic: true, DropCollections: false, SkipSeed: true });
+    assert.equal(doc.getElementById('dropColl').checked, true);
+    assert.equal(doc.getElementById('skipSeed').checked, false);
+    assert.match(doc.getElementById('workloadDeterministicAuto').textContent, /restores the previous values/);
+    setChecked(doc, 'workloadDeterministic', false);
+    assert.equal(doc.getElementById('dropColl').checked, false);
+    assert.equal(doc.getElementById('skipSeed').checked, true);
+    assert.deepEqual(errors, []);
+});
+
 test('same values from equal fingerprints do not mark a summary as containing literal values', async () => {
     const { w, errors } = await page();
     const traffic = { rows: [{ query_values: { state: 'same_values', source: 'same_generated_traffic', label: 'Same values: both runs generated the same deterministic traffic' } }] };

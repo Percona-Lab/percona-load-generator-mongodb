@@ -299,6 +299,9 @@ ordinary generated traffic still depends on timing (which records the shared poo
 how many operations fit in `duration`); use
 [Deterministic Generated Traffic](./record-and-replay.md#deterministic-generated-traffic) or
 [Record and Replay](./record-and-replay.md) when the operations themselves must match.
+With deterministic traffic, Duration is still how long the run lasts. Operations per Worker
+is one pass, and the same workload continues until Duration ends. That page explains how
+to read the clock, the operation counts, and the fingerprint.
 Leave `0` for time-based, non-deterministic generation.
 
 ## Operation Mix and Transactions

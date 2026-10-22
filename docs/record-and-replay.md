@@ -83,7 +83,7 @@ operations with the same values to two copies of the same data (for example Mong
 
 | Goal | Use |
 | --- | --- |
-| Same PLGM-generated traffic on each instance, no file | [Deterministic Generated Traffic](#deterministic-generated-traffic) (`workload_deterministic` + `random_seed` + `operations_per_worker`) |
+| Same PLGM-generated workload on each instance for a set length of time, no file | [Deterministic Generated Traffic](#deterministic-generated-traffic) (`workload_deterministic` + `random_seed` + `operations_per_worker` + `duration`) |
 | Exact operations captured once, replayed anywhere (also across PLGM versions or config changes) | [Record and Replay settings](#record-and-replay-settings) |
 | Real application traffic | [Import Captured Traffic](#import-captured-traffic) (`plgm import-traffic`), then replay |
 | Per-operation results to compare | [Operation Outcomes](#operation-outcomes) (`workload_record_outcomes`, optional result checksums) |
@@ -209,53 +209,62 @@ stops the recording, `block` slows the workers. Run
 `go test ./internal/workloadrec -run x -bench Recorder` to measure your host.
 
 ## Deterministic Generated Traffic
-Send the same generated operations, with the same values, on two instances without a
-recording file. Settings are on **Record & Replay > Seed & Determinism** and are off by default.
+Use this when you want the same generated workload, with the same values, on two
+instances, for a set amount of time, without saving a recording file. A typical case is
+a 30-second comparison of two MongoDB versions that start from the same seeded data.
+
+Settings are on **Record & Replay > Seed & Determinism** and are off by default.
+
+**Duration is how long the measured run lasts.** **Operations per Worker** is one pass
+of that workload, not a reason to stop early. Each worker sends that many operations,
+then keeps going with the next operations of the same workload until Duration ends.
+A failed operation or a retried transaction does not change the values of later
+operations. Each operation's values come from the random seed, the iteration, the
+worker, and the operation number.
+
+Example: 4 workers, Operations per Worker 100, Duration 30 seconds. One pass is
+4 × 100 = 400 operations. If the database finishes those in about a second, the workers
+continue until the clock reaches 30 seconds. The run is one run, not a new launch.
 
 **In the Web UI:**
 
-1. **Record & Replay > Seed & Determinism**: set **Random Seed** (non-zero), turn on **Deterministic traffic**, and set **Operations per Worker**.
-2. **Data / Query Mix**: turn **Drop Collections First** on and **Skip Seed Phase** off.
-3. **Workload Configuration**: keep **Load Profile** on **Fixed**.
-4. Optional, to compare later: **Record & Replay > Outcomes**: turn on **Record Outcomes** and set **Deterministic Outcome File (server path)**.
-5. Click **Launch Workload**. Repeat on the second instance with the same settings, then compare the two outcome files in **Query & Index Analysis > Replay Comparison**.
+1. **Workload Configuration**: set **Duration** (for example `30s`) and a fixed **Concurrency**.
+2. **Record & Replay > Seed & Determinism**: set **Random Seed** (non-zero), turn on **Deterministic traffic**, and set **Operations per Worker**. Turning **Deterministic traffic** on also turns **Drop Collections First** on, turns **Skip Seed Phase** off, and sets **Load Profile** to **Fixed**. Turning it off restores the previous values.
+3. Optional, to compare later: **Record & Replay > Outcomes**: turn on **Record Outcomes** and set **Deterministic Outcome File (server path)**.
+4. Click **Launch Workload**. Repeat on the second instance with the same settings, including the same Duration.
+
+**How to read the dashboard**
+
+- While seeding, the header clock counts preparation time and ends with `init`. That time is not part of the 30 seconds.
+- When execution starts, the clock is execution time out of Duration, for example `00:04 / 00:30`. It keeps moving until Duration ends.
+- **FINISHED** and `1 / 1 COMPLETED` mean the run lasted for Duration. The note under the header says how many operations were sent and that the smaller number is one pass. In the example, one pass is 400; a 30-second run sends more than 400.
+- **INCOMPLETE** and **BUDGET NOT FINISHED** mean Duration ended before every worker finished even one pass. The workload was too large for that time, or the database was too slow. Raise Duration or lower Operations per Worker. The note gives the reason.
+- The operation tiles (Find, Insert, Update, Delete, Aggregate) count what the database did. A bulk insert counts each document, so Insert can be higher than the number of insert commands. The pass size in the note is commands, not documents.
+- The traffic fingerprint, on the dashboard, in Download Summary, and in the HTML report, identifies the **first pass only**. The same fingerprint means those first operations were the same commands, in the same per-worker order. It does not mean both runs sent the same total. A faster instance fits more operations into the same Duration, so **sent** can be higher than **planned**. Planned is workers × Operations per Worker × iterations (one pass). Sent is everything that actually ran.
+
+Only hashes are stored, never query values. In Trends, two complete runs with the same fingerprint are annotated `same_generated_traffic`, and their query values count as `same_values`. That does not change the improved or regressed labels.
 
 **Settings:**
 
-- **Deterministic traffic** (`workload_deterministic`). On: each operation's values come
-  from its own random stream derived from (`random_seed`, iteration, worker, operation
-  number), so a failed operation or a transaction retry never shifts later operations (a
-  retried transaction reuses its values). Off (default): operations are generated as usual
-  until `duration` ends.
-- **Operations per worker** (`operations_per_worker`). Each worker sends exactly this many
-  operations per iteration; required when deterministic traffic is on. 0 (default): no
-  budget.
+- **Deterministic traffic** (`workload_deterministic`). On: generate the workload as described above. Off (default): generate operations as usual until Duration ends, with no fixed pass and no fingerprint.
+- **Operations per Worker** (`operations_per_worker`). The size of one pass. Required when deterministic traffic is on, and it must be greater than 0. 0 (default): no pass; workers simply run until Duration ends.
+
+Turning **Deterministic traffic** on in the Web UI sets `drop_collections`, clears `skip_seed`, and selects a fixed load profile.
 
 Requirements, checked before the run starts (the Web UI opens the Workload tab): a non-zero
 `random_seed`; `operations_per_worker` > 0; `drop_collections` on and `skip_seed` off, so the
-existing records a query targets are the seeded documents, regenerated from the seed instead
-of read from the database (or the worker's own inserts, with deterministic `_id`s); a fixed
-worker count (load profiles that change concurrency are rejected); no replay and no raw
-injector. Think time and access patterns are allowed. The insert cache and bootstrap are not
-used. `duration` is a safety timeout: if it is reached first, the run is marked
-`incomplete` with the reason. With `iterations` > 1 the iteration is part of each
-operation's derivation and the whole run has one fingerprint.
+records a query looks up are the seeded documents, regenerated from the seed instead of read
+from the database (or the worker's own inserts, with deterministic `_id`s); a fixed worker
+count (a load profile that changes concurrency is rejected); no replay and no raw injector.
+Think time and access patterns are allowed. The insert cache and bootstrap are not used.
+With `iterations` > 1, each iteration is part of how operations are derived, and the whole
+run has one fingerprint. Each iteration still lasts for Duration.
 
-The run metadata (`generated_traffic` in `/api/insights`), the dashboard, Download Summary,
-and the HTML report show the **traffic fingerprint**: a hash over a header (format, PLGM
-version, collections and queries definition hashes, seed, workers, operations per worker,
-iterations) and the per-worker hashes of the canonical commands sent, plus planned,
-generated, and sent counts. Only hashes are stored, never values. In Trends, two complete
-runs with the same fingerprint are annotated `same_generated_traffic` and their query
-values count as `same_values` even when no literal values were stored; this never changes
-the improved/regressed labels.
-
-Still nondeterministic: the interleaving of operations across workers (and therefore
-server-side timing, locks, and cache state); server-generated values (for example
-`$currentDate`, `$$NOW`); query results on different data (a different seed, document count,
-or pre-existing data); a filter field that follows the shard key on a sharded collection;
-and any change to PLGM's version or the collection/query definitions, which changes the
-fingerprint.
+These things can still differ between two runs: the order in which workers' operations
+interleave, and therefore locks, cache, and timing on the server; values the server fills
+in (for example `$currentDate` or `$$NOW`); results when the starting data differs; a
+filter field that follows the shard key on a sharded collection; and any change to PLGM's
+version or to the collection or query definitions, which changes the fingerprint.
 
 ## Operation Outcomes
 Keep what every operation returned so two executions of the same traffic can be compared
@@ -374,9 +383,11 @@ each with the first, in one run.
   `per_worker` mode, where it does not wait), and the summary, run report, and comparisons
   show it. In the CLI, the per-interval lines of concurrent targets interleave; each line
   starts with its target's `[label]`.
-- **Deterministic traffic.** With `workload_deterministic` instead of a replay, each target runs
-  the same generated operations; the run checks that every target reports the reference's
-  traffic fingerprint.
+- **Deterministic traffic.** With `workload_deterministic` instead of a replay, each target
+  runs the same workload for the same Duration. The run checks that every target reports
+  the reference's traffic fingerprint, which is the first pass. A faster target can send
+  more operations after that pass, so a comparison can show extra operations on that side
+  even when the fingerprint matches.
 - **Reads only.** `workload_replay_ops: reads_only` skips every write, so targets keep their
   starting data; skipped operations are counted (`ops_skipped`) and the comparison warns when
   only one side skipped writes.

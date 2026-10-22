@@ -148,7 +148,9 @@ go test -tags=integration ./internal/mongo -run TestWorkloadRecordReplayIntegrat
 
 `TestWorkloadDeterministicIntegration` runs the same deterministic workload
 twice, each time on a database freshly seeded from the same seed, and asserts
-equal complete traffic fingerprints and per-shape operation counts.
+equal complete traffic fingerprints (the first pass). Shape counts follow how
+many passes fit in the duration, so they are not required to match. The run
+continues past `operations_per_worker` until `duration` ends.
 `TestWorkloadOutcomesIntegration` runs one deterministic worker twice on freshly
 seeded copies, recording outcomes with result checksums, replays the recording
 on a third copy, and asserts every result matches per operation; a second replay
@@ -168,8 +170,9 @@ then replays it on instances B and C, sequentially and concurrently, from the
 same seeded data, and runs a concurrent deterministic workload on B and C. It
 asserts that every target completes, that its starting data matches the
 recording, that the concurrent replay reports client-side lag, that the
-deterministic traffic fingerprints are equal, and that the comparison of C with
-B has no differing operations. Every target uses the same database name, so B
+deterministic traffic fingerprints are equal (the first pass). Operations
+after that pass can differ when one target is faster, so the comparison is
+not required to have zero differing operations. Every target uses the same database name, so B
 and C must be separate `mongod` instances; the test skips unless
 `PLGM_IT_MONGO_URI_B` and `PLGM_IT_MONGO_URI_C` are set (the CI job runs one
 service and skips it). It drops its `plgm_it_multi_target_*` database on all

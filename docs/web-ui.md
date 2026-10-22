@@ -148,13 +148,17 @@ PLGM shows an explicit lifecycle so you can tell preparation apart from measured
 Important timing behavior:
 
 * Initialization time is tracked separately and is **not** treated as execution runtime
-* Execution timer and progress bar start from the execution phase
-* During initialization, the UI shows progress context (step name, progress %, and recent activity events)
+* During initialization, the header clock counts preparation time and is labeled `init`. The progress bar follows the current setup step
+* The execution timer and progress bar start when the workload itself starts. Preparation time is not included in that clock
+* With more than one iteration and an interval delay, the total on the clock includes the pauses between runs. Five runs of 30s with 10s between them is 03:10 (02:30 of workload plus four 10s pauses; there is no pause after the last run). A short note under the clock states that once execution starts. It stays hidden during initialization, while the clock is counting preparation time. See [Workload Iterations](./performance-tuning.md#workload-iterations--scheduling)
+* With deterministic traffic, Duration is the length of the measured run. Operations per Worker is one pass. When a worker finishes that pass, it continues the same workload until Duration ends. The header stays on the duration clock (`00:04 / 00:30`). **FINISHED** means the run filled that time; the note gives operations sent and the size of one pass. **INCOMPLETE** means Duration ended before every worker finished one pass. The traffic fingerprint is that first pass, so two runs can share it and still send different totals. See [Deterministic Generated Traffic](./record-and-replay.md#deterministic-generated-traffic)
+* During initialization, the UI shows progress context (step name, progress %, and recent activity events). Seeding progress advances as documents are inserted, including inside one large collection
+* Reloading the page during a run returns to that run and restores the live charts from samples kept for it, then continues. Starting again while one is already going opens the run in progress
 
 Current limitation:
 
-* Initialization progress is structured and user-visible, but still coarse-grained (step/event based)
-* It is not yet per-index/per-shard real-time streaming
+* Index creation and sharding progress are still per collection, not per index or shard
+* Chart samples kept for a reload are capped at 3,600 points (about 30 minutes at the default 500ms refresh)
 
 ## Shutting down
 

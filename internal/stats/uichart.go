@@ -1,0 +1,260 @@
+package stats
+
+import (
+	"fmt"
+	"math"
+	"sync"
+	"sync/atomic"
+)
+
+// defaultMaxUIChartPoints bounds the samples kept so a reloaded dashboard can
+// redraw the run. At the default 500ms refresh this is about 30 minutes;
+// older samples are dropped.
+const defaultMaxUIChartPoints = 3600
+
+// UIChartOps is one throughput or cumulative-total sample, in operations.
+type UIChartOps struct {
+	Total     float64 `json:"total"`
+	Find      float64 `json:"find"`
+	Insert    float64 `json:"insert"`
+	Update    float64 `json:"update"`
+	Delete    float64 `json:"delete"`
+	Aggregate float64 `json:"aggregate"`
+}
+
+// UIChartLatency is one latency sample in milliseconds. A nil field means the
+// window had no operations for that series (the chart leaves a gap).
+type UIChartLatency struct {
+	Total       *float64 `json:"total"`
+	Find        *float64 `json:"find"`
+	Insert      *float64 `json:"insert"`
+	Update      *float64 `json:"update"`
+	Delete      *float64 `json:"delete"`
+	Aggregate   *float64 `json:"aggregate"`
+	Transaction *float64 `json:"transaction"`
+}
+
+// UIChartPoint is one live-dashboard sample. Seq increases for the life of the
+// collector so a client can ask for samples after the last one it drew.
+type UIChartPoint struct {
+	Seq        int            `json:"seq"`
+	ElapsedSec float64        `json:"elapsedSec"`
+	Iteration  int            `json:"iteration,omitempty"`
+	Waiting    bool           `json:"waiting,omitempty"`
+	Marker     string         `json:"marker,omitempty"`
+	Rates      UIChartOps     `json:"rates"`
+	Totals     UIChartOps     `json:"totals"`
+	Avg        UIChartLatency `json:"avg"`
+	P95        UIChartLatency `json:"p95"`
+	P99        UIChartLatency `json:"p99"`
+}
+
+type uiLatAccum struct {
+	sum   float64
+	count float64
+}
+
+type uiChartSeries struct {
+	mu            sync.Mutex
+	points        []UIChartPoint
+	max           int
+	nextSeq       int
+	prevElapsed   float64
+	havePrev      bool
+	prevFind      uint64
+	prevInsert    uint64
+	prevUpdate    uint64
+	prevDelete    uint64
+	prevAgg       uint64
+	prevLat       map[string]uiLatAccum
+	lastIteration int
+	lastWaiting   bool
+}
+
+// RecordUIChartSample appends one dashboard sample from the current counters
+// and the interval latency snapshot the stats handler just took. Rates match
+// the live page: operations since the previous sample divided by execution
+// time since that sample. Update counts include upserts.
+func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting bool, interval map[string]map[string]float64) {
+	if c == nil {
+		return
+	}
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	find := atomic.LoadUint64(&c.FindOps)
+	insert := atomic.LoadUint64(&c.InsertOps)
+	update := atomic.LoadUint64(&c.UpdateOps) + atomic.LoadUint64(&c.UpsertOps)
+	del := atomic.LoadUint64(&c.DeleteOps)
+	agg := atomic.LoadUint64(&c.AggOps)
+
+	c.uiChart.mu.Lock()
+	defer c.uiChart.mu.Unlock()
+	st := &c.uiChart
+
+	delta := elapsed
+	if st.havePrev {
+		delta = elapsed - st.prevElapsed
+	}
+	if delta < 0.001 {
+		delta = 0.001
+	}
+	rate := func(now, prev uint64) float64 {
+		d := float64(now) - float64(prev)
+		if d < 0 {
+			d = 0
+		}
+		return math.Round(d / delta)
+	}
+	totals := UIChartOps{
+		Find:      float64(find),
+		Insert:    float64(insert),
+		Update:    float64(update),
+		Delete:    float64(del),
+		Aggregate: float64(agg),
+	}
+	totals.Total = totals.Find + totals.Insert + totals.Update + totals.Delete + totals.Aggregate
+	rates := UIChartOps{
+		Find:      rate(find, st.prevFind),
+		Insert:    rate(insert, st.prevInsert),
+		Update:    rate(update, st.prevUpdate),
+		Delete:    rate(del, st.prevDelete),
+		Aggregate: rate(agg, st.prevAgg),
+	}
+	rates.Total = rates.Find + rates.Insert + rates.Update + rates.Delete + rates.Aggregate
+
+	marker := ""
+	if iteration > 0 && iteration != st.lastIteration {
+		marker = fmt.Sprintf("Iter %d", iteration)
+		st.lastIteration = iteration
+	} else if waiting && !st.lastWaiting {
+		marker = "Wait"
+	}
+	st.lastWaiting = waiting
+	st.prevElapsed = elapsed
+	st.havePrev = true
+	st.prevFind, st.prevInsert, st.prevUpdate, st.prevDelete, st.prevAgg = find, insert, update, del, agg
+
+	avg := UIChartLatency{}
+	p95 := UIChartLatency{}
+	p99 := UIChartLatency{}
+	sum, count := histSumCount(c.TotalHist)
+	setLatency(&avg, &p95, &p99, st, "total", interval["total"], sum, count, true, waiting)
+	sum, count = histSumCount(c.FindHist)
+	setLatency(&avg, &p95, &p99, st, "find", interval["find"], sum, count, true, waiting)
+	sum, count = histSumCount(c.InsertHist)
+	setLatency(&avg, &p95, &p99, st, "insert", interval["insert"], sum, count, true, waiting)
+	uSum, uCount := histSumCount(c.UpdateHist)
+	sSum, sCount := histSumCount(c.UpsertHist)
+	setLatency(&avg, &p95, &p99, st, "update", interval["update"], uSum+sSum, uCount+sCount, true, waiting)
+	sum, count = histSumCount(c.DeleteHist)
+	setLatency(&avg, &p95, &p99, st, "delete", interval["delete"], sum, count, true, waiting)
+	sum, count = histSumCount(c.AggHist)
+	setLatency(&avg, &p95, &p99, st, "aggregate", interval["aggregate"], sum, count, true, waiting)
+	sum, count = histSumCount(c.TransHist)
+	setLatency(&avg, &p95, &p99, st, "transaction", interval["transaction"], sum, count, false, waiting)
+
+	st.nextSeq++
+	st.points = append(st.points, UIChartPoint{
+		Seq:        st.nextSeq,
+		ElapsedSec: elapsed,
+		Iteration:  iteration,
+		Waiting:    waiting,
+		Marker:     marker,
+		Rates:      rates,
+		Totals:     totals,
+		Avg:        avg,
+		P95:        p95,
+		P99:        p99,
+	})
+	limit := st.max
+	if limit <= 0 {
+		limit = defaultMaxUIChartPoints
+	}
+	if len(st.points) > limit {
+		st.points = st.points[len(st.points)-limit:]
+	}
+}
+
+// UIChartHistory returns samples with Seq greater than since, in order.
+func (c *Collector) UIChartHistory(since int) []UIChartPoint {
+	if c == nil {
+		return []UIChartPoint{}
+	}
+	c.uiChart.mu.Lock()
+	defer c.uiChart.mu.Unlock()
+	out := make([]UIChartPoint, 0)
+	for _, p := range c.uiChart.points {
+		if p.Seq > since {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func histSumCount(h *LatencyHistogram) (sum, count float64) {
+	if h == nil {
+		return 0, 0
+	}
+	st := h.GetStats()
+	return st["sum"], st["count"]
+}
+
+func setLatency(avg, p95, p99 *UIChartLatency, st *uiChartSeries, op string, bucket map[string]float64, sum, count float64, useFallback, waiting bool) {
+	var avgV, p95V, p99V *float64
+	if v, ok := intervalMetric(bucket, "avg"); ok {
+		avgV = f64p(v)
+	} else if useFallback {
+		avgV = f64p(st.avgDelta(op, sum, count))
+	}
+	if v, ok := intervalMetric(bucket, "p95"); ok {
+		p95V = f64p(v)
+	}
+	if v, ok := intervalMetric(bucket, "p99"); ok {
+		p99V = f64p(v)
+	}
+	if waiting {
+		avgV, p95V, p99V = f64p(0), f64p(0), f64p(0)
+	}
+	switch op {
+	case "total":
+		avg.Total, p95.Total, p99.Total = avgV, p95V, p99V
+	case "find":
+		avg.Find, p95.Find, p99.Find = avgV, p95V, p99V
+	case "insert":
+		avg.Insert, p95.Insert, p99.Insert = avgV, p95V, p99V
+	case "update":
+		avg.Update, p95.Update, p99.Update = avgV, p95V, p99V
+	case "delete":
+		avg.Delete, p95.Delete, p99.Delete = avgV, p95V, p99V
+	case "aggregate":
+		avg.Aggregate, p95.Aggregate, p99.Aggregate = avgV, p95V, p99V
+	case "transaction":
+		avg.Transaction, p95.Transaction, p99.Transaction = avgV, p95V, p99V
+	}
+}
+
+func intervalMetric(bucket map[string]float64, name string) (float64, bool) {
+	if len(bucket) == 0 || bucket["count"] <= 0 {
+		return 0, false
+	}
+	v, ok := bucket[name]
+	return v, ok
+}
+
+func (st *uiChartSeries) avgDelta(op string, sum, count float64) float64 {
+	if st.prevLat == nil {
+		st.prevLat = map[string]uiLatAccum{}
+	}
+	prev := st.prevLat[op]
+	st.prevLat[op] = uiLatAccum{sum: sum, count: count}
+	if count-prev.count > 0 {
+		return (sum - prev.sum) / (count - prev.count)
+	}
+	return 0
+}
+
+func f64p(v float64) *float64 {
+	p := v
+	return &p
+}

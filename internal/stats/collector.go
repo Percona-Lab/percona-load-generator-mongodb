@@ -265,6 +265,9 @@ type Collector struct {
 	// used by CaptureLatencyIntervalEvery to enforce a stable window size.
 	lastHeatmapCapUnix int64
 
+	// uiChart keeps live-dashboard samples so a reloaded page can redraw them.
+	uiChart uiChartSeries
+
 	CurrentIteration int
 	// OutputLabel, when set before Monitor starts, prefixes the CLI interval
 	// lines so concurrent multi-target tables can be told apart.

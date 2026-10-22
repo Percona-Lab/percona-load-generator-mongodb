@@ -77,7 +77,7 @@ func TestValidateWorkloadDeterministic(t *testing.T) {
 		"load profile":    {func(c *AppConfig) { c.LoadProfile = loadprofile.Config{Kind: "step"} }, "fixed worker count"},
 		"no drop":         {func(c *AppConfig) { c.DropCollections = false }, "drop_collections"},
 		"skip seed":       {func(c *AppConfig) { c.SkipSeed = true }, "skip_seed off"},
-		"no duration":     {func(c *AppConfig) { c.Duration = "0s" }, "safety timeout"},
+		"no duration":     {func(c *AppConfig) { c.Duration = "0s" }, "repeats until"},
 		"fixed is fine":   {func(c *AppConfig) { c.LoadProfile = loadprofile.Config{Kind: "fixed"} }, ""},
 		"record is fine":  {func(c *AppConfig) { c.WorkloadRecordEnabled = true }, ""},
 		"think is fine":   {func(c *AppConfig) { c.ThinkTimeMs, c.ThinkJitterMs = 5, 5 }, ""},

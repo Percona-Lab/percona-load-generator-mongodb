@@ -122,7 +122,8 @@ func checkWorkloadPath(name, path string) error {
 
 // ValidateWorkloadDeterministic rejects deterministic generation that could
 // not reproduce its traffic: it needs a non-zero random_seed, an
-// operations_per_worker budget, a positive duration (the safety timeout),
+// operations_per_worker budget, a positive duration (the run repeats
+// until it ends),
 // a fixed worker count, and freshly seeded data, because values for
 // existing records are derived from the seeded documents instead of being
 // read from the database. It cannot be combined with replay or the raw
@@ -151,7 +152,7 @@ func ValidateWorkloadDeterministic(cfg *AppConfig) error {
 		return fmt.Errorf(prefix + "workload_deterministic needs freshly seeded data: turn drop_collections on and skip_seed off, so every run starts from the documents the seed generates (existing data is not supported yet)")
 	}
 	if d, err := time.ParseDuration(strings.TrimSpace(cfg.Duration)); err == nil && d <= 0 {
-		return fmt.Errorf(prefix+"workload_deterministic needs a positive duration; it is the safety timeout (duration=%s)", cfg.Duration)
+		return fmt.Errorf(prefix+"workload_deterministic needs a positive duration; the workload repeats until it ends (duration=%s)", cfg.Duration)
 	}
 	return nil
 }

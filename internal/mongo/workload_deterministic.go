@@ -229,7 +229,7 @@ func newDeterministicRun(ctx context.Context, collections []config.CollectionDef
 	if run.maxOwn <= 0 {
 		run.maxOwn = 10000
 	}
-	log.Printf("[Deterministic] iteration %d: %d workers x %d operations, seed %d; values for existing records come from the %d seeded documents per collection and each worker's own inserts (no database reads); duration %s is only a safety timeout", iteration, workers, run.budget, run.seed, run.seeded, cfg.Duration)
+	log.Printf("[Deterministic] iteration %d: %d workers x %d operations, seed %d; values for existing records come from the %d seeded documents per collection and each worker's own inserts (no database reads); the same workload repeats until duration %s ends", iteration, workers, run.budget, run.seed, run.seeded, cfg.Duration)
 	return run, nil
 }
 
@@ -644,46 +644,62 @@ func executeDeterministicOp(ctx context.Context, wCfg workloadConfig, w *detWork
 }
 
 // deterministicWorker sends the worker's operations_per_worker operations,
-// then stops. It stops early only when ctx ends.
+// then keeps sending the next operations of that same workload until ctx
+// ends. The first pass is the traffic fingerprint. A later pass uses the
+// next operation numbers, so inserts keep distinct deterministic _ids.
+// The worker stops only when ctx ends.
 func deterministicWorker(ctx context.Context, w *detWorker) {
 	if w.wCfg.activeCount != nil {
 		atomic.AddInt64(w.wCfg.activeCount, 1)
 		defer atomic.AddInt64(w.wCfg.activeCount, -1)
 	}
+	budget := uint64(w.run.budget)
+	if budget == 0 {
+		return
+	}
 	dbOpCtx := context.Background()
-	for seq := uint64(1); seq <= uint64(w.run.budget); seq++ {
+	var passed uint64
+	for {
 		if ctx.Err() != nil {
 			return
 		}
-		op := w.generate(seq)
-		w.stream.generated++
-		if op.pause > 0 {
-			t := time.NewTimer(op.pause)
-			select {
-			case <-ctx.Done():
-				t.Stop()
+		for seq := uint64(1); seq <= budget; seq++ {
+			if ctx.Err() != nil {
 				return
-			case <-t.C:
+			}
+			op := w.generate(passed*budget + seq)
+			w.stream.generated++
+			if op.pause > 0 {
+				t := time.NewTimer(op.pause)
+				select {
+				case <-ctx.Done():
+					t.Stop()
+					return
+				case <-t.C:
+				}
+			}
+			if op.kind == detSkip {
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if passed == 0 {
+				w.stream.hash.Add(op.hashLine)
+			}
+			w.stream.sent++
+			var out *workloadrec.Outcome
+			if w.wCfg.outcomeFile != nil || w.wCfg.recorder.Active() {
+				out = w.wCfg.newOutcome()
+			}
+			deterministicExecFn(dbOpCtx, w.wCfg, w, op, out)
+			if out != nil && w.wCfg.outcomeFile != nil {
+				w.wCfg.outcomeFile.Write(workloadrec.OutcomeLine{Worker: w.id, WorkerSeq: op.seq, Iteration: w.run.iteration, NS: op.ns, Op: op.opType, Shape: op.shape, Outcome: *out})
 			}
 		}
-		if op.kind == detSkip {
-			continue
-		}
-		if ctx.Err() != nil {
-			return
-		}
-		w.stream.hash.Add(op.hashLine)
-		w.stream.sent++
-		var out *workloadrec.Outcome
-		if w.wCfg.outcomeFile != nil || w.wCfg.recorder.Active() {
-			out = w.wCfg.newOutcome()
-		}
-		deterministicExecFn(dbOpCtx, w.wCfg, w, op, out)
-		if out != nil && w.wCfg.outcomeFile != nil {
-			w.wCfg.outcomeFile.Write(workloadrec.OutcomeLine{Worker: w.id, WorkerSeq: op.seq, Iteration: w.run.iteration, NS: op.ns, Op: op.opType, Shape: op.shape, Outcome: *out})
-		}
+		w.stream.completed = true
+		passed++
 	}
-	w.stream.completed = true
 }
 
 func (c workloadConfig) dbName() string {

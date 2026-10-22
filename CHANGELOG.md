@@ -5,6 +5,35 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v5.1.0 - Runs Last for Duration, and the Web UI Stays With the Run
+
+This release keeps a workload going for the time you configured, and keeps the Web UI attached to that run. Deterministic traffic no longer stops when the first pass of operations finishes. Checking that box also sets Drop Collections, Skip Seed, and a fixed load profile for you. The header clock moves during seeding, explains a total that includes pauses between iterations, and a reload returns you to the run that is already going.
+
+**Highlights**
+
+**Changed: Deterministic traffic runs until Duration**
+- `duration` is how long the measured run lasts. `operations_per_worker` is one pass, not a reason to stop. When a worker finishes that pass, it continues the same workload with the next operation numbers until Duration ends. A run that ends before every worker finishes one pass is marked incomplete, with the reason.
+- The traffic fingerprint still identifies that first pass only (hashes, never values). Two runs with the same fingerprint sent the same first-pass commands per worker. A faster instance can send more operations after that pass, so **sent** can be higher than **planned**. Planned is workers × Operations per Worker × iterations.
+- Reports label that configured time as Duration. In v5.0.0 the same field was called a safety timeout, and the run stopped when the pass finished.
+
+**New: Checking Deterministic traffic configures the required settings**
+- Turning **Deterministic traffic** on sets the settings that mode requires: **Drop Collections First** on, **Skip Seed Phase** off, and **Load Profile** to Fixed. A note under the checkbox states what changed. Turning the checkbox off restores the values those fields had before.
+- The CLI and config file are unchanged. `workload_deterministic` still requires those settings itself; the Web UI now applies them when you check the box.
+
+**Web UI**
+- During initialization the header clock counts preparation time and is labeled `init` (for example `00:12 init`). Seeding progress advances as documents are inserted, including inside one large collection. The execution clock starts when the workload itself starts, and preparation time is not included.
+- With more than one iteration and an interval delay, the clock total includes the pauses between runs. Five runs of 30s with 10s between them is 03:10 (02:30 of workload plus four 10s pauses; there is no pause after the last run). A short note under the clock states that once execution starts. The note stays hidden during initialization.
+- Reloading the page during a run returns to that run, with **Stop Workload** still available, and restores the live charts from samples kept for it (about 30 minutes at the default 500ms refresh). Starting again while a workload is already running opens that run instead of reporting "workload is already running".
+
+**Fixes**
+- Fixed a hang on the fast-find path when pooled records had no integer key for the lookup field. Sampling now stops after a bounded number of draws, and when the run is canceled.
+- Fixed the Stored Runs list on Trends & History, which did not appear because its container reused the id of the "Runs to keep" field.
+
+**Testing & Docs**
+- README is now a short overview, quick start, and index. Feature guides with Web UI steps are in `docs/` (web UI, CLI, workloads, load modeling, query analysis, trends and history, record and replay, reports and exports, raw injector, performance tuning, and the configuration reference).
+- Documented the deterministic duration behavior and the checkbox defaults in `docs/record-and-replay.md`, `docs/web-ui.md`, `docs/workloads.md`, `docs/cli.md`, `docs/performance-tuning.md`, and `docs/configuration-reference.md`: how long a run lasts, how to read FINISHED and INCOMPLETE, operation tiles versus command counts, the first-pass fingerprint, and that checking **Deterministic traffic** sets Drop Collections, Skip Seed, and a fixed load profile. Also documented the header total when iterations have an interval delay.
+- Extended unit and jsdom tests for the initialization clock, reload and reattach, deterministic duration, seeding progress, the fast-find bound, and the iteration-total note.
+
 ## v5.0.0 - Reproducible Workloads: Record, Replay, and Compare Instances
 
 This release makes PLGM an upgrade- and migration-testing tool. You can send the exact same operations, with the same values, to two or more MongoDB instances, then compare what each one returned and how fast, operation by operation. Every new feature is opt-in and off by default; with the defaults, runs, recordings, and stored trends are unchanged.

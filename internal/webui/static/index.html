@@ -113,12 +113,27 @@
             gap: 12px;
         }
 
+        .timer-block {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+            max-width: 280px;
+        }
+
         .timer-text {
             font-family: monospace;
             font-size: 16px;
             font-weight: 500;
             color: white;
             letter-spacing: 0.3px;
+        }
+
+        .timer-note {
+            font-size: 11px;
+            line-height: 1.3;
+            color: rgba(255, 255, 255, 0.85);
+            text-align: right;
         }
 
         .lifecycle-hint {
@@ -1132,6 +1147,14 @@
                 justify-content: flex-start;
             }
 
+            .timer-block {
+                align-items: flex-start;
+            }
+
+            .timer-note {
+                text-align: left;
+            }
+
             .header-bottom {
                 flex-direction: column;
                 align-items: flex-start;
@@ -2141,7 +2164,10 @@
                 </div>
 
                 <div class="header-runtime">
-                    <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
+                    <div class="timer-block">
+                        <div id="timerDisplay" class="timer-text">00:00 / 00:00</div>
+                        <div id="timerNote" class="timer-note" style="display:none;"></div>
+                    </div>
                     <button type="button" class="btn-exit" onclick="shutdownApp()" title="Shut down the PLGM backend">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
@@ -2962,14 +2988,15 @@
                                     <label for="workloadDeterministic">Deterministic traffic</label>
                                 </div>
                             </div>
-                            <div class="settings-note" id="workloadDeterministicNote"><strong>On:</strong> every operation is generated from the random seed, iteration, worker, and operation number, so two runs with the same settings send the same commands with the same values, without a recording file. Each worker sends exactly Operations per Worker operations; failures and retries do not shift later operations. Needs a non-zero Random Seed, Drop Collections on and Skip Seed off, and a fixed worker count; Duration becomes a safety timeout (the run is marked incomplete if it is hit). The insert cache and bootstrap are not used, and the run reports a traffic fingerprint (hashes only). Cross-worker interleaving, server-generated values, and results on different data can still differ. <strong>Off (default):</strong> operations are generated as usual until Duration ends. <span class="setting-keys"><code>workload_deterministic</code> / <code>PLGM_WORKLOAD_DETERMINISTIC</code></span></div>
+                            <div class="settings-note" id="workloadDeterministicNote"><strong>On:</strong> every operation is generated from the random seed, iteration, worker, and operation number, so two runs with the same settings send the same commands with the same values, without a recording file. Each worker sends Operations per Worker operations and then continues that same workload until Duration ends; failures and retries do not shift later operations. Needs a non-zero Random Seed, Drop Collections on and Skip Seed off, and a fixed worker count. Turning this on sets Drop Collections First on, Skip Seed Phase off, and Load Profile to Fixed. If Duration ends before that first pass finishes, the run is marked incomplete. The insert cache and bootstrap are not used, and the run reports a traffic fingerprint (hashes only). Cross-worker interleaving, server-generated values, and results on different data can still differ. <strong>Off (default):</strong> operations are generated as usual until Duration ends. <span class="setting-keys"><code>workload_deterministic</code> / <code>PLGM_WORKLOAD_DETERMINISTIC</code></span>
+                                <p id="workloadDeterministicAuto" style="display:none; margin: 8px 0 0;"></p></div>
                         </div>
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="operationsPerWorker">Operations per Worker</label>
                                 <input type="number" name="operations_per_worker" id="operationsPerWorker" value="0" min="0" step="1">
                             </div>
-                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> each worker sends exactly this many operations per iteration; required when Deterministic traffic is on. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
+                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> one pass of a deterministic workload. When a worker finishes this many operations before Duration ends, it continues the same workload. Required when Deterministic traffic is on. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
                         </div>
                     </div>
                 </section>
@@ -4605,6 +4632,46 @@
             }
             return validateReplayTargets(recordOn, replayOn, detOn, outcomesOn, replayOutPath, detOutPath);
         }
+        // Values from before Deterministic traffic was turned on, restored if it is turned off.
+        let deterministicOverrides = null;
+        function applyDeterministicRequirements() {
+            const det = document.getElementById('workloadDeterministic');
+            const drop = document.getElementById('dropColl');
+            const skip = document.getElementById('skipSeed');
+            const lp = document.getElementById('loadProfileKind');
+            const note = document.getElementById('workloadDeterministicAuto');
+            if (!det || !drop || !skip) return;
+            if (!det.checked) {
+                if (deterministicOverrides) {
+                    drop.checked = deterministicOverrides.drop;
+                    skip.checked = deterministicOverrides.skip;
+                    if (lp && deterministicOverrides.loadProfile != null) {
+                        lp.value = deterministicOverrides.loadProfile;
+                        onLoadProfileKindChange();
+                    }
+                    deterministicOverrides = null;
+                }
+                if (note) note.style.display = 'none';
+                return;
+            }
+            if (!deterministicOverrides) {
+                deterministicOverrides = {
+                    drop: drop.checked,
+                    skip: skip.checked,
+                    loadProfile: lp ? lp.value : 'fixed'
+                };
+            }
+            drop.checked = true;
+            skip.checked = false;
+            if (lp && lp.value !== 'fixed') {
+                lp.value = 'fixed';
+                onLoadProfileKindChange();
+            }
+            if (note) {
+                note.style.display = 'block';
+                note.textContent = 'Drop Collections First is on, Skip Seed Phase is off, and Load Profile is Fixed. Turning Deterministic traffic off restores the previous values.';
+            }
+        }
         function validateConfigForm() {
             if (selectedQueryNeedsSortReview()) {
                 showTab('tab-mix');
@@ -5259,6 +5326,7 @@
         let lastRuntimeErrorShown = '';
         let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
         let lastExecutionElapsed = 0;
+        let chartPointsApplied = 0;
         let lastLat = {
             total: { sum: 0, count: 0 },
             find: { sum: 0, count: 0 },
@@ -5315,6 +5383,12 @@
 
         document.addEventListener("DOMContentLoaded", function () {
             initCharts();
+            document.getElementById('workloadDeterministic').addEventListener('change', applyDeterministicRequirements);
+            ['dropColl', 'skipSeed', 'loadProfileKind'].forEach(id => {
+                document.getElementById(id).addEventListener('change', () => {
+                    if (document.getElementById('workloadDeterministic')?.checked) applyDeterministicRequirements();
+                });
+            });
             document.getElementById('insightsExplainEnabled').addEventListener('change', updateExplainOffWarning);
             updateExplainOffWarning();
             document.addEventListener('keydown', (e) => {
@@ -5418,6 +5492,7 @@
                 document.getElementById('workloadReplayMode').value = cfg.WorkloadReplayMode === 'timed' ? 'timed' : 'per_worker';
                 document.getElementById('workloadReplayAllowMismatch').value = cfg.WorkloadReplayAllowMismatch ? 'true' : 'false';
                 document.getElementById('workloadDeterministic').checked = !!cfg.WorkloadDeterministic;
+                applyDeterministicRequirements();
                 document.getElementById('operationsPerWorker').value = cfg.OperationsPerWorker || 0;
                 document.getElementById('workloadRecordOutcomes').value = cfg.WorkloadRecordOutcomes ? 'true' : 'false';
                 document.getElementById('workloadRecordResultChecksums').value = cfg.WorkloadRecordResultChecksums ? 'true' : 'false';
@@ -5440,6 +5515,7 @@
                 }
                 loadDefinitionLibrary();
             });
+            resumeRunningWorkload();
 
             ['collection', 'query'].forEach(kind => {
                 const importInput = importFileFor(kind);
@@ -6107,7 +6183,7 @@
                 `Fingerprint: <code id="generatedTrafficFingerprint">${escHtml(g.fingerprint || '')}</code>`,
                 `Status: <strong id="generatedTrafficStatus">${escHtml(g.status || '')}</strong>${g.reason ? ` (${escHtml(g.reason)})` : ''}`,
                 `Random seed ${escHtml(String(g.random_seed))} | ${Number(g.workers || 0)} workers × ${Number(g.operations_per_worker || 0)} operations | ${Number(g.iterations || 1)} iteration(s) | planned ${Number(g.ops_planned || 0)}, generated ${Number(g.ops_generated || 0)}, sent ${Number(g.ops_sent || 0)}`,
-                `PLGM ${escHtml(g.plgm_version || '')} | collections hash ${escHtml(String(g.collections_hash || '').slice(0, 12))} | queries hash ${escHtml(String(g.queries_hash || '').slice(0, 12))} | commands hash ${escHtml(String(g.commands_hash || '').slice(0, 12))}${g.safety_timeout ? ` | safety timeout ${escHtml(g.safety_timeout)}` : ''}`,
+                `PLGM ${escHtml(g.plgm_version || '')} | collections hash ${escHtml(String(g.collections_hash || '').slice(0, 12))} | queries hash ${escHtml(String(g.queries_hash || '').slice(0, 12))} | commands hash ${escHtml(String(g.commands_hash || '').slice(0, 12))}${g.safety_timeout ? ` | duration ${escHtml(g.safety_timeout)}` : ''}`,
                 `<details><summary>Per-worker hashes (${workers.length})</summary>${workers.map(w => `<div>worker ${escHtml(w)}: <code>${escHtml(g.worker_hashes[w])}</code></div>`).join('')}</details>`,
                 'Two complete runs with the same fingerprint sent the same commands, with the same values, in the same order per worker. Cross-worker interleaving, server-generated values, and results on different data can still differ.'
             ];
@@ -7823,9 +7899,104 @@
                 });
         }
 
+        function updateTimerNote(duration, iterations, intervalDelay, show) {
+            const note = document.getElementById('timerNote');
+            if (!note) return;
+            const iters = Number(iterations) || 1;
+            const intervalSecs = parseDuration(intervalDelay || '0s');
+            const pauses = Math.max(0, iters - 1);
+            if (show && iters > 1 && intervalSecs > 0 && pauses > 0) {
+                const runLabel = String(duration || '').trim() || formatTime(parseDuration(duration || '0s'));
+                const pauseLabel = String(intervalDelay || '').trim() || formatTime(intervalSecs);
+                note.textContent = `${iters} runs of ${runLabel}, plus ${pauseLabel} between runs (${pauses} ${pauses === 1 ? 'pause' : 'pauses'}).`;
+                note.style.display = 'block';
+            } else {
+                note.textContent = '';
+                note.style.display = 'none';
+            }
+        }
+
+        function targetSecondsFromParts(duration, iterations, intervalDelay) {
+            const durSecs = parseDuration(duration || '0s');
+            const iters = Number(iterations) || 1;
+            const intervalSecs = parseDuration(intervalDelay || '0s');
+            return (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
+        }
+
+        function targetSecondsFromStats(stats) {
+            return targetSecondsFromParts(stats && stats.duration, stats && stats.totalIterations, stats && stats.intervalDelay);
+        }
+
+        function openLiveDashboard(seconds) {
+            document.getElementById('configForm').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('dashboardControls').style.display = 'flex';
+            document.getElementById('activeActions').style.display = 'block';
+            document.getElementById('finishActions').style.display = 'none';
+            showInsightsTab('overview');
+            showQueryAnalysisTab('efficiency');
+            // Reset live dashboard to the first tab; this also hides the
+            // panels that belong to other tabs (e.g. insights).
+            showDashTab('overview');
+            renderLatencyHeatmap([]);
+            document.getElementById('progressBar').style.width = "0%";
+            finalInsightsData = null;
+            renderFinalInsights({ metadata: { status: 'pending' }, summary: {} });
+            if (seconds != null && !Number.isNaN(Number(seconds))) targetSeconds = Number(seconds);
+
+            histLabels = [];
+            histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+            histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+            histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
+            histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+            histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+            histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
+            latencyMetricVisibility = { avg: false, p95: false, p99: true };
+            latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
+            zoomState.active = false;
+            zoomState.dragging = false;
+            zoomState.sourceCanvasId = '';
+            updateZoomControls();
+            updateLatencyToggleUI();
+            lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
+            lastExecutionElapsed = 0;
+            chartPointsApplied = 0;
+            lastLat = {
+                total: { sum: 0, count: 0 },
+                find: { sum: 0, count: 0 },
+                insert: { sum: 0, count: 0 },
+                update: { sum: 0, count: 0 },
+                delete: { sum: 0, count: 0 },
+                aggregate: { sum: 0, count: 0 }
+            };
+
+            globalMarkers = [];
+            lastKnownIteration = 0;
+            lastKnownWaiting = false;
+            lastLifecyclePhase = 'idle';
+            document.getElementById('iterationBadge').style.display = 'block';
+
+            goToLive();
+            startTime = Date.now();
+            startPolling();
+        }
+
+        // A reload during a run used to show the settings form while the
+        // workload kept going. Reattach so Start is not rejected as already running.
+        function resumeRunningWorkload() {
+            fetch('/api/stats?chartSince=0')
+                .then(r => r.ok ? r.json() : null)
+                .then(stats => {
+                    if (!stats || !stats.isRunning) return;
+                    openLiveDashboard(targetSecondsFromStats(stats));
+                    applyLiveStats(stats);
+                })
+                .catch(() => {});
+        }
+
         function launchWorkload(formData) {
             lastFormData = formData;
-                        lastRuntimeErrorShown = '';
+            lastRuntimeErrorShown = '';
             fetch('/api/start', { method: 'POST', body: formData })
                 .then(async r => {
                     const bodyText = await r.text();
@@ -7840,68 +8011,28 @@
                             definitionState.query.selected.sortOrderReview = data.sortOrderReview;
                             renderSortOrderReview(definitionState.query.selected);
                         }
+                        if (r.status === 409) {
+                            const statsRes = await fetch('/api/stats?chartSince=0');
+                            const stats = statsRes.ok ? await statsRes.json() : null;
+                            if (stats && stats.isRunning) {
+                                openLiveDashboard(targetSecondsFromStats(stats));
+                                applyLiveStats(stats);
+                                return { status: 'attached' };
+                            }
+                        }
                         const message = (data && data.message) ? data.message : bodyText;
                         throw new Error(message || `HTTP ${r.status}`);
                     }
                     return data;
                 })
                 .then(data => {
+                    if (!data || data.status === 'attached') return;
                     if (data.status === 'started') {
-                        document.getElementById('configForm').style.display = 'none';
-                        document.getElementById('dashboard').style.display = 'block';
-                        document.getElementById('dashboardControls').style.display = 'flex';
-                        document.getElementById('activeActions').style.display = 'block';
-                        document.getElementById('finishActions').style.display = 'none';
-                        showInsightsTab('overview');
-                        showQueryAnalysisTab('efficiency');
-                        // Reset live dashboard to the first tab; this also hides the
-                        // panels that belong to other tabs (e.g. insights).
-                        showDashTab('overview');
-                        renderLatencyHeatmap([]);
-                        document.getElementById('progressBar').style.width = "0%";
-                        finalInsightsData = null;
-                        renderFinalInsights({ metadata: { status: 'pending' }, summary: {} });
-
-                        const durSecs = parseDuration(formData.get('duration'));
-                        const iters = parseInt(formData.get('iterations')) || 1;
-                        const intervalSecs = parseDuration(formData.get('interval_delay') || '0s');
-                        targetSeconds = (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
-
-                        histLabels = [];
-                        histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-                        histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-                        histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-                        histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-                        histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-                        histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-                        latencyMetricVisibility = { avg: false, p95: false, p99: true };
-                        latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
-                        zoomState.active = false;
-                        zoomState.dragging = false;
-                        zoomState.sourceCanvasId = '';
-                        updateZoomControls();
-                        updateLatencyToggleUI();
-                        lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
-                        lastExecutionElapsed = 0;
-                        lastLat = {
-                            total: { sum: 0, count: 0 },
-                            find: { sum: 0, count: 0 },
-                            insert: { sum: 0, count: 0 },
-                            update: { sum: 0, count: 0 },
-                            delete: { sum: 0, count: 0 },
-                            aggregate: { sum: 0, count: 0 }
-                        };
-
-                        globalMarkers = [];
-                        lastKnownIteration = 0;
-                        lastKnownWaiting = false;
-                        lastLifecyclePhase = 'idle';
-                        document.getElementById('iterationBadge').style.display = 'block';
-
-                        goToLive();
-
-                        startTime = Date.now();
-                        startPolling();
+                        openLiveDashboard(targetSecondsFromParts(
+                            formData.get('duration'),
+                            formData.get('iterations'),
+                            formData.get('interval_delay') || '0s'
+                        ));
                     }
                 }).catch(err => {
                     showError("Failed to start workload: " + (err && err.message ? err.message : String(err)));
@@ -7910,13 +8041,106 @@
 
         function stopWorkload() { fetch('/api/stop', { method: 'POST' }); }
 
-        function startPolling() {
+        function stopPolling() {
             if (pollInterval) clearInterval(pollInterval);
+            pollInterval = null;
+        }
 
-            pollInterval = setInterval(() => {
-                fetch('/api/stats')
+        function liveStatsURL() {
+            return '/api/stats?chartSince=' + chartPointsApplied;
+        }
+
+        function markerFromSample(sample) {
+            const text = sample && sample.marker ? String(sample.marker) : '';
+            if (!text) return null;
+            let color = colors.amethyst;
+            if (text === 'Wait') color = colors.sunrise;
+            else if (text === 'Exec Start') color = colors.aqua;
+            else if (text === 'Failed') color = colors.red;
+            else if (text === 'Finished') color = colors.forest;
+            return { text, color };
+        }
+
+        function metricOrNull(bucket, key) {
+            if (!bucket || bucket[key] === null || bucket[key] === undefined || bucket[key] === '') return null;
+            const n = Number(bucket[key]);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function pushChartSample(sample) {
+            const rates = sample.rates || {};
+            const totals = sample.totals || {};
+            const avg = sample.avg || {};
+            const p95 = sample.p95 || {};
+            const p99 = sample.p99 || {};
+            const elapsed = Number(sample.elapsedSec || 0);
+            histLabels.push(formatTime(elapsed));
+            ['total', 'find', 'insert', 'update', 'delete', 'aggregate'].forEach(op => {
+                histRates[op].push(Math.max(0, Math.round(Number(rates[op] || 0))));
+                histTotals[op].push(Number(totals[op] || 0));
+                histLats[op].push(metricOrNull(avg, op) ?? 0);
+            });
+            latencyOps.forEach(op => {
+                histLatTimelineAvg[op].push(metricOrNull(avg, op));
+                histLatTimelineP95[op].push(metricOrNull(p95, op));
+                histLatTimelineP99[op].push(metricOrNull(p99, op));
+            });
+            globalMarkers.push(markerFromSample(sample));
+            if (sample.iteration) lastKnownIteration = Number(sample.iteration);
+            lastKnownWaiting = !!sample.waiting;
+            lastExecutionElapsed = elapsed;
+            lastStats = {
+                total: Number(totals.total || 0),
+                find: Number(totals.find || 0),
+                insert: Number(totals.insert || 0),
+                update: Number(totals.update || 0),
+                delete: Number(totals.delete || 0),
+                aggregate: Number(totals.aggregate || 0)
+            };
+        }
+
+        // Server samples are the chart. A reload asks from seq 0 and redraws the
+        // run so far; later polls append only samples after chartPointsApplied.
+        function applyChartHistory(stats) {
+            const samples = stats.chartHistory;
+            if (!Array.isArray(samples) || samples.length === 0) return;
+            let added = 0;
+            for (const sample of samples) {
+                const seq = Number(sample && sample.seq || 0);
+                if (seq <= chartPointsApplied) continue;
+                pushChartSample(sample);
+                chartPointsApplied = seq;
+                added++;
+            }
+            if (added === 0) return;
+            const maxIdx = histRates.find.length - 1;
+            const scrubber = document.getElementById('timeScrubber');
+            if (scrubber) scrubber.max = maxIdx;
+            if (isLiveMode && stats.isRunning && scrubber) {
+                scrubber.value = maxIdx;
+                renderChartsAt(maxIdx);
+            }
+        }
+
+        function startPolling() {
+            stopPolling();
+            const tick = () => {
+                fetch(liveStatsURL())
                     .then(r => r.json())
-                    .then(stats => {
+                    .then(applyLiveStats)
+                    .catch(err => {
+                        console.error("Polling error:", err);
+                        if (err.message && err.message.includes("Unexpected end of JSON")) {
+                            console.log("Ignored partial JSON load.");
+                        } else {
+                            showError("UI Render Error: " + err.message + ". The backend may have stopped unexpectedly; check the terminal log for the first panic/error.");
+                        }
+                    });
+            };
+            pollInterval = setInterval(tick, currentRefreshRate);
+        }
+
+        function applyLiveStats(stats) {
                         if (stats.lastError && stats.lastError !== lastRuntimeErrorShown) {
                             lastRuntimeErrorShown = stats.lastError;
                             showError("Workload error: " + stats.lastError);
@@ -7939,7 +8163,15 @@
                                 const eventMsg = latestEvent && latestEvent.message ? ` • ${latestEvent.message}` : '';
                                 lifecycleHintEl.textContent = `${stepPrefix} (${pct}%): ${lifecycleStep || stats.lifecycleMessage || 'Preparing workload resources'}${eventMsg}`;
                             } else if (lifecyclePhase === 'running') {
-                                lifecycleHintEl.textContent = `Initialization completed in ${initializationDuration.toFixed(2)}s. Execution timer excludes preparation time.`;
+                                let hint = `Initialization completed in ${initializationDuration.toFixed(2)}s. Execution timer excludes preparation time.`;
+                                if (stats.workloadDeterministic) {
+                                    const ops = Number(stats.operationsPerWorker || 0);
+                                    const safety = stats.duration
+                                        ? formatTime(targetSecondsFromParts(stats.duration, stats.totalIterations, stats.intervalDelay))
+                                        : formatTime(targetSeconds);
+                                    hint += ` Deterministic traffic sends ${ops} operations per worker, then continues that same workload until ${safety}.`;
+                                }
+                                lifecycleHintEl.textContent = hint;
                             } else if (lifecyclePhase === 'failed') {
                                 lifecycleHintEl.textContent = stats.lifecycleMessage || 'Run failed.';
                             } else {
@@ -7953,13 +8185,25 @@
                             const iters = stats.totalIterations || 1;
                             const intervalSecs = parseDuration(stats.intervalDelay || '0s');
                             targetSeconds = (durSecs * iters) + (intervalSecs * Math.max(0, iters - 1));
+                            updateTimerNote(stats.duration, iters, stats.intervalDelay || '0s', lifecyclePhase !== 'initializing');
                         }
 
-                        const displayElapsed = Math.min(executionElapsed, targetSeconds > 0 ? targetSeconds : executionElapsed);
-                        const timeStr = formatTime(displayElapsed);
-                        document.getElementById('timerDisplay').textContent = `${timeStr} / ${formatTime(targetSeconds)}`;
-
-                        if (targetSeconds > 0) document.getElementById('progressBar').style.width = Math.min((executionElapsed / targetSeconds) * 100, 100) + "%";
+                        const initElapsed = Number(stats.initializationElapsedSec || 0);
+                        const timerEl = document.getElementById('timerDisplay');
+                        const progressEl = document.getElementById('progressBar');
+                        if (stats.isRunning && lifecyclePhase === 'initializing') {
+                            timerEl.textContent = `${formatTime(initElapsed)} init`;
+                            timerEl.title = 'Time spent preparing the workload. The run clock starts when execution starts.';
+                            const prepPct = Number.isFinite(lifecycleStepProgressPct) ? Math.max(0, Math.min(100, lifecycleStepProgressPct)) : 0;
+                            progressEl.style.width = prepPct + '%';
+                        } else {
+                            const displayElapsed = Math.min(executionElapsed, targetSeconds > 0 ? targetSeconds : executionElapsed);
+                            timerEl.textContent = `${formatTime(displayElapsed)} / ${formatTime(targetSeconds)}`;
+                            timerEl.title = stats.workloadDeterministic
+                                ? 'Execution time. Deterministic traffic repeats the same workload until this duration ends.'
+                                : 'Execution time. Preparation time is not included.';
+                            if (targetSeconds > 0) progressEl.style.width = Math.min((executionElapsed / targetSeconds) * 100, 100) + '%';
+                        }
 
                         // Latency heatmap (always update so the Latency Analysis tab is current).
                         renderLatencyHeatmap(stats.latencyHeatmap);
@@ -7995,7 +8239,10 @@
                             updateLatRow('delete', stats.distDelete);
                             updateLatRow('agg', stats.distAgg);
                             updateLatRow('trans', stats.distTrans);
-
+                        }
+                        if (Array.isArray(stats.chartHistory)) {
+                            applyChartHistory(stats);
+                        } else if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
                             const cFind = stats.findOps || 0;
                             const cInsert = stats.insertOps || 0;
                             const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
@@ -8168,18 +8415,37 @@
 
                         // === 2. HANDLE STOPPING / FINISHED STATE ===
                         if (!stats.isRunning) {
+                            const traffic = stats.generatedTraffic;
+                            const budgetDone = traffic && traffic.status === 'complete';
+                            const budgetShort = traffic && traffic.status === 'incomplete';
                             const isFailed = lifecyclePhase === 'failed';
-                            badge.textContent = isFailed ? "FAILED" : "FINISHED";
-                            badge.style.background = isFailed ? colors.red : "rgba(255,255,255,0.2)";
-                            badge.style.color = isFailed ? "white" : "white";
+                            badge.textContent = isFailed ? "FAILED" : (budgetShort ? "INCOMPLETE" : "FINISHED");
+                            badge.style.background = (isFailed || budgetShort) ? (isFailed ? colors.red : "var(--p-sunrise)") : "rgba(255,255,255,0.2)";
+                            badge.style.color = (isFailed || budgetShort) ? "var(--p-night)" : "white";
+                            if (isFailed) badge.style.color = "white";
                             document.getElementById('activeActions').style.display = 'none';
                             document.getElementById('finishActions').style.display = 'block';
 
                             const iterBadge = document.getElementById('iterationBadge');
-                            iterBadge.textContent = isFailed
-                                ? `FAILED DURING ${lifecyclePhase.toUpperCase()}${stats.lifecycleMessage ? ': ' + stats.lifecycleMessage : ''}`
-                                : `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
-                            iterBadge.style.background = isFailed ? colors.red : 'var(--p-forest)';
+                            if (isFailed) {
+                                iterBadge.textContent = `FAILED DURING ${lifecyclePhase.toUpperCase()}${stats.lifecycleMessage ? ': ' + stats.lifecycleMessage : ''}`;
+                                iterBadge.style.background = colors.red;
+                            } else if (budgetShort) {
+                                iterBadge.textContent = 'BUDGET NOT FINISHED';
+                                iterBadge.style.background = 'var(--p-sunrise)';
+                                if (lifecycleHintEl) lifecycleHintEl.textContent = traffic.reason || 'Duration ended before every worker finished one pass of the workload.';
+                            } else {
+                                iterBadge.textContent = `${stats.totalIterations || 1} / ${stats.totalIterations || 1} COMPLETED`;
+                                iterBadge.style.background = 'var(--p-forest)';
+                                if (budgetDone && lifecycleHintEl) {
+                                    const sent = Number(traffic.ops_sent || 0);
+                                    const planned = Number(traffic.ops_planned || 0);
+                                    if (sent > planned) {
+                                        const until = traffic.safety_timeout || formatTime(targetSeconds);
+                                        lifecycleHintEl.textContent = `The same workload continued until ${until}. ${sent} operations were sent; ${planned} is one pass.`;
+                                    }
+                                }
+                            }
                             iterBadge.style.display = 'block';
 
                             if (executionElapsed >= targetSeconds && targetSeconds > 0) {
@@ -8331,16 +8597,6 @@
                             globalMarkers.push({ text: 'Exec Start', color: colors.aqua });
                         }
                         lastLifecyclePhase = lifecyclePhase;
-                    })
-                    .catch(err => {
-                        console.error("Polling error:", err);
-                        if (err.message && err.message.includes("Unexpected end of JSON")) {
-                            console.log("Ignored partial JSON load.");
-                        } else {
-                            showError("UI Render Error: " + err.message + ". The backend may have stopped unexpectedly; check the terminal log for the first panic/error.");
-                        }
-                    });
-            }, currentRefreshRate);
         }
 
         function shutdownApp() {

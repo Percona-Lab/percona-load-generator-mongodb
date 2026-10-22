@@ -151,7 +151,7 @@ func TestMultiTargetReplayIntegration(t *testing.T) {
 
 	t.Run("deterministic concurrent", func(t *testing.T) {
 		cfg := base
-		cfg.Duration = "60s"
+		cfg.Duration = "3s"
 		cfg.WorkloadDeterministic, cfg.OperationsPerWorker = true, 200
 		cfg.WorkloadDeterministicOutcomesPath = filepath.Join(t.TempDir(), "det.ndjson")
 		cfg.WorkloadReplayTargets = []config.ReplayTarget{{Label: "b", URI: uriB}, {Label: "c", URI: uriC}}
@@ -166,7 +166,7 @@ func TestMultiTargetReplayIntegration(t *testing.T) {
 		if res.FingerprintsMatch == nil || !*res.FingerprintsMatch || res.Targets[0].TrafficFingerprint == "" {
 			t.Fatalf("fingerprints: %+v", res.Targets)
 		}
-		if c := res.Comparisons[0]; c.Error != "" || c.DifferingOps != 0 || c.Report.Overall.Matched != 200 {
+		if c := res.Comparisons[0]; c.Error != "" || c.Report == nil || !c.Report.IdentityMatch || c.Report.Overall.Matched < 200 {
 			t.Fatalf("b vs c = %+v", c)
 		}
 	})

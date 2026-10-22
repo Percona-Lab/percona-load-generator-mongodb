@@ -318,7 +318,7 @@ func TestGeneratedTrafficReportSection(t *testing.T) {
 	for _, kv := range items {
 		joined += kv.Key + "=" + kv.Value + "\n"
 	}
-	for _, want := range []string{"Fingerprint=" + g.Fingerprint, "Status=incomplete (the safety timeout was reached)", "20 / 15 / 14", "Safety Timeout=5s"} {
+	for _, want := range []string{"Fingerprint=" + g.Fingerprint, "Status=incomplete (the safety timeout was reached)", "20 / 15 / 14", "Duration=5s"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}

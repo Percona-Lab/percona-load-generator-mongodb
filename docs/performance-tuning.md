@@ -102,6 +102,7 @@ Control how PLGM repeats a given workload and schedules the time between runs.
 * **`interval_delay`**: The amount of time to pause the workload between each iteration (e.g., `10s`, `1m`).
     * *Tip:* Adding a delay allows database background processes (like log flushing, checkpointing, or compaction) to catch up, simulating real-world batch-processing patterns.
     * *Default:* `0s`
+    * The header clock total is every iteration's Duration plus a pause after each iteration except the last. Five runs of 30s with a 10s delay is 03:10, not 02:30: 5 × 30s of workload and 4 × 10s of pauses. Once execution starts, the clock shows a short note with that breakdown. The note stays hidden during initialization. There is no pause after the final iteration.
 
 The **Insights > Iterations** view on the dashboard overlays the iterations so you can compare them.
 
