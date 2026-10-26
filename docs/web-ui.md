@@ -26,7 +26,9 @@ The Web UI does everything the CLI does. You pick a task, fill in a few fields, 
 
 PLGM listens on `127.0.0.1:9999` and opens your browser.
 
-[Watch a 90-second walkthrough](../images/plgm_walkthrough.mp4): record a workload, replay it on three servers, and open the comparison.
+90-second walkthrough: record a workload, replay it on three servers, and open the comparison.
+
+https://github.com/user-attachments/assets/daf25637-7d0d-4f3a-9d97-eeaa3b4835e4
 
 ## Your first run
 

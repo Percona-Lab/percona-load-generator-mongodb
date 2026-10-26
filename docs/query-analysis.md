@@ -93,7 +93,9 @@ The repo includes a demo with one deliberately unindexed query: [`resources/coll
 
 You should see `updateOne on fields: customer_email` at the top: scan efficiency 0, a collection scan, and most of the operation time. Add an index on `customer_email` to the collection definition, run again with the same **Run label**, and **Trends** shows it go from 0 to 100.
 
-For a quick look at the whole UI, including the analysis view after a run, see the [walkthrough video](../images/plgm_walkthrough.mp4).
+For a quick look at the whole UI, including the analysis view after a run, see the walkthrough video:
+
+https://github.com/user-attachments/assets/daf25637-7d0d-4f3a-9d97-eeaa3b4835e4
 
 ## Settings reference
 
