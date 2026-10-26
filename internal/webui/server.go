@@ -90,6 +90,17 @@ type WebServer struct {
 	replayCompares []*replaycompare.Report
 	// trafficImports are the kept converted recordings, oldest first.
 	trafficImports []*trafficImport
+	// recordingDirs are listed by /api/recordings (from the startup
+	// config); sessionRecordings are files record runs wrote, oldest first.
+	recordingDirs     []string
+	sessionRecordings []string
+	// generated are the paths the last run got because their settings were
+	// blank; they are cleared from the config served to the form and from
+	// the base of the next run, so every run gets new names.
+	generated []*generatedFile
+	// startupConfig is the configuration PLGM started with (config.yaml and
+	// environment), served for "Use defaults" and "Reset to defaults".
+	startupConfig config.AppConfig
 	// multiTarget is the plan of the current or last multi-target run;
 	// multiTargetRefInsights is its reference target's final insights.
 	multiTarget            *multitarget.Plan
@@ -140,8 +151,10 @@ func NewServer(cfg *config.AppConfig) *WebServer {
 		LifecyclePhase:  "idle",
 		DefinitionStore: defStore,
 		runHistory:      history,
+		recordingDirs:   serverRecordingDirs(cfg),
 	}
 	if cfg != nil {
+		s.startupConfig = *cfg
 		s.trendStoreSetting = cfg.TrendBaselineStore
 	}
 	return s
@@ -286,6 +299,7 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/replay-compare/", s.handleReplayCompareItem)
 	mux.HandleFunc("/api/import-traffic", s.handleImportTraffic)
 	mux.HandleFunc("/api/import-traffic/", s.handleImportTrafficItem)
+	mux.HandleFunc("/api/recordings", s.handleRecordings)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/run-history", s.handleRunHistory)
 	mux.HandleFunc("/api/run-history/", s.handleRunHistoryItem)
@@ -354,7 +368,13 @@ func (s *WebServer) Start(port int) error {
 
 func (s *WebServer) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	s.mu.Lock()
 	safeCfg := *s.AppConfig
+	if r.URL.Query().Get("defaults") == "1" {
+		safeCfg = s.startupConfig
+	}
+	forgetGeneratedPaths(&safeCfg, s.generated)
+	s.mu.Unlock()
 	safeCfg.ConnectionParams.Password = ""
 	json.NewEncoder(w).Encode(safeCfg)
 }
@@ -787,15 +807,23 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.addLifecycleEventLocked("config", "Reading run configuration and validating inputs")
 
 	baseCfg := *s.AppConfig
+	// A name generated for an earlier run is never reused.
+	forgetGeneratedPaths(&baseCfg, s.generated)
 	s.mu.Unlock()
 
 	// An uploaded replay file holds literal values; it is removed when the
 	// run ends, or here when the run does not start.
 	var replayUpload string
 	replayHandedOff := false
+	// Outcome files reserved for a blank outcome path are removed while
+	// still empty if the run does not start, or when it ends.
+	var generated []*generatedFile
 	defer func() {
 		if replayUpload != "" && !replayHandedOff {
 			_ = os.Remove(replayUpload)
+		}
+		if !replayHandedOff {
+			removeEmptyFiles(generatedPaths(generated))
 		}
 	}()
 
@@ -1183,6 +1211,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeStartError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// A blank recording name gets a new file per run instead of the fixed
+	// default; it is reserved after validation, like generated outcome files.
+	generateRecordPath := recordPathToGenerate(cfg)
+	if generateRecordPath {
+		cfg.WorkloadRecordPath = pendingRecordPath
+	}
 	config.NormalizeWorkloadRecordReplay(cfg)
 	if err := config.ValidateWorkloadRecordReplay(cfg); err != nil {
 		s.abortRun(err.Error())
@@ -1193,6 +1227,12 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.abortRun(err.Error())
 		writeStartError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// A blank outcome path the run needs gets a generated name; the files
+	// are reserved only once the settings (target labels included) are valid.
+	outcomeField := outcomePathToGenerate(cfg)
+	if outcomeField != "" {
+		setOutcomePath(cfg, outcomeField, pendingOutcomePath)
 	}
 	if err := config.ValidateWorkloadOutcomes(cfg); err != nil {
 		s.abortRun(err.Error())
@@ -1209,6 +1249,51 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.abortRun(msg)
 		writeStartError(w, http.StatusBadRequest, msg)
 		return
+	}
+	if cfg.WorkloadReplayEnabled && replayUpload == "" {
+		if err := checkReplayRecording(strings.TrimSpace(cfg.WorkloadReplayPath)); err != nil {
+			msg := "invalid workload record/replay settings: " + err.Error()
+			s.abortRun(msg)
+			writeStartError(w, http.StatusBadRequest, msg)
+			return
+		}
+	}
+	genDir := "."
+	if dirs := s.recordingDirs; len(dirs) > 0 {
+		genDir = dirs[0]
+	}
+	if generateRecordPath {
+		cfg.WorkloadRecordPath = ""
+		g, err := assignRecordPath(cfg, genDir)
+		if err != nil {
+			msg := "invalid workload record/replay settings: " + err.Error()
+			s.abortRun(msg)
+			writeStartError(w, http.StatusBadRequest, msg)
+			return
+		}
+		generated = append(generated, g)
+	}
+	if outcomeField != "" {
+		setOutcomePath(cfg, outcomeField, "")
+		g, err := assignOutcomePaths(cfg, genDir)
+		if err != nil {
+			msg := "invalid workload outcome settings: " + err.Error()
+			s.abortRun(msg)
+			writeStartError(w, http.StatusBadRequest, msg)
+			return
+		}
+		generated = append(generated, g)
+	}
+	if len(generated) > 0 {
+		s.mu.Lock()
+		s.generated = generated
+		for _, g := range generated {
+			s.addLifecycleEventLocked("config", g.note())
+		}
+		s.mu.Unlock()
+	}
+	if cfg.WorkloadRecordEnabled {
+		s.rememberRecording(cfg.WorkloadRecordPath)
 	}
 
 	s.mu.Lock()
@@ -1410,7 +1495,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 
 	if multitarget.Enabled(cfg) {
 		replayHandedOff = true
-		s.startMultiTarget(w, ctx, cancel, cfg, collectionsCfg, queriesCfg, dbName, replayUpload)
+		s.startMultiTarget(w, ctx, cancel, cfg, collectionsCfg, queriesCfg, dbName, replayUpload, generated)
 		return
 	}
 
@@ -1438,8 +1523,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.CurrentStats.CurrentIteration = 1
 	s.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	writeJSON(w, http.StatusOK, startedResponse(generated))
 
 	s.runWG.Add(1)
 	replayHandedOff = true
@@ -1448,6 +1532,9 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		defer s.persistDashboard()
 		if replayUpload != "" {
 			defer s.removeReplayUpload(replayUpload)
+		}
+		if len(generated) > 0 {
+			defer removeEmptyFiles(generatedPaths(generated))
 		}
 		defer func() {
 			if r := recover(); r != nil {
@@ -1719,6 +1806,8 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		workloadDeterministic = s.AppConfig.WorkloadDeterministic
 		operationsPerWorker = s.AppConfig.OperationsPerWorker
 	}
+	outcomeFile := runOutcomeFile(s.AppConfig)
+	recordingFile := runRecordingFile(s.AppConfig)
 	curIter := s.CurrentIteration
 	totIter := s.TotalIterations
 	isWait := s.IsWaiting
@@ -1953,6 +2042,11 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt
+	} else if outcomeFile != "" && lifecyclePhase != "idle" {
+		statsResp["outcomeFile"] = outcomeFile
+	}
+	if recordingFile != "" && lifecyclePhase != "idle" {
+		statsResp["recordingFile"] = recordingFile
 	}
 	if g := collector.GeneratedTraffic(); g != nil {
 		statsResp["generatedTraffic"] = g

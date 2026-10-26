@@ -73,7 +73,7 @@ func TestHandleStartIterationsWithRecordAndReplay(t *testing.T) {
 		wantCalls int
 	}{
 		"record": {fields: map[string]string{"workload_record_enabled": "true", "workload_record_backpressure": "block", "workload_record_compression": "gzip"}, wantCalls: 3},
-		"replay": {fields: map[string]string{"workload_replay_enabled": "true", "workload_replay_path": "in.ndjson"}, wantCalls: 1},
+		"replay": {fields: map[string]string{"workload_replay_enabled": "true", "workload_replay_path": "<recording>"}, wantCalls: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
 			calls := make(chan config.AppConfig, 8)
@@ -103,6 +103,9 @@ func TestHandleStartIterationsWithRecordAndReplay(t *testing.T) {
 			waitForRunsOnCleanup(t, s)
 			fields := map[string]string{"default_workload": "on", "documents_count": "0", "iterations": "3", "interval_delay": "0s", "workload_record_path": t.TempDir() + "/rec.ndjson"}
 			for k, v := range tc.fields {
+				if v == "<recording>" {
+					v = writeTestRecording(t, t.TempDir(), "in.ndjson")
+				}
 				fields[k] = v
 			}
 			req, rec := newMultipartRequest(t, fields, nil)

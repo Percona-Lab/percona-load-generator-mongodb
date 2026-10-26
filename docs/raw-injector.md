@@ -36,7 +36,7 @@ When running in **Raw Injector Mode**, the Web UI and CLI may report very high t
 ### Document-Level vs. Command-Level Metrics
 The "Ops/Sec" reported by PLGM refers to individual **documents** processed. To achieve maximum performance, the Raw Injector bypasses standard BSON marshaling and groups thousands of operations into a single network round-trip command.
 
-### The "Batch Size" Discrepancy
+### "Batch Size" Discrepancy
 The relationship between PLGM reporting and standard "Opcounters" in PMM is defined by your configured `batch_size`.
 
 * **PLGM Reporting**: Counts every individual document within a batch. For example, with a `batch_size` of **2,000**, a report of **100,000 Ops/Sec** means 100,000 records are being processed per second.

@@ -1,12 +1,15 @@
 # Record and Replay
 
-Send the exact same operations, with the same values, to two or more MongoDB instances, then compare what each one returned and how fast, operation by operation. This is the tool for upgrade and migration testing: record on the version you run today, replay on the version you are moving to, and read the differences.
+Send the exact same operations, with the same values, to two or more MongoDB servers, then compare what each one returned and how fast. Use it for upgrade and migration testing: record on the version you run today, replay on the versions you're moving to, and read the differences.
 
-Every setting on this page is off by default. With the defaults, runs, recordings, and stored trends behave exactly as before.
+Everything on this page is off by default.
 
 [Back to the main README](../README.md)
 
-- [Quick start in the Web UI](#quick-start-in-the-web-ui)
+- [Quick start: compare three servers](#quick-start-compare-three-servers)
+- [Read the results](#read-the-results)
+- [Replay on one server at a time](#replay-on-one-server-at-a-time)
+- [Replay real application traffic](#replay-real-application-traffic)
 - [Comparing Two Instances (Upgrade Testing)](#comparing-two-instances-upgrade-testing)
 - [Record and Replay settings](#record-and-replay-settings)
 - [Deterministic Generated Traffic](#deterministic-generated-traffic)
@@ -16,61 +19,90 @@ Every setting on this page is off by default. With the defaults, runs, recording
 - [Preparing identical starting data](#preparing-identical-starting-data)
 - [Import Captured Traffic](#import-captured-traffic)
 
+> **Treat these files like production data.** Recordings, outcome files, and comparison reports contain real query values.
+
 ---
 
-## Quick start in the Web UI
+## Quick start: compare three servers
 
-Start the UI with `./plgm --webui`. Choosing **Record a workload** or **Replay a recorded workload** shows the **Record** or **Replay** section in **Basic settings**. The other sections are in the **Record & replay** category once **Advanced** is on: **Seed & Deterministic Traffic**, **Multi-Target Replay & Starting Data**, **Outcome Capture**, and (when replaying) **Import Captured Traffic**. Every setting shows what happens when it is on and when it is off, along with its `config.yaml` key and environment variable.
+You need two runs: one to record, one to replay on every server.
 
-The test takes three runs: record on the current server, replay on the new server, and compare.
+### 1. Record
 
-### Step 1: Record on the current instance
+1. Choose **Record a workload** and set **MongoDB URI** to the server you run today.
+2. Pick the workload under **Workload to record**: the built-in one, or **Custom definitions** with your own collections and queries.
+3. In **Data & Query Definitions**, check **Seed documents** and turn **Drop Collections First** on (Advanced).
+4. Turn on **Advanced**. In **Seed & Deterministic**, set **Random Seed** to any number other than 0, for example `42`. The same seed gives every server the same starting documents.
+5. In **Basic settings > Record**, set **Recording Compression** to `zstd`. For a long or busy run, set **When the Writer Falls Behind** to **Block workers** so no operation is lost. Leave **Recording File** blank: each recording gets its own name, like `plgm_workload_record-20261026T153045Z-1a2b3c4d.ndjson.zst`, so a new run never replaces an old one. Type a name only if you want a specific one.
 
-1. Choose **Record a workload**. In **Basic settings**, set **MongoDB URI** (Target Connection) to the current server.
-2. Set **Workload to record** (above the settings level) to **Custom definitions**. In **Basic settings > Data & Query Definitions**, pick your collection and query definitions, set **Seed Document Count**, turn **Drop Collections First** on, and turn **Skip Seed Phase** off.
-3. Turn on **Advanced**. **Record & replay > Seed & Deterministic Traffic**: set **Random Seed** to any non-zero value (for example `42`). The same seed gives both servers identical starting documents.
-4. **Basic settings > Record** (**Record Workload** is already On in this mode):
-   - **Recording File (server path)**: for example `rec.ndjson.zst`.
-   - **Recording Compression**: `zstd`.
-   - For long or busy runs, set **When the Writer Falls Behind** to **Block workers** so every operation is captured.
-5. **Record & replay > Multi-Target Replay & Starting Data**: set **Starting-Data Fingerprint** to **Counts and indexes**. Every replay then checks that its target starts with the same data.
-6. **Record & replay > Outcome Capture**: **Record Outcomes**: On. Optionally turn on **Result Checksums** to compare the actual documents returned.
-7. Click **Launch Workload** (bottom right).
+   ![Record section: file name left blank, zstd, block workers](../images/settings_record_replay.png)
 
-![Record section: Record Workload on, a zstd recording file, and the writer settings](../images/settings_record_replay.png)
+6. Optional: in the same **Record** section, set **Starting-Data Fingerprint** to **Counts and indexes**. Every replay then checks that its server starts with the same data.
+7. Click **Launch Workload**.
 
-### Step 2: Replay on the new instance
+The file is written on the PLGM server, in the folder PLGM runs from unless you give a full path. The dashboard shows its name while the run goes.
 
-1. Choose **Replay a recorded workload** (this turns Record Workload off and Replay Workload on; they cannot both be on). In **Basic settings**, change **MongoDB URI** to the new server. Leave the data settings unchanged.
-2. Keep the same collection and query definitions selected in **Data & Query Definitions**.
-3. **Basic settings > Replay**:
-   - **Recording to Replay (server path)**: the file from step 1, or use **or upload a recording**.
-   - **Replay Mode**: **Per worker** sends operations as fast as possible; **Timed** keeps the recorded pacing and reports lag.
-   - **Replay Operations**: **Reads only** if writes must not change the target's data.
-4. **Record & replay > Outcome Capture** (Advanced): keep **Record Outcomes** On and set **Replay Outcome File (server path)**, for example `outcomes-new.ndjson`.
-5. Click **Launch Workload**.
+### 2. Replay on every server
 
-### Step 3: Compare
+1. Choose **Replay a recorded workload**.
+2. Keep the same **Data & Query Definitions** and seed settings as the recording. If they don't match, PLGM refuses to replay and tells you what differs.
+3. Check **Recording to Replay**. The newest recording on the PLGM server is already selected. The list shows them all, newest first, with size and time (and operation count for uncompressed files). Pick another one if you need to, or click **Refresh** if you just made one. To use a file somewhere else, open **Enter a server path or upload a file**.
 
-1. On the dashboard, open **Query & Index Analysis > Replay Comparison**.
-2. Side A: the recording file (it holds the outcomes from step 1), label `current`.
-3. Side B: `outcomes-new.ndjson`, label `new`.
-4. Optional: add the recording under **Recording (shows the commands)** to see the command behind each differing operation.
-5. Click **Compare**. Click any differing operation to see both sides, and download the report as HTML or JSON.
+   ![Replay section with the newest recording selected](../images/settings_replay.png)
 
-The screenshot shows a recording made on MongoDB 8.0 (side A) compared with its replay on MongoDB 7.0 (side B), with plans taken from both trend runs. The top shows the two sides and the overall verdict. Next is the per-shape table with latency verdicts and plan changes, and the first differing operations are at the bottom:
+   **Starting-Data Fingerprint** in this section checks each server's data against the recording before the first operation, if the recording stored it.
 
-![Replay Comparison: MongoDB 8.0 recording compared with its MongoDB 7.0 replay](../images/replay_comparison.png)
+4. In **Target Connection** at the top, set **Run on** to **Several servers**. The MongoDB URI field is replaced by a server list with two empty rows. Give each server a short label and its URI, and click **Add target** for more (2 to 8). Username and password below apply to every server.
 
-### Shortcut: replay on several servers in one run
+   ![Run on: Several servers, with three servers listed](../images/settings_multi_target.png)
 
-Instead of step 2, open **Record & replay > Multi-Target Replay & Starting Data** (Advanced), click **Add target** for each server (2 to 8, each with a label such as `m8` and a URI), choose **Sequential** or **Concurrent** in **Targets Mode**, and set the **Replay Outcome File**. One launch replays on every target and compares each one with the first. The UI asks for confirmation before a run that replays writes, drops, or seeds targets.
+5. Leave **Targets Mode** (under the list) on **Sequential**. The servers run one after another, so they don't compete for the PLGM host and their latencies are fair to compare. **Concurrent** runs them all at once from one PLGM host, which shares its CPU, memory, and network.
+6. Leave the outcome files alone. Listing targets turns **Record Outcomes** on, and a blank **Replay Outcome File** gets a new name for this run, one file per server. Type a name only if you want a specific one.
 
-### Replaying real application traffic
+   ![Outcome Capture: Record Outcomes turned on by the targets, outcome file left blank](../images/settings_outcomes.png)
 
-Choose **Replay a recorded workload**, turn on **Advanced**, and use **Record & replay > Import Captured Traffic**: choose your mongod JSON logs or `system.profile` export in **Captured Traffic Files**, click **Convert**, then **Use for replay**. Continue with step 2. See [Import Captured Traffic](#import-captured-traffic).
+7. Click **Launch Workload** and confirm. PLGM drops, seeds, and replays on each server in turn.
 
-> **Handle these files like production data.** Recordings, outcome files, comparison reports, and trend stores with query values enabled contain real query values.
+**If targets can't be used**, the note under the targets list says why. While recording, targets are greyed out and not sent: record first, then replay. In a generic or custom run without Deterministic traffic, the run connects only to the server in the **MongoDB URI** field and the bar at the bottom says `replay targets not used`. Your targets stay in the list either way.
+
+## Read the results
+
+When the replay finishes, the dashboard shows one row per server:
+
+![Multi-target results: three servers, two comparisons](../images/multi_target_card.png)
+
+- **Operations**: operations sent out of operations in the recording. They should match.
+- **Starting data**: `matches recording` means the counts and indexes matched the recording before the first operation. It shows `-` if Starting-Data Fingerprint was off when you recorded.
+- **Client-side lag**: how far PLGM fell behind the recorded timing. It's shown for concurrent and timed replays.
+- **Outcome file**: the file each server wrote. Hover to see the full path. The folder is shown under the comparisons.
+- Each server after the first is compared with the first. **Open report** opens the comparison in a new browser tab, and **Download** saves it as HTML.
+
+The comparison is also in **Query & Index Analysis > Replay Comparison**:
+
+![Replay Comparison: rs01 compared with rs02](../images/replay_comparison.png)
+
+How to read it:
+
+- **Overall**: operations on each side, how many matched, and how many differ. Latency shows avg, p50, p95, and p99 for both sides and a verdict.
+- **Latency verdicts** (`slower`, `faster`, `no material change`) are rules of thumb, not statistics. A change has to be at least 1 ms and 20% to count.
+- **Differing operations** are facts: the same operation returned a different count or checksum, or failed on one side.
+- **Many result differences on identical servers usually mean the data drifted.** In the example, both servers run MongoDB 8.0.4, yet about 19,000 operations differ: the replayed inserts, updates, and deletes changed the data slightly differently on each server, so later finds returned 9 documents instead of 10. To compare results without that noise, set **Replay Operations** to **Reads only**. Latency comparisons are fine either way.
+- **Per shape** splits the same numbers by query shape, with the plan each side used when trend runs are linked.
+- Click any differing operation to see both outcomes side by side.
+
+The opened report:
+
+![Comparison report opened in a browser tab](../images/replay_report.png)
+
+Reports are kept in memory, newest 10, until PLGM restarts. An old link then shows "Report not available"; run the comparison again to rebuild it.
+
+## Replay on one server at a time
+
+Skip the targets list and set **MongoDB URI** to the server instead. Run the replay once per server. Each run gets its own outcome file (shown on the dashboard). Then compare any two in **Query & Index Analysis > Replay Comparison**: pick a file or server path for side A and side B, label them, and click **Compare**. You can also compare the recording itself (it holds the outcomes of the recorded run) with a replay.
+
+## Replay real application traffic
+
+Choose **Replay a recorded workload**, turn on **Advanced**, and open **Outcomes & import > Import Captured Traffic**. Pick your mongod JSON logs or `system.profile` export, click **Convert**, then **Use for replay**. Continue from step 2 above. See [Import Captured Traffic](#import-captured-traffic).
 
 ---
 
@@ -85,7 +117,7 @@ operations with the same values to two copies of the same data (for example Mong
 | Exact operations captured once, replayed anywhere (also across PLGM versions or config changes) | [Record and Replay settings](#record-and-replay-settings) |
 | Real application traffic | [Import Captured Traffic](#import-captured-traffic) (`plgm import-traffic`), then replay |
 | Per-operation results to compare | [Operation Outcomes](#operation-outcomes) (`workload_record_outcomes`, optional result checksums) |
-| The A-vs-B report | [Compare Replays](#compare-replays) (`plgm compare-replays` or Query Analysis > Replay Comparison) |
+| A-vs-B report | [Compare Replays](#compare-replays) (`plgm compare-replays` or Query Analysis > Replay Comparison) |
 | Several instances in one run | [Multi-Target Replay](#multi-target-replay) (sequential or concurrent, each compared with the first) |
 | Did two ordinary benchmark runs use the same query values? | **Store query values** (`insights_trend_store_query_values`, see [Trends and History](./trends-and-history.md#store-query-values)) |
 
@@ -142,7 +174,7 @@ improved/regressed labels never change.
 ## Record and Replay settings
 Run the exact same operations, with the same values, on two instances: record on one,
 replay on the other. In the Web UI, **Record** and **Replay** are in **Basic settings** of the matching task; seed,
-multi-target, outcome, and import settings are in the **Record & replay** category (Advanced).
+deterministic, and outcome settings are in the **Seed & Deterministic** category (Advanced), called **Outcomes & import** in a replay. Replay targets are under **Target Connection > Run on**.
 All are off by default. Record and replay cannot both be on for the
 same run, and neither works with the raw injector.
 
@@ -156,8 +188,11 @@ same run, and neither works with the raw injector.
   is recorded into the one file, and a replay runs them in order. Off (default): nothing is
   recorded.
 - **Recording file** (`workload_record_path`, UI: Record > **Recording File (server path)**). Set: NDJSON file, written with mode 0600; an
-  existing file that is not a recording is never overwritten. Empty (default):
-  `plgm_workload_record.ndjson` in the working directory when recording is on.
+  existing recording at that path is replaced, and any other file is never overwritten.
+  Empty (default): in the Web UI, each run gets a new file,
+  `plgm_workload_record-<UTC time>-<random>.ndjson` (`.zst` or `.gz` added when
+  compressed), so an earlier recording is never replaced; the CLI uses
+  `plgm_workload_record.ndjson` in the working directory.
 - **Max recording size** (`workload_record_max_bytes`, UI: Record > **Max Recording Size (bytes)**). Set: when the uncompressed size
   reaches this many bytes the recording stops and is marked truncated; the run continues.
   0: unlimited; watch the free disk space. Empty (default): 536870912 (512 MiB).
@@ -174,9 +209,15 @@ same run, and neither works with the raw injector.
   profile, access pattern, and think time are ignored. Iterations is ignored too: the
   replay runs once and replays every recorded iteration in order. Off (default):
   operations are generated as usual.
-- **Recording to replay** (`workload_replay_path`, UI: Replay > **Recording to Replay (server path)** or **or upload a recording**). Set: the
-  recording to replay; an uploaded file is used instead of the path and deleted after the
-  run. Empty (default): nothing to replay; required when replay is on.
+- **Recording to replay** (`workload_replay_path`, UI: Replay > **Recording to Replay (on the PLGM server)**, or
+  **Enter a server path or upload a file**). Set: the recording to replay; an uploaded file is
+  used instead of the path and deleted after the run. Empty (default): nothing to replay;
+  required when replay is on. When Replay opens with no recording chosen, the Web UI selects the
+  newest one. The list (`GET /api/recordings`) shows the recordings in
+  the folder of the server's `workload_record_path` (no subfolders, no symbolic links, newest
+  100), converted traffic imports, and files recorded by this server. A file that looks like a
+  recording but can't be replayed is listed greyed out with the reason. The chosen file is
+  checked again when the run starts.
 - **Replay mode** (`workload_replay_mode`, UI: Replay > **Replay Mode**). `timed`: sends each operation at its recorded
   offset from the start and reports how far behind it fell (lag). `per_worker` (default):
   each worker sends its recorded operations in order, as fast as possible.
@@ -211,7 +252,9 @@ Use this when you want the same generated workload, with the same values, on two
 instances, for a set amount of time, without saving a recording file. A typical case is
 a 30-second comparison of two MongoDB versions that start from the same seeded data.
 
-Settings are on **Record & replay > Seed & Deterministic Traffic** (Advanced; generic, custom, and record runs) and are off by default.
+Settings are on **Seed & Deterministic** (Advanced; generic, custom, and record runs) and are off by default.
+
+Deterministic means the same commands with the same values. It does not mean the same latency, throughput, order of operations across workers, server-generated values, or results on different data.
 
 **Duration is how long the measured run lasts.** **Operations per Worker** is one pass
 of that workload, not a reason to stop early. Each worker sends that many operations,
@@ -227,9 +270,13 @@ continue until the clock reaches 30 seconds. The run is one run, not a new launc
 **In the Web UI:**
 
 1. **Basic settings > Workload Control**: set **Duration** (for example `30s`) and a fixed **Concurrency**.
-2. Turn on **Advanced**. **Record & replay > Seed & Deterministic Traffic**: set **Random Seed** (non-zero), turn on **Deterministic traffic**, and set **Operations per Worker**. Turning **Deterministic traffic** on also turns **Drop Collections First** on, turns **Skip Seed Phase** off, and sets **Load Profile** to **Fixed**. Turning it off restores the previous values. The note under the setting links to those Basic settings.
-3. Optional, to compare later: **Record & replay > Outcome Capture**: turn on **Record Outcomes** and set **Deterministic Outcome File (server path)**.
-4. Click **Launch Workload**. Repeat on the second instance with the same settings, including the same Duration.
+2. Turn on **Advanced** and open **Seed & Deterministic**. Turn on **Deterministic traffic** and set **Operations per Worker**. If **Random Seed** is 0, a seed is filled in; keep it, or type your own, and use the same one on every run you compare. Turning Deterministic traffic on also turns **Drop Collections First** on, turns **Seed documents** on, and sets **Load Profile** to **Fixed**; the note under the checkbox lists what it changed. Turning it off restores those values, except any you changed in the meantime.
+3. To run on several servers at once (generic or custom runs), set **Run on** to **Several servers** in the same section and list the servers. It is the same choice as in Target Connection. **Record Outcomes** turns on by itself.
+
+   ![Seed & Deterministic: Deterministic traffic on, seed 42, and two servers listed](../images/settings_seed_deterministic.png)
+
+4. Optional, to compare later: **Outcome Capture** in the same category: turn on **Record Outcomes**. Leave the outcome file blank for a new name per run.
+5. Click **Launch Workload**. For a second server without **Several servers**, repeat with the same settings, including the same Duration.
 
 **How to read the dashboard**
 
@@ -266,7 +313,7 @@ version or to the collection or query definitions, which changes the fingerprint
 
 ## Operation Outcomes
 Keep what every operation returned so two executions of the same traffic can be compared
-offline. Settings are on **Record & replay > Outcome Capture** (Advanced) and are off by default.
+offline. Settings are on **Seed & Deterministic > Outcome Capture** (Advanced; **Outcomes & import** in a replay) and are off by default.
 
 - **Record outcomes** (`workload_record_outcomes`, UI: **Record Outcomes**). Each operation gets an `outcome`: client
   latency (`latency_us`), `ok`, or the server error code and code name (`error_code`,
@@ -280,6 +327,11 @@ offline. Settings are on **Record & replay > Outcome Capture** (Advanced) and ar
   stored field order does not).
 - **Replay outcome file** (`workload_replay_outcomes_path`, UI: **Replay Outcome File (server path)**). Where a replay writes its outcomes.
 - **Deterministic outcome file** (`workload_deterministic_outcomes_path`, UI: **Deterministic Outcome File (server path)**). Where a deterministic run writes its outcomes.
+- **Blank file name (Web UI only).** With Record Outcomes on and the file left blank, PLGM
+  creates `plgm_replay_outcomes-<UTC time>-<random>.ndjson` (or `plgm_deterministic_outcomes-...`)
+  next to the recordings, one per target with the label before the extension. Every run gets
+  a new name, and an existing file is never replaced. A name you type is used as it is. The CLI
+  doesn't generate names; set the path in `config.yaml`, the environment, or a flag.
 
 Where the outcomes go: a recording stores them inline on each operation line (with outcomes
 off, the recording is byte-for-byte what it was). A replay needs
@@ -344,13 +396,7 @@ JSON. Trend rows of two replays of the same recording show **same values** (sour
 Replay one recording (or run one deterministic workload) on several instances and compare
 each with the first, in one run.
 
-**In the Web UI:**
-
-1. Set up the replay (or deterministic traffic) and outcomes as in the [quick start](#quick-start-in-the-web-ui).
-2. **Record & replay > Multi-Target Replay & Starting Data** (Advanced): click **Add target** for each instance (2 to 8). Give each a short label (for example `m8`) and its URI. The **MongoDB URI** in Target Connection is not used.
-3. **Targets Mode**: **Sequential** (one after another) or **Concurrent** (all at once from this host).
-4. **Starting-Data Fingerprint**: **Counts and indexes** to check every target before the first operation.
-5. Click **Launch Workload** and confirm. The comparisons appear in **Query & Index Analysis > Replay Comparison**.
+**In the Web UI:** see [Quick start: compare three servers](#quick-start-compare-three-servers). The choice is **Target Connection > Run on: Several servers** in Basic settings. For generated traffic instead of a recording, turn on **Deterministic traffic** in a generic or custom run: **Run on** then appears right under it in **Seed & Deterministic**, and in Target Connection. Both are the same setting. Recording always runs on one server, so **Run on** isn't shown there.
 
 **From the command line:**
 
@@ -374,6 +420,8 @@ each with the first, in one run.
   compared with the first, exactly as [Compare Replays](#compare-replays) does; the CLI writes
   the reports next to the outcome files, and the Web UI keeps them with the other replay
   comparisons, linked to the targets' trend runs. A failed target does not stop the others.
+- **Reports.** `GET /api/replay-compare/{id}/report.html` opens a kept report in the browser;
+  add `?download=1` to download it. Reports never contain target URIs.
 - **Sequential (default) or concurrent.** Sequential prepares and runs one target after
   another. Concurrent prepares every target first, one at a time, then starts all workloads at
   once; the targets share this host's CPU, memory, and network, so latencies may be affected.
@@ -399,12 +447,12 @@ A comparison is meaningful only if every target starts from the same data. Eithe
 1. **Same seed.** Let PLGM seed each target: the same `random_seed`, `documents_count`,
    collection definitions, `drop_collections: true`, and `skip_seed: false` seed identical
    documents (and `_id`s) on every target. Record on a target seeded the same way.
-   In the UI: the same **Random Seed** and **Seed Document Count**, **Drop Collections First** on, **Skip Seed Phase** off.
+   In the UI: the same **Random Seed** and **Seed Document Count**, **Drop Collections First** on, **Seed documents** on.
 2. **Restore a copy.** Restore the same snapshot or `mongodump` on every target and run with
    `skip_seed: true` and `drop_collections: false`.
-   In the UI: **Skip Seed Phase** on, **Drop Collections First** off.
+   In the UI: **Seed documents** off, **Drop Collections First** off.
 
-Set `workload_data_fingerprint: counts` (UI: **Starting-Data Fingerprint > Counts and indexes**) when recording to store each collection's document
+Set `workload_data_fingerprint: counts` (UI: **Record > Starting-Data Fingerprint > Counts and indexes**; the same setting is in the Replay section when replaying) when recording to store each collection's document
 count and index list in the recording header; every replay compares them with its target
 before sending anything and fails on a difference (`workload_replay_allow_mismatch` turns it
 into a warning). `dbhash` (**Counts, indexes, and dbHash**) also stores the `dbHash` collection hashes; they compare stored BSON
@@ -421,12 +469,12 @@ and [Compare Replays](#compare-replays).
 
 **In the Web UI:**
 
-1. Choose **Replay a recorded workload**, turn on **Advanced**, and open **Record & replay > Import Captured Traffic**.
+1. Choose **Replay a recorded workload**, turn on **Advanced**, and open **Outcomes & import > Import Captured Traffic**.
 2. Choose one or more files in **Captured Traffic Files**.
 3. Optional: set **Import Workers** (maps connections onto N workers), **Default Database**, **Imported Recording Compression**, and **Skip server-generated values**.
 4. Click **Convert**. The import report lists what was converted, skipped, and flagged.
 5. Click **Use for replay** to set the replay path to the converted file, or **Download recording** to save it.
-6. Because the recording runs against data you restored yourself, turn **Skip Seed Phase** on and **Drop Collections First** off in **Basic settings > Data & Query Definitions**, then replay as in [step 2 of the quick start](#step-2-replay-on-the-new-instance).
+6. Because the recording runs against data you restored yourself, turn **Seed documents** and **Drop Collections First** off in **Basic settings > Data & Query Definitions**, then replay as in [step 2 of the quick start](#2-replay-on-every-server).
 
 The server keeps the newest 5 converted files (mode 0600) and deletes them when it is shut down from the UI.
 

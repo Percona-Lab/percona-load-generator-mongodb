@@ -57,7 +57,10 @@ test('every card belongs to one category and each control appears once', async (
     const { doc } = await page();
     const cards = [...doc.querySelectorAll('#settingsPanels .settings-card')].filter(c => !c.classList.contains('rr-intro'));
     for (const c of cards) assert.ok(c.dataset.group, `${c.querySelector('h4')?.textContent} has a category`);
-    const names = [...doc.querySelectorAll('#configForm [name]')].map(el => el.name);
+    // A radio group (several inputs, one name) is one control.
+    const names = [...doc.querySelectorAll('#configForm [name]')]
+        .filter((el, i, all) => el.type !== 'radio' || all.findIndex(o => o.type === 'radio' && o.name === el.name) === i)
+        .map(el => el.name);
     assert.deepEqual(names.filter((n, i) => names.indexOf(n) !== i), [], 'no setting has two editable controls');
 });
 

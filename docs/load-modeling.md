@@ -30,11 +30,15 @@ active worker counts are exposed in `/api/stats` (`concurrencyTarget`,
    - **Step**: **Steps**, a JSON array such as `[{"workers": 5, "duration": "30s"}, {"workers": 20, "duration": "60s"}]`.
    - **Spike**: **Base Workers**, **Peak Workers**, **Spike At (e.g. 20s)**, **Spike For (e.g. 5s)**.
    - **Sine**: **Min Workers**, **Max Workers**, **Period (e.g. 30s)**.
-4. Click **Launch Workload**. The dashboard shows the target and active worker counts as the profile runs.
+4. Click **Launch Workload**. Watch **Live Throughput** climb as workers are added. The run report lists the profile and its peak worker count, and `/api/stats` has the live numbers (`concurrencyTarget`, `concurrencyActive`).
 
-[Think Time / Pacing](#think-time--pacing) and the [Access Pattern](#access-pattern-skew) are in **Workload execution > Client Pacing & Access Pattern** (Advanced). Here a ramp from 2 to 8 workers over 20 seconds is combined with 1 ms think time plus up to 2 ms jitter and Zipfian access:
+A 40-second run that ramps from 2 to 24 workers over the first 30 seconds, then holds at 24:
 
-![Workload Control and Client Pacing & Access Pattern: ramp load profile, think time, and Zipfian access pattern](../images/settings_workload.png)
+![Workload Control: ramp from 2 to 24 workers over 30s](../images/settings_workload.png)
+
+[Think time](#think-time--pacing) and the [access pattern](#access-pattern-skew) are in **Workload execution > Client Pacing & Access Pattern** (Advanced). Here, 2 ms think time plus up to 3 ms jitter, and Zipfian access:
+
+![Client Pacing & Access Pattern: think time, jitter, and Zipfian access](../images/settings_categories.png)
 
 **In `config.yaml`:**
 
@@ -140,22 +144,13 @@ Env overrides: `PLGM_ACCESS_PATTERN_KIND`, `PLGM_ACCESS_PATTERN_ZIPFIAN_EXPONENT
 
 ## Latency Heatmap Over Time
 
-PLGM buckets latency into ~1&nbsp;second time windows and records p50/p95/p99/max
-per window (across **all operation types combined**), so you can see
-tail-latency drift over the run. The series is exposed in `/api/stats`
-(`latencyHeatmap`) and rendered as an inline chart both in the live **Latency
-Analysis** tab and in the exported report. There is nothing to configure: open the **Latency Analysis** tab on the dashboard while the workload runs.
+The heatmap shows how tail latency moved during the run. There's nothing to set up: open **Latency Analysis** on the dashboard. It's also in the HTML report, and `/api/stats` has the data (`latencyHeatmap`).
 
-![Latency heatmap (bottom) for a 30-second ramp: windows turn from green to orange as the worker count and p99 rise](../images/dashboard_latency.png)
+![Latency for the ramp above: the heatmap bars grow as workers are added and stay green to lime](../images/dashboard_latency.png)
 
-Each column in the heatmap is one time window. Two independent visual channels
-encode the data:
+Each bar is about one second, all operation types combined.
 
-- **Color = absolute p99 latency.** Colors map to fixed latency thresholds
-  (based on common database/APM norms), *not* to the run's own maximum. This
-  means a fast run stays green even if one window is relatively taller than the
-  others; the heatmap will never paint a healthy 10&nbsp;ms run red just
-  because it is the busiest window seen so far.
+- **Color is the actual p99 of that second.** It uses fixed thresholds, so a fast run stays green no matter which second was its slowest.
 
   | p99 (this window) | Color | Interpretation |
   | :--- | :--- | :--- |
@@ -167,21 +162,13 @@ encode the data:
   | ~500 ms | Strong red | Very slow |
   | &ge; 1 s | Dark red | Critical |
 
-  Values between anchors are interpolated, so the color transitions smoothly.
+- **Height is that p99 compared with the run's slowest second.** It shows *when* latency rose, even in an all-green run.
 
-- **Bar height = relative drift.** Height is scaled to this run's own peak p99,
-  so you can always see *when* tail latency rose or fell during the run, even in
-  an all-green run where every window is objectively fast.
+In the example, the bars get taller as the worker count ramps up, and every second stays at 25 ms or less.
 
-Hover any column to see the full per-window breakdown (ops in window,
-throughput, and p50/p95/p99/max). While the cursor is over the heatmap it
-pauses updating so you can inspect a window; it resumes and catches up to the
-latest data as soon as the cursor leaves.
+Hover a bar for that second's operations, throughput, and p50/p95/p99/max. The heatmap stops updating while your cursor is on it.
 
-> Note: because each window is short, an occasional slow operation (for example
-> a heavy aggregation) can lift a single window's p99 above the cumulative p99
-> shown in the distribution table. That is expected: surfacing exactly *when*
-> tail latency occurred is the purpose of this view.
+A single slow operation can push one second's p99 above the p99 for the whole run. That's expected: the point is to show when it happened.
 
 ## Schema Inference from Query Logs
 

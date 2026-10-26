@@ -566,7 +566,7 @@
 
         .setting-rows > #workloadDeterministicAuto {
             flex-basis: 100%;
-            margin: 0 !important;
+            margin: calc(-1 * var(--space-2)) 0 0 !important;
         }
 
         .setting-control {
@@ -609,8 +609,6 @@
             flex-wrap: wrap;
             gap: 12px;
             margin-top: 16px;
-            padding-top: 14px;
-            border-top: 1px solid #eef2f6;
         }
 
         .rr-import-result:not(:empty) {
@@ -2090,6 +2088,26 @@
         .insight-badge.replay-verdict-slower { background: #fee2e2; color: #991b1b; }
         .insight-badge.replay-verdict-faster { background: #dcfce7; color: #166534; }
         .replay-table-wrap { overflow-x: auto; }
+        .run-on { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
+        .run-on-label { font-weight: 600; color: var(--text-strong); }
+        .run-on-choice { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 3px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); }
+        .run-on-choice > .run-on-option { display: inline-flex; align-items: center; margin: 0; padding: 5px 10px 5px 12px; border-radius: var(--radius-sm, 6px); }
+        .run-on-choice > .run-on-option > label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; }
+        .run-on-option:has(input:checked) { background: var(--surface); box-shadow: var(--elevation-1); color: var(--accent); }
+        .run-on-option input { margin: 0; accent-color: var(--accent); }
+        .multi-server { margin-bottom: var(--space-3); padding-top: 0; }
+        .det-servers { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+        .det-servers .run-on { margin-bottom: var(--space-3); }
+        .det-servers .multi-server { margin-bottom: 0; }
+        .det-auto { margin: 8px 0 0; }
+        .det-hint { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--warn); }
+        .recording-picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .recording-picker select { flex: 1 1 18rem; min-width: 0; max-width: 100%; }
+        .recording-status[data-state="error"] { color: var(--danger); }
+        .recording-manual { margin-top: 8px; }
+        .recording-manual summary { cursor: pointer; color: var(--accent); }
+        .replay-target-row input:disabled, .replay-target-row button:disabled { opacity: .6; }
+        .mono-cell { font-family: var(--font-mono); font-size: 12px; word-break: break-all; }
         .eff-table td.num, .eff-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
         .eff-table tr.selected td { background: #eef2ff; }
         .eff-table tr.eff-row-clickable { cursor: pointer; }
@@ -2153,9 +2171,7 @@
         }
 
         .expert-toggle {
-            margin-top: 10px;
-            border-top: 1px dashed var(--border);
-            padding-top: 8px;
+            margin-top: 0;
         }
 
         .expert-toggle summary {
@@ -2257,6 +2273,17 @@
             .mode-grid { grid-template-columns: subgrid; grid-template-rows: subgrid; grid-auto-rows: auto; }
         }
         .start-history { grid-column: 3; grid-row: 2; }
+        /* Each task card has a small "Use defaults" action in its corner. */
+        .mode-card-wrap { position: relative; display: grid; min-width: 0; }
+        .mode-card-wrap > .mode-card { height: 100%; padding-bottom: 40px; }
+        .mode-card-defaults { position: absolute; right: 12px; bottom: 10px; padding: 3px 8px; font: inherit; font-size: var(--fs-sm); color: var(--accent); background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm, 6px); cursor: pointer; }
+        .mode-card-defaults:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-border); }
+        .mode-card-defaults:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .mode-card-defaults:disabled { cursor: not-allowed; opacity: 0.55; }
+        body.mode-active .mode-card-defaults { display: none; }
+        body.mode-active .mode-card-wrap > .mode-card { padding-bottom: 9px; }
+        .settings-topbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+        .defaults-status { margin: 0; font-size: var(--fs-sm); color: var(--text-secondary); }
 
         .mode-card,
         .start-history {
@@ -2423,9 +2450,21 @@
         .settings-subhead-wrap { margin-top: var(--space-4); margin-bottom: 10px; padding-top: var(--space-3); border-top: 1px solid var(--border); }
         .settings-subhead-wrap > h4.settings-subhead { margin: 0; padding-top: 0; border-top: 0; }
         #definitionLibraryBlock[hidden] + h4.settings-subhead { margin-top: 0; padding-top: 0; border-top: 0; }
-        .settings-columns > div > .settings-subhead-wrap:first-child,
-        .settings-columns > div > h4.settings-subhead:first-child { margin-top: var(--space-3); }
         .checkbox-group > .label-help { margin: 0; }
+        /* One look for every settings card: title (level tag, "?"), then the
+           fields 12px below. A divider only opens a subsection inside a card,
+           never right under the title. */
+        body.mode-active .rr-tag { display: none; }
+        .rr-card-head { margin-bottom: var(--space-3); }
+        .rr-card-head + .setting-rows { padding-top: 0; }
+        .settings-columns > div > .settings-subhead-wrap:first-child,
+        .settings-columns > div > h4.settings-subhead:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+        .setting-row-wide > .setting-control > .checkbox-group:first-child { padding-top: 0; }
+        .settings-card h4.settings-subhead { margin-bottom: 10px; }
+        .seed-subhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-4); margin: var(--space-4) 0 10px; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+        .seed-subhead > h4.settings-subhead { margin: 0; padding-top: 0; border-top: 0; }
+        .seed-subhead > .checkbox-group > .label-help { margin: 0; }
+        #definitionLibraryBlock[hidden] + .seed-subhead { margin-top: 0; padding-top: 0; border-top: 0; }
         /* A checkbox placed beside labelled fields lines up with their controls. */
         .field-check,
         .setting-control > .checkbox-group:first-child { padding-top: calc(var(--fs-base) * 1.35 + 6px); }
@@ -2554,6 +2593,7 @@
 
             <div id="dashboardControls" class="header-bottom" style="display: none;">
                 <div id="lifecycleHint" class="lifecycle-hint"></div>
+                <div id="runOutcomeFile" class="lifecycle-hint" hidden></div>
                 <div class="header-controls">
                     <div class="refresh-rate-control">
                         <label for="refreshRate" style="margin:0; cursor:pointer;" title="How often the dashboard asks the server for new samples">Refresh (ms)</label>
@@ -2809,11 +2849,12 @@
             <div id="multiTargetCard" class="mat-card" style="display:none; margin-top: 16px;">
                 <div class="mat-card-title">Multi-target replay</div>
                 <div id="multiTargetSummary" class="insights-status-line"></div>
-                <table class="data-table" id="multiTargetTable">
-                    <thead><tr><th>Target</th><th>Status</th><th>Operations</th><th>Elapsed</th><th>Client-side lag</th><th>Starting data</th></tr></thead>
+                <div class="replay-table-wrap"><table class="data-table" id="multiTargetTable">
+                    <thead><tr><th>Target</th><th>Status</th><th>Operations</th><th>Elapsed</th><th>Client-side lag</th><th>Starting data</th><th>Outcome file</th></tr></thead>
                     <tbody id="multiTargetRows"></tbody>
-                </table>
+                </table></div>
                 <div id="multiTargetComparisons" class="insights-status-line"></div>
+                <div id="multiTargetOutcomeDir" class="settings-note" hidden></div>
                 <div id="multiTargetNotes" class="settings-note"></div>
             </div>
 
@@ -3100,26 +3141,41 @@
                 <p id="modeLockNotice" class="mode-lock" role="status" hidden>A workload is running. Mode stays locked until it stops.</p>
                 <div class="start-grid">
                     <div class="mode-grid" role="radiogroup" aria-labelledby="modePickerTitle">
+                        <div class="mode-card-wrap">
                         <button type="button" class="mode-card" role="radio" aria-checked="false" tabindex="0" data-mode="generic" onclick="selectMode('generic')">
                             <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></svg></span>
                             <span class="mode-card-text"><strong class="mode-card-title">Run a generic workload</strong><span class="mode-card-desc">Exercise MongoDB with built-in collections, queries, and a ready operation mix.</span></span>
                         </button>
+                            <button type="button" class="mode-card-defaults" onclick="startFromDefaults('generic')" aria-label="Run a generic workload, use defaults" title="Settings PLGM started with (config.yaml). Your connection is kept.">Use defaults</button>
+                        </div>
+                        <div class="mode-card-wrap">
                         <button type="button" class="mode-card" role="radio" aria-checked="false" tabindex="-1" data-mode="custom" onclick="selectMode('custom')">
                             <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></span>
                             <span class="mode-card-text"><strong class="mode-card-title">Run a custom workload</strong><span class="mode-card-desc">Drive your own collection and query definitions with an operation mix you set.</span></span>
                         </button>
+                            <button type="button" class="mode-card-defaults" onclick="startFromDefaults('custom')" aria-label="Run a custom workload, use defaults" title="Settings PLGM started with (config.yaml). Your connection is kept.">Use defaults</button>
+                        </div>
+                        <div class="mode-card-wrap">
                         <button type="button" class="mode-card" role="radio" aria-checked="false" tabindex="-1" data-mode="raw" onclick="selectMode('raw')">
                             <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.6 17.5a8.5 8.5 0 1 1 14.8 0"/><path d="M12 13.5l4.2-4.2"/><circle cx="12" cy="13.5" r="1.4"/><path d="M7.5 20h9"/></svg></span>
                             <span class="mode-card-text"><strong class="mode-card-title">Stress test</strong><span class="mode-card-desc">Push raw inserts at the server to find hardware and storage limits.</span></span>
                         </button>
+                            <button type="button" class="mode-card-defaults" onclick="startFromDefaults('raw')" aria-label="Stress test, use defaults" title="Settings PLGM started with (config.yaml). Your connection is kept.">Use defaults</button>
+                        </div>
+                        <div class="mode-card-wrap">
                         <button type="button" class="mode-card" role="radio" aria-checked="false" tabindex="-1" data-mode="record" onclick="selectMode('record')">
                             <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none"/></svg></span>
                             <span class="mode-card-text"><strong class="mode-card-title">Record a workload</strong><span class="mode-card-desc">Capture every operation of a run to a file that can be replayed later.</span></span>
                         </button>
+                            <button type="button" class="mode-card-defaults" onclick="startFromDefaults('record')" aria-label="Record a workload, use defaults" title="Settings PLGM started with (config.yaml). Your connection is kept.">Use defaults</button>
+                        </div>
+                        <div class="mode-card-wrap">
                         <button type="button" class="mode-card" role="radio" aria-checked="false" tabindex="-1" data-mode="replay" onclick="selectMode('replay')">
                             <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v4.5H8"/><path d="M10.5 9.2v5.6l4.6-2.8z" fill="currentColor"/></svg></span>
                             <span class="mode-card-text"><strong class="mode-card-title">Replay a recorded workload</strong><span class="mode-card-desc">Send a saved recording to another instance and compare how it behaves.</span></span>
                         </button>
+                            <button type="button" class="mode-card-defaults" onclick="startFromDefaults('replay')" aria-label="Replay a recorded workload, use defaults" title="Settings PLGM started with (config.yaml). Your connection is kept.">Use defaults</button>
+                        </div>
                     </div>
                     <button type="button" class="start-history" id="openCompletedRuns" onclick="showRunHistory()" aria-controls="runHistoryPanel">
                         <span class="mode-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 9h17M8 13h8M8 16.5h5"/></svg></span>
@@ -3133,6 +3189,10 @@
                     <div class="settings-topbar">
                         <h3 id="modeSettingsTitle">Settings</h3>
                         <p id="modeSettingsLead">The defaults work for most runs. Changes apply the next time you launch a workload.</p>
+                        <div class="settings-topbar-actions">
+                            <button type="button" class="btn btn-secondary btn-small" id="modeResetDefaults" hidden title="Settings PLGM started with (config.yaml). Your connection is kept." onclick="startFromDefaults()">Reset to defaults</button>
+                            <p id="defaultsStatus" class="defaults-status" role="status" hidden></p>
+                        </div>
                     </div>
                     <div id="modeSettings">
                         <div class="record-source" id="recordSourceRow" hidden>
@@ -3163,8 +3223,43 @@
                 <section class="settings-card">
                     <h4>Target Connection</h4>
                     <div class="settings-help">Set the MongoDB target and authentication details used for execution.</div>
-                    <div class="form-group"><label>MongoDB URI <span class="req-mark">Required</span></label><input class="f-xl" type="text" name="uri"
+                    <div class="run-on" id="runOnRow" hidden>
+                        <span class="run-on-label" id="runOnLabel">Run on</span>
+                        <div class="run-on-choice" role="radiogroup" aria-labelledby="runOnLabel">
+                            <div class="label-help run-on-option">
+                                <label for="runOnOne"><input type="radio" name="run_on" id="runOnOne" value="one" checked> One server</label>
+                            </div>
+                            <span class="settings-note" id="runOnOneNote">Connects to the one server in the MongoDB URI field of Target Connection. Pick this for a single benchmark; to compare servers in one run, choose Several servers.</span>
+                            <div class="label-help run-on-option">
+                                <label for="runOnSeveral"><input type="radio" name="run_on" id="runOnSeveral" value="several"> Several servers</label>
+                            </div>
+                            <span class="settings-note" id="runOnSeveralNote">Connects to each server in the list below with the URI you enter for it; the single MongoDB URI field is hidden and ignored. Every server (2 to 8) gets the same operations, including drops, seeding, and writes, one after another or all at once (Targets Mode). Each server is compared with the first.</span>
+                        </div>
+                    </div>
+                    <div class="form-group" id="uriGroup"><label>MongoDB URI <span class="req-mark">Required</span></label><input class="f-xl" type="text" name="uri"
                             placeholder="mongodb://localhost:27017/" required></div>
+                    <div class="setting-rows multi-server" id="multiServerBlock" hidden>
+                            <div class="setting-row setting-row-wide">
+                                <div class="setting-control">
+                                    <label for="workloadReplayTargetsList">Replay Targets</label>
+                                    <div id="workloadReplayTargetsList" class="replay-targets-list"></div>
+                                    <button type="button" class="btn btn-secondary btn-small" id="workloadReplayTargetAdd" onclick="addReplayTargetRow('', '')">Add target</button>
+                                    <input type="hidden" name="workload_replay_targets" id="workloadReplayTargets" value="">
+                                    <p id="replayTargetsStatus" class="settings-note" role="status" hidden></p>
+                                </div>
+                                <div class="settings-note" id="workloadReplayTargetsNote"><strong>Listed (2&ndash;8 targets):</strong> with <strong>Run on: Several servers</strong>, the replay (or deterministic run) runs once on every listed target, and only on those, each with the URI entered for it; the single MongoDB URI field is hidden and ignored. Each target gets its own client, workers, stats, outcome file (the label goes before the extension, for example <code>outcomes.m8.ndjson</code>), insights, and trend run, and is compared with the first target. Needs a traffic source, Replay a recording or Deterministic traffic, and Record Outcomes, which is turned on while targets are listed; a blank outcome file gets a new generated name per run. Shown for replays, and for generic or custom runs with Deterministic traffic on (Advanced). Not available while recording: record on one instance, then replay the recording on the targets. Username, password, and TLS settings apply to every target; put other per-target options in its URI. <strong>Empty (default):</strong> a single run on the server in the MongoDB URI field. <span class="setting-keys"><code>workload_replay_targets</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS</code> (<code>label=uri;label=uri</code>)</span></div>
+                            </div>
+                            <div class="setting-row">
+                                <div class="setting-control">
+                                    <label for="workloadReplayTargetsMode">Targets Mode</label>
+                                    <select name="workload_replay_targets_mode" id="workloadReplayTargetsMode">
+                                        <option value="sequential" selected>Sequential</option>
+                                        <option value="concurrent">Concurrent</option>
+                                    </select>
+                                </div>
+                                <div class="settings-note" id="workloadReplayTargetsModeNote"><strong>Concurrent:</strong> every target is prepared first, one at a time, then all run at once from this host; they share its CPU, memory, and network, so latencies may be affected, and the report shows each target's client-side lag behind the recorded timeline. <strong>Sequential (default):</strong> targets run one after another and do not compete for this host, so their latencies are the easiest to compare. Neither mode creates, resets, or copies data on the targets beyond what Drop Collections and the seed do; each target must start from the data you intend to compare (see Starting-Data Fingerprint). <span class="setting-keys"><code>workload_replay_targets_mode</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS_MODE</code></span></div>
+                            </div>
+                    </div>
                     <div class="grid-2">
                         <div class="form-group"><label>Username (Optional)</label><input class="f-md" type="text" name="username"></div>
                         <div class="form-group"><label>Password (Optional)</label><input class="f-md" type="password" id="uiPassword"
@@ -3401,10 +3496,9 @@
                 </section>
 
                 <div class="rr-tabs" role="tablist" aria-label="Record and replay sections">
-                    <button type="button" class="rr-tab" role="tab" aria-controls="rrSeedCard" aria-selected="true" onclick="showReplaySection('rrSeedCard')">Seed &amp; Determinism</button>
+                    <button type="button" class="rr-tab" role="tab" aria-controls="rrSeedCard" aria-selected="true" onclick="showReplaySection('rrSeedCard')">Seed &amp; Deterministic</button>
                     <button type="button" class="rr-tab" role="tab" aria-controls="rrRecordCard" aria-selected="false" onclick="showReplaySection('rrRecordCard')">Record</button>
                     <button type="button" class="rr-tab" role="tab" aria-controls="rrReplayCard" aria-selected="false" onclick="showReplaySection('rrReplayCard')">Replay</button>
-                    <button type="button" class="rr-tab" role="tab" aria-controls="rrTargetsCard" aria-selected="false" onclick="showReplaySection('rrTargetsCard')">Multi-Target</button>
                     <button type="button" class="rr-tab" role="tab" aria-controls="rrOutcomeCard" aria-selected="false" onclick="showReplaySection('rrOutcomeCard')">Outcomes</button>
                     <button type="button" class="rr-tab" role="tab" aria-controls="trafficImportCard" aria-selected="false" onclick="showReplaySection('trafficImportCard')">Import Traffic</button>
                 </div>
@@ -3412,37 +3506,39 @@
                 <section class="settings-card rr-card rr-panel active" id="rrSeedCard" role="tabpanel">
                     <header class="rr-card-head">
                         <div>
-                            <h4>Seed &amp; Deterministic Traffic</h4>
-                            <div class="settings-help">Make generated data and operations repeatable. With deterministic traffic, every instance receives the same commands without a recording file.</div>
+                            <h4>Seed &amp; Deterministic</h4>
+                            <div class="settings-help">Deterministic traffic sends the same generated commands, with the same values, on every run and server, without a recording file. Random Seed on its own makes the seeded data repeatable.</div>
                         </div>
                         <span class="rr-tag">Any run</span>
                     </header>
                     <div class="setting-rows">
+                        <div class="setting-row setting-row-wide">
+                            <div class="setting-control">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="workloadDeterministic" name="workload_deterministic" value="true" aria-describedby="workloadDeterministicAuto">
+                                    <label for="workloadDeterministic">Deterministic traffic</label>
+                                </div>
+                                <p id="workloadDeterministicAuto" class="settings-note det-auto" role="status" style="display:none;"></p>
+                            </div>
+                            <div class="settings-note" id="workloadDeterministicNote"><strong>On:</strong> every operation is generated from the random seed, iteration, worker, and operation number, so two runs with the same settings send the same commands with the same values, without a recording file. Each worker sends Operations per Worker operations and then continues that same workload until Duration ends; failures and retries do not shift later operations. If Duration ends before that first pass finishes, the run is marked incomplete. Needs a non-zero Random Seed, freshly seeded data (Drop Collections First and Seed documents on), and a fixed worker count; turning it on sets these and says what it changed. The insert cache and bootstrap are not used, and the run reports a traffic fingerprint (hashes only). It does not make latency, throughput, or results identical: Cross-worker interleaving, server-generated values, and results on different data can still differ. <strong>Off (default):</strong> operations are generated as usual until Duration ends. <span class="setting-keys"><code>workload_deterministic</code> / <code>PLGM_WORKLOAD_DETERMINISTIC</code></span>
+</div>
+                        </div>
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="randomSeedInput">Random Seed</label>
                                 <input class="f-md" type="number" name="random_seed" id="randomSeedInput" value="0" step="1">
                             </div>
-                            <div class="settings-note" id="randomSeedNote"><strong>Set (non-zero):</strong> seeds data and query generation, so the same seed, documents count, and collection definitions seed identical documents on any instance; use it on both sides of a replay. <strong>0 (default):</strong> values are time-based and differ every run. <span class="setting-keys"><code>random_seed</code> / <code>PLGM_RANDOM_SEED</code></span></div>
+                            <div class="settings-note" id="randomSeedNote"><strong>Set (non-zero):</strong> seeds data and query generation, so the same seed, documents count, and collection definitions seed identical documents on any instance; use it on both sides of a replay. Works with or without Deterministic traffic, which needs it: use the same seed on every run you compare. <strong>0 (default):</strong> values are time-based and differ every run. <span class="setting-keys"><code>random_seed</code> / <code>PLGM_RANDOM_SEED</code></span></div>
                         </div>
-                        <div class="setting-row">
-                            <div class="setting-control">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="workloadDeterministic" name="workload_deterministic" value="true">
-                                    <label for="workloadDeterministic">Deterministic traffic</label>
-                                </div>
-                                <p id="workloadDeterministicAuto" class="settings-note" role="status" style="display:none; margin: 8px 0 0;"></p>
-                            </div>
-                            <div class="settings-note" id="workloadDeterministicNote"><strong>On:</strong> every operation is generated from the random seed, iteration, worker, and operation number, so two runs with the same settings send the same commands with the same values, without a recording file. Each worker sends Operations per Worker operations and then continues that same workload until Duration ends; failures and retries do not shift later operations. Needs a non-zero Random Seed, Drop Collections on and Skip Seed off, and a fixed worker count. Turning this on sets Drop Collections First on, Skip Seed Phase off, and Load Profile to Fixed. If Duration ends before that first pass finishes, the run is marked incomplete. The insert cache and bootstrap are not used, and the run reports a traffic fingerprint (hashes only). Cross-worker interleaving, server-generated values, and results on different data can still differ. <strong>Off (default):</strong> operations are generated as usual until Duration ends. <span class="setting-keys"><code>workload_deterministic</code> / <code>PLGM_WORKLOAD_DETERMINISTIC</code></span>
-</div>
-                        </div>
-                        <div class="setting-row">
+                        <div class="setting-row" id="operationsPerWorkerRow" hidden>
                             <div class="setting-control">
                                 <label for="operationsPerWorker">Operations per Worker</label>
-                                <input class="f-sm" type="number" name="operations_per_worker" id="operationsPerWorker" value="0" min="0" step="1">
+                                <input class="f-sm" type="number" name="operations_per_worker" id="operationsPerWorker" value="0" min="0" step="1" aria-describedby="operationsPerWorkerHint">
+                                <p id="operationsPerWorkerHint" class="det-hint" hidden>Required: how many operations each worker sends in one pass.</p>
                             </div>
-                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> one pass of a deterministic workload. When a worker finishes this many operations before Duration ends, it continues the same workload. Required when Deterministic traffic is on. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
+                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> one pass of a deterministic workload. When a worker finishes this many operations before Duration ends, it continues the same workload. Required when Deterministic traffic is on, and shown only then. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
                         </div>
+                        <div class="setting-row setting-row-wide det-servers" id="detServersSlot" hidden></div>
                     </div>
                 </section>
 
@@ -3468,9 +3564,9 @@
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="workloadRecordPath">Recording File (server path)</label>
-                                <input class="f-xl" type="text" name="workload_record_path" id="workloadRecordPath" placeholder="plgm_workload_record.ndjson">
+                                <input class="f-xl" type="text" name="workload_record_path" id="workloadRecordPath" placeholder="Blank: a new file per run">
                             </div>
-                            <div class="settings-note" id="workloadRecordPathNote"><strong>Set:</strong> NDJSON file on the server, written with mode 0600; an existing file that is not a recording is never overwritten. <strong>Empty (default):</strong> <code>plgm_workload_record.ndjson</code> in the working directory when recording is on. <span class="setting-keys"><code>workload_record_path</code> / <code>PLGM_WORKLOAD_RECORD_PATH</code></span></div>
+                            <div class="settings-note" id="workloadRecordPathNote"><strong>Set:</strong> NDJSON file on the server, written with mode 0600; an existing recording at that path is replaced, and any other file is never overwritten. <strong>Empty (default):</strong> each run gets a new file, <code>plgm_workload_record-&lt;UTC time&gt;-&lt;random&gt;.ndjson</code> (<code>.ndjson.zst</code> or <code>.ndjson.gz</code> when compressed), in the server's recordings folder, so an earlier recording is never replaced. The name is shown on the dashboard and in the Replay list. <span class="setting-keys"><code>workload_record_path</code> / <code>PLGM_WORKLOAD_RECORD_PATH</code></span></div>
                         </div>
                         <div class="setting-row">
                             <div class="setting-control">
@@ -3524,12 +3620,23 @@
                         </div>
                         <div class="setting-row">
                             <div class="setting-control">
-                                <label for="workloadReplayPath">Recording to Replay (server path)</label>
-                                <input class="f-xl" type="text" name="workload_replay_path" id="workloadReplayPath" placeholder="plgm_workload_record.ndjson">
-                                <label for="workloadReplayFile" class="setting-sublabel">or upload a recording</label>
-                                <input type="file" name="workload_replay_file" id="workloadReplayFile" accept=".ndjson,.jsonl,.json,.zst,.gz">
+                                <label for="workloadReplayRecording">Recording to Replay (on the PLGM server)</label>
+                                <div class="recording-picker">
+                                    <select class="f-xl" id="workloadReplayRecording" onchange="onReplayRecordingPicked()" aria-describedby="workloadReplayRecordingStatus">
+                                        <option value="">Choose a recording</option>
+                                    </select>
+                                    <button type="button" class="btn btn-secondary btn-small" id="workloadReplayRecordingRefresh" onclick="loadServerRecordings()">Refresh</button>
+                                </div>
+                                <p id="workloadReplayRecordingStatus" class="settings-note recording-status" role="status" aria-live="polite"></p>
+                                <details id="workloadReplayManual" class="recording-manual">
+                                    <summary>Enter a server path or upload a file</summary>
+                                    <label for="workloadReplayPath" class="setting-sublabel">Server path</label>
+                                    <input class="f-xl" type="text" name="workload_replay_path" id="workloadReplayPath" placeholder="plgm_workload_record.ndjson" oninput="onReplayPathTyped()">
+                                    <label for="workloadReplayFile" class="setting-sublabel">or upload a recording</label>
+                                    <input type="file" name="workload_replay_file" id="workloadReplayFile" accept=".ndjson,.jsonl,.json,.zst,.gz">
+                                </details>
                             </div>
-                            <div class="settings-note" id="workloadReplayPathNote"><strong>Set:</strong> the recording to replay; an uploaded file is used instead of the path and deleted after the run. <strong>Empty (default):</strong> nothing to replay; required when Replay Workload is on. <span class="setting-keys"><code>workload_replay_path</code> / <code>PLGM_WORKLOAD_REPLAY_PATH</code></span></div>
+                            <div class="settings-note" id="workloadReplayPathNote"><strong>Set:</strong> the recording to replay. The list shows recordings stored on the PLGM server, not on your computer, newest first: files in its recordings directory (the folder of Recording File), recordings converted by Import Traffic, and files recorded by runs of this server. Listing reads only each file's first line; the chosen file is checked again when the run starts. Any other recording the server can read can be entered as a server path; an uploaded file is sent to the server, used instead of the path, and deleted after the run. <strong>Empty (default):</strong> nothing to replay; required when Replay Workload is on. <span class="setting-keys"><code>workload_replay_path</code> / <code>PLGM_WORKLOAD_REPLAY_PATH</code></span></div>
                         </div>
                         <div class="setting-row">
                             <div class="setting-control">
@@ -3561,37 +3668,6 @@
                             </div>
                             <div class="settings-note" id="workloadReplayAllowMismatchNote"><strong>On:</strong> replays even when the collection/query definitions or namespaces differ from the recording, or the recording did not complete; results may not be comparable. <strong>Off (default):</strong> such a replay fails before any operation is sent. <span class="setting-keys"><code>workload_replay_allow_mismatch</code> / <code>PLGM_WORKLOAD_REPLAY_ALLOW_MISMATCH</code></span></div>
                         </div>
-                    </div>
-                </section>
-
-                <section class="settings-card rr-card rr-panel" id="rrTargetsCard" role="tabpanel">
-                    <header class="rr-card-head">
-                        <div>
-                            <h4>Multi-Target Replay &amp; Starting Data</h4>
-                            <div class="settings-help">Replay one recording on several instances and check that each one starts from the same data.</div>
-                        </div>
-                        <span class="rr-tag">2&ndash;8 targets</span>
-                    </header>
-                    <div class="setting-rows">
-                        <div class="setting-row setting-row-wide">
-                            <div class="setting-control">
-                                <label for="workloadReplayTargetsList">Replay Targets</label>
-                                <div id="workloadReplayTargetsList" class="replay-targets-list"></div>
-                                <button type="button" class="btn btn-secondary btn-small" id="workloadReplayTargetAdd" onclick="addReplayTargetRow('', '')">Add target</button>
-                                <input type="hidden" name="workload_replay_targets" id="workloadReplayTargets" value="">
-                            </div>
-                            <div class="settings-note" id="workloadReplayTargetsNote"><strong>Listed (2&ndash;8 targets):</strong> the replay (or deterministic run) runs once on every listed target, and only on those: MongoDB URI is not used. Each target gets its own client, workers, stats, outcome file (the label goes before the extension, for example <code>outcomes.m8.ndjson</code>), insights, and trend run, and is compared with the first target. Needs Replay Workload or Deterministic traffic, and Record Outcomes with an outcome file. Username, password, and TLS settings apply to every target; put other per-target options in its URI. <strong>Empty (default):</strong> a single run on MongoDB URI. <span class="setting-keys"><code>workload_replay_targets</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS</code> (<code>label=uri;label=uri</code>)</span></div>
-                        </div>
-                        <div class="setting-row">
-                            <div class="setting-control">
-                                <label for="workloadReplayTargetsMode">Targets Mode</label>
-                                <select name="workload_replay_targets_mode" id="workloadReplayTargetsMode">
-                                    <option value="sequential" selected>Sequential</option>
-                                    <option value="concurrent">Concurrent</option>
-                                </select>
-                            </div>
-                            <div class="settings-note" id="workloadReplayTargetsModeNote"><strong>Concurrent:</strong> every target is prepared first, one at a time, then all run at once from this host; they share its CPU, memory, and network, so latencies may be affected, and the report shows each target's client-side lag behind the recorded timeline. <strong>Sequential (default):</strong> targets run one after another and do not compete for this host. <span class="setting-keys"><code>workload_replay_targets_mode</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS_MODE</code></span></div>
-                        </div>
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="workloadDataFingerprint">Starting-Data Fingerprint</label>
@@ -3622,6 +3698,7 @@
                                     <option value="false" selected>Off</option>
                                     <option value="true">On</option>
                                 </select>
+                                <p id="workloadRecordOutcomesAuto" class="settings-note" role="status" hidden></p>
                             </div>
                             <div class="settings-note" id="workloadRecordOutcomesNote"><strong>On:</strong> keeps what every operation returned: client latency, ok or the error code and name (never the message), and a result summary (documents returned; inserted; matched/modified/upserted; deleted; transaction commit/abort), so two executions can be compared. A recording stores it on each operation line; a replay or deterministic run writes it to the outcome file below. The commands sent, stats, insights, and trends do not change; the cost is negligible without checksums. <strong>Off (default):</strong> no outcomes are kept and recordings are unchanged. <span class="setting-keys"><code>workload_record_outcomes</code> / <code>PLGM_WORKLOAD_RECORD_OUTCOMES</code></span></div>
                         </div>
@@ -3638,16 +3715,16 @@
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="workloadReplayOutcomesPath">Replay Outcome File (server path)</label>
-                                <input class="f-xl" type="text" name="workload_replay_outcomes_path" id="workloadReplayOutcomesPath" placeholder="plgm_replay_outcomes.ndjson">
+                                <input class="f-xl" type="text" name="workload_replay_outcomes_path" id="workloadReplayOutcomesPath" placeholder="Blank: a new file per run">
                             </div>
-                            <div class="settings-note" id="workloadReplayOutcomesPathNote"><strong>Set:</strong> a replay writes one outcome per replayed operation to this NDJSON file (mode 0600), with the recording's sequence numbers and header hash, so any two executions of a recording can be compared offline; required when Record Outcomes is on during a replay. An existing file that is not an outcome file is never overwritten. <strong>Empty (default):</strong> a replay writes no outcome file. <span class="setting-keys"><code>workload_replay_outcomes_path</code> / <code>PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH</code></span></div>
+                            <div class="settings-note" id="workloadReplayOutcomesPathNote"><strong>Set:</strong> a replay writes one outcome per replayed operation to this NDJSON file (mode 0600), with the recording's sequence numbers and header hash, so any two executions of a recording can be compared offline. A path you enter is used as is (an existing outcome file at that path is replaced; any other file is never overwritten). <strong>Empty (default):</strong> with Record Outcomes on, the server creates a new file for each run in its recordings directory, <code>plgm_replay_outcomes-&lt;UTC time&gt;-&lt;random&gt;.ndjson</code> (per target, the label goes before the extension), never replacing an existing file, and shows it on the dashboard; with Record Outcomes off, no outcome file. <span class="setting-keys"><code>workload_replay_outcomes_path</code> / <code>PLGM_WORKLOAD_REPLAY_OUTCOMES_PATH</code></span></div>
                         </div>
                         <div class="setting-row">
                             <div class="setting-control">
                                 <label for="workloadDeterministicOutcomesPath">Deterministic Outcome File (server path)</label>
-                                <input class="f-xl" type="text" name="workload_deterministic_outcomes_path" id="workloadDeterministicOutcomesPath" placeholder="plgm_deterministic_outcomes.ndjson">
+                                <input class="f-xl" type="text" name="workload_deterministic_outcomes_path" id="workloadDeterministicOutcomesPath" placeholder="Blank: a new file per run">
                             </div>
-                            <div class="settings-note" id="workloadDeterministicOutcomesPathNote"><strong>Set:</strong> a deterministic run writes one outcome per operation to this NDJSON file (mode 0600), keyed by iteration, worker, and operation number and stamped with the traffic fingerprint. <strong>Empty (default):</strong> no outcome file; with Record Workload on, the outcomes go into the recording instead. <span class="setting-keys"><code>workload_deterministic_outcomes_path</code> / <code>PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH</code></span></div>
+                            <div class="settings-note" id="workloadDeterministicOutcomesPathNote"><strong>Set:</strong> a deterministic run writes one outcome per operation to this NDJSON file (mode 0600), keyed by iteration, worker, and operation number and stamped with the traffic fingerprint. A path you enter is used as is. <strong>Empty (default):</strong> with Record Workload on, the outcomes go into the recording; otherwise, with Record Outcomes on, the server creates <code>plgm_deterministic_outcomes-&lt;UTC time&gt;-&lt;random&gt;.ndjson</code> for each run (per target, the label goes before the extension), never replacing an existing file. <span class="setting-keys"><code>workload_deterministic_outcomes_path</code> / <code>PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH</code></span></div>
                         </div>
                     </div>
                 </section>
@@ -3810,18 +3887,24 @@
                         Each query should include <code>name</code>, <code>collection</code>, and <code>operation</code>. If <code>database</code> is omitted, it is resolved from loaded collections when unambiguous.
                     </div>
                     </div>
-                    <h4 class="settings-subhead">Seeding &amp; Transactions</h4>
+                    <div class="seed-subhead">
+                        <h4 class="settings-subhead">Seeding &amp; Transactions</h4>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="seedData" aria-controls="seedDocumentCount">
+                            <label for="seedData">Seed documents</label>
+                        </div>
+                        <div class="settings-note" id="seedDataNote"><strong>On:</strong> before the run starts, PLGM inserts Seed Document Count documents into each collection. <strong>Off (default):</strong> no documents are inserted before the run. Inserts in the workload still run either way. Deterministic traffic needs it on. <span class="setting-keys"><code>skip_seed</code> (inverted) / <code>PLGM_SKIP_SEED</code></span></div>
+                        <input type="checkbox" id="skipSeed" name="skip_seed" value="true" checked hidden tabindex="-1" aria-hidden="true">
+                    </div>
                     <div class="grid-3">
-                        <div class="form-group"><label>Seed Document Count</label><input class="f-sm" type="number"
-                                name="documents_count" value="100000"></div>
+                        <div class="form-group"><label for="seedDocumentCount">Seed Document Count</label><input class="f-sm" type="number"
+                                name="documents_count" id="seedDocumentCount" value="100000"></div>
                         <div class="form-group" data-tier="advanced"><label>Max Transaction Ops</label><input class="f-xs" type="number"
                                 name="max_transaction_ops" value="5"></div>
                     </div>
                     <div class="checkbox-row" data-tier="advanced">
                         <div class="checkbox-group"><input type="checkbox" id="dropColl" name="drop_collections"
                                 value="true"><label for="dropColl">Drop Collections First</label></div>
-                        <div class="checkbox-group"><input type="checkbox" id="skipSeed" name="skip_seed"
-                                value="true"><label for="skipSeed">Skip Seed Phase</label></div>
                         <div class="checkbox-group"><input type="checkbox" id="useTx" name="use_transactions"
                                 value="true"><label for="useTx">Use Transactions</label></div>
                     </div>
@@ -4288,7 +4371,7 @@
             { id: 'basic', label: 'Basic settings' },
             { id: 'connection', label: 'Connection' },
             { id: 'execution', label: 'Workload execution' },
-            { id: 'reproducibility', label: 'Record & replay' },
+            { id: 'reproducibility', label: 'Seed & Deterministic', replayLabel: 'Outcomes & import' },
             { id: 'data', label: 'Data & queries' },
             { id: 'insights', label: 'Metrics & reporting' },
             { id: 'explain', label: 'Query analysis' },
@@ -4350,6 +4433,14 @@
                 }
             }
             renderSettingsNav(useNav ? groups : []);
+            placeServerChoice();
+        }
+
+        // A replay never uses the seed or deterministic traffic, so that
+        // category holds only its outcome and import settings and says so.
+        function settingsGroupLabel(g) {
+            const mode = (document.getElementById('operationMode')?.value || '').trim();
+            return mode === 'replay' && g.replayLabel ? g.replayLabel : g.label;
         }
 
         function renderSettingsNav(groups) {
@@ -4364,7 +4455,7 @@
                     ? '<span class="settings-nav-error" aria-hidden="true"></span><span class="sr-only"> (has errors)</span>'
                     : '';
                 const sep = (i === 1 && groups[0] === 'basic') ? '<div class="settings-nav-sep" role="none"></div>' : '';
-                return `${sep}<button type="button" role="tab" class="settings-nav-item" id="snav-${id}" data-group="${id}" aria-controls="settingsPanels" aria-selected="${on}" tabindex="${on ? 0 : -1}" onclick="selectSettingsGroup('${id}')"><span class="settings-nav-label">${escHtml(g.label)}</span>${err}</button>`;
+                return `${sep}<button type="button" role="tab" class="settings-nav-item" id="snav-${id}" data-group="${id}" aria-controls="settingsPanels" aria-selected="${on}" tabindex="${on ? 0 : -1}" onclick="selectSettingsGroup('${id}')"><span class="settings-nav-label">${escHtml(settingsGroupLabel(g))}</span>${err}</button>`;
             }).join('');
             if (hadFocus) document.getElementById('snav-' + activeSettingsGroup)?.focus();
         }
@@ -5090,19 +5181,232 @@
             }));
         }
         function syncReplayTargets() {
+            updateReplayDependencies();
+        }
+
+        // The effective record/replay/deterministic choice: the selected task
+        // decides, and without one the individual settings do.
+        function effectiveReproSettings() {
+            const mode = (document.getElementById('operationMode')?.value || '').trim();
+            let recordOn = document.getElementById('workloadRecordEnabled')?.value === 'true';
+            let replayOn = document.getElementById('workloadReplayEnabled')?.value === 'true';
+            let rawOn = !!document.getElementById('rawEnable')?.checked;
+            if (mode) {
+                recordOn = mode === 'record';
+                replayOn = mode === 'replay';
+                rawOn = mode === 'raw';
+            }
+            const detOn = !!document.getElementById('workloadDeterministic')?.checked && mode !== 'replay' && mode !== 'raw';
+            return { mode, recordOn, replayOn, rawOn, detOn };
+        }
+
+        // Value of Record Outcomes from before Replay Targets turned it on,
+        // restored when the targets no longer apply.
+        let targetOutcomesOverride = null;
+
+        // Recomputes what the listed Replay Targets depend on, every time a
+        // related setting changes. Unambiguous prerequisites are applied with a
+        // note (Record Outcomes); a run that cannot use targets keeps the rows,
+        // disabled and not submitted, with the way forward; a run with no
+        // traffic source is asked to choose one rather than given one.
+        function updateReplayDependencies() {
             const hidden = document.getElementById('workloadReplayTargets');
-            if (!hidden) return;
-            const rows = replayTargetRows().filter(t => t.label || t.uri);
-            hidden.value = rows.length ? JSON.stringify(rows) : '';
+            const list = document.getElementById('workloadReplayTargetsList');
+            if (!hidden || !list) return;
+            const eff = effectiveReproSettings();
+            const shown = serverChoiceShown(eff);
+            const several = shown && runOnSeveral();
+            const listed = several ? listedReplayTargets() : [];
+            let blocked = '';
+            if (eff.rawOn) blocked = 'raw';
+            else if (eff.recordOn) blocked = 'record';
+            const runOnRow = document.getElementById('runOnRow');
+            if (runOnRow) runOnRow.hidden = !shown;
+            const block = document.getElementById('multiServerBlock');
+            if (block) block.hidden = !several;
+            const uriGroup = document.getElementById('uriGroup');
+            if (uriGroup) uriGroup.hidden = serversReplaceUri();
+            placeServerChoice();
+            list.querySelectorAll('input, button').forEach(el => { el.disabled = !!blocked; });
+            const add = document.getElementById('workloadReplayTargetAdd');
+            if (add) add.disabled = !!blocked;
+            const active = listed.length > 0 && !blocked && (eff.replayOn || eff.detOn);
+            // Targets are sent only when the run can use them; otherwise they
+            // are kept for later and the note below says why.
+            hidden.value = active ? JSON.stringify(listed) : '';
+            const outcomes = document.getElementById('workloadRecordOutcomes');
+            const outcomesNote = document.getElementById('workloadRecordOutcomesAuto');
+            if (outcomes) {
+                if (active) {
+                    if (targetOutcomesOverride === null) targetOutcomesOverride = outcomes.value;
+                    outcomes.value = 'true';
+                } else if (targetOutcomesOverride !== null) {
+                    outcomes.value = targetOutcomesOverride;
+                    targetOutcomesOverride = null;
+                }
+            }
+            if (outcomesNote) {
+                outcomesNote.hidden = !active;
+                outcomesNote.textContent = active
+                    ? 'On because Replay Targets are listed: each target writes its own outcome file, compared with the first target. Removing the targets restores the previous value.'
+                    : '';
+            }
+
+            const status = document.getElementById('replayTargetsStatus');
+            if (!status) return;
+            const n = listed.length;
+            const kept = `The ${n} listed target${n === 1 ? ' is' : 's are'} kept.`;
+            let html = '';
+            if (n && blocked === 'record') {
+                html = `Replay Targets are not used while recording: a recording is written from one instance. Record here first, then choose <a href="#" class="goto-link" onclick="selectMode('replay'); return false;">Replay a recording</a> to run that file on the targets. ${kept}`;
+            } else if (n && blocked === 'raw') {
+                html = `Replay Targets are not used by the raw injector. ${kept}`;
+            } else if (n && !active) {
+                html = `This run connects only to the server in the MongoDB URI field: the servers listed here need a traffic source. To run on the targets, <a href="#" class="goto-link" onclick="revealSetting('workloadDeterministic'); return false;">turn on Deterministic traffic</a> (the same generated operations on every target) or choose <a href="#" class="goto-link" onclick="selectMode('replay'); return false;">Replay a recording</a>. ${kept}`;
+            } else if (active) {
+                const first = escHtml(listed[0].label || 'the first target');
+                const out = eff.replayOn ? 'workloadReplayOutcomesPath' : 'workloadDeterministicOutcomesPath';
+                const named = (document.getElementById(out)?.value || '').trim();
+                html = `Each target is compared with ${first}. Record Outcomes is on; ${named ? 'each target writes its own copy of the outcome file you entered, with its label before the extension' : 'a new outcome file is generated for each target when the run starts'}.`;
+            }
+            status.hidden = !html;
+            status.innerHTML = html;
+            updateEffectiveSummary();
+        }
+
+        // --- Server recordings (Replay) ---
+        // The list comes from /api/recordings: files on the PLGM server, read
+        // only up to their header. The chosen path goes into workload_replay_path.
+        let replayPathFromList = false;
+        let recordingsRequest = 0;
+        function formatRecordingSize(n) {
+            n = Number(n || 0);
+            if (n >= 1 << 30) return `${(n / (1 << 30)).toFixed(1)} GiB`;
+            if (n >= 1 << 20) return `${(n / (1 << 20)).toFixed(1)} MiB`;
+            if (n >= 1 << 10) return `${(n / (1 << 10)).toFixed(1)} KiB`;
+            return `${n} B`;
+        }
+        function recordingOptionLabel(e) {
+            const when = (e.created_at || e.modified_at || '').replace('T', ' ').replace(/(:\d\d)Z$|Z$/, '$1').slice(0, 16);
+            const parts = [e.name || e.path];
+            if (e.problem) return `${parts[0]} - cannot be replayed: ${e.problem}`;
+            if (e.ops !== undefined && e.ops !== null) parts.push(`${Number(e.ops).toLocaleString('en-US')} ops`);
+            parts.push(formatRecordingSize(e.size_bytes));
+            if (when) parts.push(when);
+            if (e.source === 'import') parts.push('imported traffic');
+            else if (e.source === 'run') parts.push('recorded by this server');
+            if (e.status && e.status !== 'complete') parts.push(e.status);
+            return parts.join(' · ');
+        }
+        function setRecordingStatus(text, state) {
+            const el = document.getElementById('workloadReplayRecordingStatus');
+            if (!el) return;
+            el.textContent = text;
+            el.dataset.state = state || '';
+        }
+        async function loadServerRecordings() {
+            const sel = document.getElementById('workloadReplayRecording');
+            const btn = document.getElementById('workloadReplayRecordingRefresh');
+            if (!sel) return;
+            const req = ++recordingsRequest;
+            sel.setAttribute('aria-busy', 'true');
+            if (btn) btn.disabled = true;
+            setRecordingStatus('Loading the recordings on the PLGM server...', 'loading');
+            try {
+                const res = await fetch('/api/recordings');
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                if (req === recordingsRequest) renderServerRecordings(data);
+            } catch (err) {
+                if (req !== recordingsRequest) return;
+                setRecordingStatus(`Could not list the recordings on the PLGM server (${err && err.message ? err.message : err}). Try Refresh, or enter a server path or upload a file.`, 'error');
+                const manual = document.getElementById('workloadReplayManual');
+                if (manual) manual.open = true;
+            } finally {
+                if (req === recordingsRequest) {
+                    sel.removeAttribute('aria-busy');
+                    if (btn) btn.disabled = false;
+                }
+            }
+        }
+        function renderServerRecordings(data) {
+            const sel = document.getElementById('workloadReplayRecording');
+            const pathEl = document.getElementById('workloadReplayPath');
+            if (!sel || !pathEl) return;
+            const list = Array.isArray(data && data.recordings) ? data.recordings : [];
+            const dirs = Array.isArray(data && data.directories) ? data.directories : [];
+            const where = dirs.length ? dirs.join(', ') : 'its recordings directory';
+            sel.innerHTML = '';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = list.length ? 'Choose a recording' : 'No recordings found';
+            sel.appendChild(placeholder);
+            list.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.path;
+                opt.textContent = recordingOptionLabel(e);
+                opt.title = e.path;
+                if (e.problem) opt.disabled = true;
+                sel.appendChild(opt);
+            });
+            const path = pathEl.value.trim();
+            const match = list.find(e => e.path === path && !e.problem);
+            const uploading = !!document.getElementById('workloadReplayFile')?.files?.length;
+            const newest = list.find(e => !e.problem);
+            let extra = '';
+            if (match) {
+                sel.value = path;
+            } else if (!path && !uploading && newest) {
+                // Nothing chosen yet: take the newest recording, and say so.
+                sel.value = newest.path;
+                pathEl.value = newest.path;
+                replayPathFromList = true;
+                pathEl.dispatchEvent(new Event('change', { bubbles: true }));
+                extra = ` The newest one, ${newest.name || newest.path}, is selected.`;
+            } else {
+                sel.value = '';
+                if (path && replayPathFromList) {
+                    pathEl.value = '';
+                    replayPathFromList = false;
+                    extra = ` The recording you chose, ${path}, is no longer available: choose another one.`;
+                } else if (path) {
+                    const manual = document.getElementById('workloadReplayManual');
+                    if (manual) manual.open = true;
+                    extra = ` The server path entered below (${path}) is used; it is not in this list.`;
+                }
+            }
+            const count = list.length
+                ? `${list.length}${data.truncated ? ' (newest)' : ''} recording${list.length === 1 ? '' : 's'} on the PLGM server in ${where}.`
+                : `No recordings found on the PLGM server in ${where}. Record a workload first (Record a workload task), convert captured traffic (Import Traffic), or enter a server path or upload a file.`;
+            setRecordingStatus(count + extra, extra.includes('no longer') ? 'error' : (list.length ? '' : 'empty'));
+        }
+        function onReplayRecordingPicked() {
+            const sel = document.getElementById('workloadReplayRecording');
+            const pathEl = document.getElementById('workloadReplayPath');
+            if (!sel || !pathEl) return;
+            pathEl.value = sel.value;
+            replayPathFromList = !!sel.value;
+            const opt = sel.selectedOptions && sel.selectedOptions[0];
+            if (sel.value && opt) setRecordingStatus(`Selected on the PLGM server: ${sel.value}`, '');
+            pathEl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        function onReplayPathTyped() {
+            const sel = document.getElementById('workloadReplayRecording');
+            const pathEl = document.getElementById('workloadReplayPath');
+            if (!sel || !pathEl) return;
+            replayPathFromList = false;
+            const v = pathEl.value.trim();
+            const opt = Array.from(sel.options).find(o => o.value && o.value === v && !o.disabled);
+            sel.value = opt ? v : '';
         }
         function addReplayTargetRow(label, uri) {
             const list = document.getElementById('workloadReplayTargetsList');
             if (!list) return;
             const row = document.createElement('div');
             row.className = 'replay-target-row';
-            row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px;';
-            row.innerHTML = '<input type="text" class="replay-target-label" placeholder="label (e.g. m8)" maxlength="32" style="max-width:160px;">'
-                + '<input type="text" class="replay-target-uri" placeholder="mongodb://host:27017" style="flex:1;">'
+            row.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px;';
+            row.innerHTML = '<input type="text" class="replay-target-label" placeholder="label (e.g. m8)" maxlength="32" aria-label="Target label" style="flex:0 1 160px; min-width:7rem;">'
+                + '<input type="text" class="replay-target-uri" placeholder="mongodb://host:27017" aria-label="Target URI" style="flex:1 1 14rem; min-width:0;">'
                 + '<button type="button" class="btn btn-secondary replay-target-remove" title="Remove target">Remove</button>';
             row.querySelector('.replay-target-label').value = label || '';
             row.querySelector('.replay-target-uri').value = uri || '';
@@ -5115,25 +5419,94 @@
             const list = document.getElementById('workloadReplayTargetsList');
             if (!list) return;
             list.innerHTML = '';
-            (Array.isArray(targets) ? targets : []).forEach(t => addReplayTargetRow(t.label || t.Label || '', t.uri || t.URI || ''));
+            const list2 = Array.isArray(targets) ? targets : [];
+            list2.forEach(t => addReplayTargetRow(t.label || t.Label || '', t.uri || t.URI || ''));
+            // A loaded list means the run was on several servers.
+            setRunOnSeveral(list2.length > 0);
             syncReplayTargets();
         }
         function listedReplayTargets() {
             return replayTargetRows().filter(t => t.label || t.uri);
         }
-        function validateReplayTargets(recordOn, replayOn, detOn, outcomesOn, replayOutPath, detOutPath) {
+
+        // "Run on" in Target Connection: one server (MongoDB URI) or several
+        // (the Replay Targets list). It is offered for replays, and for
+        // generic or custom runs with deterministic traffic.
+        function runOnSeveral() {
+            return !!document.getElementById('runOnSeveral')?.checked;
+        }
+        function setRunOnSeveral(on) {
+            const several = document.getElementById('runOnSeveral');
+            const one = document.getElementById('runOnOne');
+            if (several && one) { several.checked = !!on; one.checked = !on; }
+        }
+        function serverChoiceShown(eff) {
+            if (!eff.mode) return true;
+            if (eff.mode === 'replay') return true;
+            if (eff.mode === 'generic' || eff.mode === 'custom') return eff.detOn;
+            return false;
+        }
+        // The servers list replaces MongoDB URI when the run can use it.
+        function serversReplaceUri() {
+            const eff = effectiveReproSettings();
+            return serverChoiceShown(eff) && runOnSeveral() && !eff.recordOn && !eff.rawOn && (eff.replayOn || eff.detOn);
+        }
+        // Run on and the server list are one set of controls. They sit in
+        // Target Connection, except while a generic or custom run with
+        // Deterministic traffic has Seed & Deterministic open: then they move
+        // next to Deterministic traffic, so that run is set up in one place.
+        // Only one of the two places is on screen at a time.
+        function placeServerChoice() {
+            const row = document.getElementById('runOnRow');
+            const block = document.getElementById('multiServerBlock');
+            const uri = document.getElementById('uriGroup');
+            const slot = document.getElementById('detServersSlot');
+            const card = document.getElementById('rrSeedCard');
+            if (!row || !block || !uri || !slot || !card) return;
+            const eff = effectiveReproSettings();
+            const here = eff.detOn && (eff.mode === 'generic' || eff.mode === 'custom')
+                && !!document.getElementById('settingsBody')?.classList.contains('has-nav')
+                && card.dataset.groupHidden !== '1' && settingsCardShown(card);
+            if (here && row.parentElement !== slot) {
+                slot.append(row, block);
+            } else if (!here && row.parentElement === slot) {
+                uri.before(row);
+                uri.after(block);
+            }
+            slot.hidden = !here;
+        }
+        // Operations per Worker only matters with Deterministic traffic; it
+        // stays visible while it holds a value that would block the run.
+        function updateDeterministicDisclosure() {
+            const det = !!document.getElementById('workloadDeterministic')?.checked;
+            const ops = (document.getElementById('operationsPerWorker')?.value || '').trim();
+            const row = document.getElementById('operationsPerWorkerRow');
+            if (row) row.hidden = !det && /^\d*$/.test(ops);
+            const hint = document.getElementById('operationsPerWorkerHint');
+            if (hint) hint.hidden = !(det && !(Number(ops) > 0));
+        }
+        function onRunOnChange() {
+            if (runOnSeveral() && replayTargetRows().length === 0) {
+                addReplayTargetRow('', '');
+                addReplayTargetRow('', '');
+            }
+            updateReplayDependencies();
+        }
+        function validateReplayTargets(recordOn, replayOn, detOn, outcomesOn) {
             const mode = (document.getElementById('operationMode')?.value || '').trim();
             const ops = document.getElementById('workloadReplayOps')?.value || 'all';
             if (!mode && ops === 'reads_only' && !replayOn) return 'Replay Operations "Reads only" needs Replay Workload on.';
             const fp = document.getElementById('workloadDataFingerprint')?.value || 'off';
             if (!mode && fp !== 'off' && !recordOn && !replayOn) return 'Starting-Data Fingerprint needs Record Workload (the recording stores it) or Replay Workload on.';
-            if (mode && !replayOn && !detOn) return '';
+            // While recording (or with the raw injector) the targets are kept
+            // but not submitted; the note next to them says why.
+            // Without a replay or deterministic traffic, the targets are not
+            // sent either, and the run uses MongoDB URI.
+            if (recordOn || effectiveReproSettings().rawOn || (!replayOn && !detOn)) return '';
+            if (!runOnSeveral() || !serverChoiceShown(effectiveReproSettings())) return '';
             const targets = listedReplayTargets();
-            if (targets.length === 0) return '';
-            if (targets.length < 2 || targets.length > 8) return `Replay Targets needs 2 to 8 targets (got ${targets.length}); use MongoDB URI for a single instance.`;
-            if (!replayOn && !detOn) return 'Replay Targets needs Replay Workload or Deterministic traffic on.';
-            if (recordOn) return 'Replay Targets cannot be combined with Record Workload: every target would write the same recording.';
-            if (document.getElementById('rawEnable')?.checked) return 'Replay Targets does not work with the raw injector (Expert / Debug tab).';
+            if (targets.length === 0) return 'Replay Targets needs 2 to 8 targets (got 0): add the servers, or choose Run on: One server.';
+            if (targets.length < 2 || targets.length > 8) return `Replay Targets needs 2 to 8 targets (got ${targets.length}); for a single server, choose Run on: One server.`;
             const labels = new Set(), uris = new Set();
             for (let i = 0; i < targets.length; i++) {
                 const t = targets[i];
@@ -5144,14 +5517,15 @@
                 if (uris.has(t.uri)) return `Replay target "${t.label}": the same URI is listed twice.`;
                 uris.add(t.uri);
             }
-            const outPath = replayOn ? replayOutPath : detOutPath;
-            if (!outcomesOn || !outPath) return `Replay Targets needs Record Outcomes on and the ${replayOn ? 'Replay' : 'Deterministic'} Outcome File set: every target writes its own outcome file.`;
+            if (!outcomesOn) return 'Replay Targets needs Record Outcomes on: every target writes its own outcome file.';
             return '';
         }
         // A multi-target run writes to every listed target unless it only
         // replays reads and neither drops nor seeds: ask first.
         function confirmMultiTargetWrites() {
-            const targets = listedReplayTargets();
+            updateReplayDependencies();
+            const sent = document.getElementById('workloadReplayTargets')?.value || '';
+            const targets = sent ? JSON.parse(sent) : [];
             if (targets.length === 0) return true;
             const replayOn = document.getElementById('workloadReplayEnabled')?.value === 'true';
             const readsOnly = replayOn && document.getElementById('workloadReplayOps')?.value === 'reads_only';
@@ -5165,15 +5539,10 @@
             return confirm(`This run will ${what.join(', ')} on ${targets.length} targets: ${targets.map(t => t.label).join(', ')}. Continue?`);
         }
         function validateWorkloadRecordReplay() {
-            const mode = (document.getElementById('operationMode')?.value || '').trim();
-            let recordOn = document.getElementById('workloadRecordEnabled')?.value === 'true';
-            let replayOn = document.getElementById('workloadReplayEnabled')?.value === 'true';
-            let rawOn = !!document.getElementById('rawEnable')?.checked;
-            if (mode) {
-                recordOn = mode === 'record';
-                replayOn = mode === 'replay';
-                rawOn = mode === 'raw';
-            }
+            updateReplayDependencies();
+            updateDeterministicDisclosure();
+            syncSeedToggle();
+            const { mode, recordOn, replayOn, rawOn } = effectiveReproSettings();
             if (recordOn && replayOn) {
                 return 'Record Workload and Replay Workload cannot both be on for the same run.';
             }
@@ -5184,7 +5553,7 @@
                 const path = (document.getElementById('workloadReplayPath')?.value || '').trim();
                 const files = document.getElementById('workloadReplayFile')?.files?.length || 0;
                 if (!path && files === 0) {
-                    return 'Replay Workload is on: enter the recording path or upload a recording.';
+                    return 'Replay Workload is on: choose a recording on the PLGM server, enter the recording path, or upload a recording.';
                 }
             }
             const seed = (document.querySelector('[name="random_seed"]')?.value || '').trim();
@@ -5203,8 +5572,11 @@
                 if (rawOn) return 'Deterministic traffic does not work with the raw injector (Expert / Debug tab).';
                 const kind = document.getElementById('loadProfileKind')?.value || 'fixed';
                 if (kind !== 'fixed') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed.';
-                if (!document.getElementById('dropColl')?.checked || document.getElementById('skipSeed')?.checked) {
-                    return 'Deterministic traffic needs Drop Collections on and Skip Seed off, so existing records are the seeded documents.';
+                if (document.getElementById('skipSeed')?.checked) {
+                    return 'Deterministic traffic needs Seed documents on, so existing records are the seeded documents.';
+                }
+                if (!document.getElementById('dropColl')?.checked) {
+                    return 'Deterministic traffic needs Drop Collections First on, so existing records are the seeded documents.';
                 }
             }
             let outcomesOn = document.getElementById('workloadRecordOutcomes')?.value === 'true';
@@ -5225,51 +5597,123 @@
             } else {
                 if (replayOutPath && !replayOn) return 'Replay Outcome File is set but Replay Workload is off.';
                 if (detOutPath && !detOn) return 'Deterministic Outcome File is set but Deterministic traffic is off.';
-                if (replayOn && !replayOutPath) return 'Record Outcomes during a replay needs a Replay Outcome File.';
-                if (!replayOn && detOn && !detOutPath && !recordOn) return 'Record Outcomes in a deterministic run needs a Deterministic Outcome File or Record Workload on.';
-                if (!replayOn && !detOn && !recordOn) return 'Record Outcomes needs Record Workload on, a replay with a Replay Outcome File, or Deterministic traffic with a Deterministic Outcome File.';
+                // A blank outcome file is generated by the server for the run.
+                if (!replayOn && !detOn && !recordOn) return 'Record Outcomes needs Record Workload, Replay Workload, or Deterministic traffic on.';
             }
-            return validateReplayTargets(recordOn, replayOn, detOn, outcomesOn, replayOutPath, detOutPath);
+            return validateReplayTargets(recordOn, replayOn, detOn, outcomesOn);
         }
-        // Values from before Deterministic traffic was turned on, restored if it is turned off.
+        // What turning Deterministic traffic on changed: each entry keeps the
+        // earlier value and the one set. Turning it off puts back only the
+        // values still as they were set, so a later edit is never undone.
         let deterministicOverrides = null;
+        const deterministicFields = [
+            { key: 'seed', id: 'randomSeedInput', label: 'Random Seed', basic: false },
+            { key: 'drop', id: 'dropColl', label: 'Drop Collections First', basic: true },
+            { key: 'skip', id: 'skipSeed', label: 'Seed documents', basic: true },
+            { key: 'loadProfile', id: 'loadProfileKind', label: 'Load Profile', basic: true }
+        ];
+        function deterministicFieldValue(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            return el.type === 'checkbox' ? el.checked : el.value;
+        }
+        function setDeterministicFieldValue(id, v) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = v; else el.value = v;
+            if (id === 'loadProfileKind') onLoadProfileKindChange();
+            if (id === 'skipSeed') syncSeedToggle();
+        }
+        // Seed documents is the visible switch for skip_seed (inverted); the
+        // hidden skip_seed checkbox holds the value that is submitted. Off
+        // disables Seed Document Count, which keeps its value.
+        function syncSeedToggle() {
+            const skip = document.getElementById('skipSeed');
+            const toggle = document.getElementById('seedData');
+            const count = document.getElementById('seedDocumentCount');
+            if (!skip || !toggle) return;
+            toggle.checked = !skip.checked;
+            if (count) count.disabled = skip.checked;
+        }
+        function onSeedToggle() {
+            const skip = document.getElementById('skipSeed');
+            skip.checked = !document.getElementById('seedData').checked;
+            skip.dispatchEvent(new Event('change', { bubbles: true }));
+            syncSeedToggle();
+        }
+        // A seed for a deterministic run when none is set: any non-zero value
+        // works; the user can replace it.
+        let newDeterministicSeed = () => 1 + Math.floor(Math.random() * 999999);
+        function describeDeterministicValue(f, v) {
+            if (f.key === 'loadProfile') return `${f.label} is ${v === 'fixed' ? 'Fixed' : v}`;
+            if (f.key === 'seed') return `${f.label} is ${v}`;
+            if (f.key === 'skip') return `${f.label} is ${v ? 'off' : 'on'}`;
+            return `${f.label} is ${v ? 'on' : 'off'}`;
+        }
         function applyDeterministicRequirements() {
             const det = document.getElementById('workloadDeterministic');
-            const drop = document.getElementById('dropColl');
-            const skip = document.getElementById('skipSeed');
-            const lp = document.getElementById('loadProfileKind');
             const note = document.getElementById('workloadDeterministicAuto');
-            if (!det || !drop || !skip) return;
+            if (!det || !document.getElementById('dropColl') || !document.getElementById('skipSeed')) return;
+            const show = html => {
+                if (!note) return;
+                note.innerHTML = html;
+                note.style.display = html ? 'block' : 'none';
+            };
             if (!det.checked) {
+                const restored = [], kept = [];
                 if (deterministicOverrides) {
-                    drop.checked = deterministicOverrides.drop;
-                    skip.checked = deterministicOverrides.skip;
-                    if (lp && deterministicOverrides.loadProfile != null) {
-                        lp.value = deterministicOverrides.loadProfile;
-                        onLoadProfileKindChange();
-                    }
+                    deterministicFields.forEach(f => {
+                        const o = deterministicOverrides[f.key];
+                        if (!o || o.prev === o.applied) return;
+                        if (String(deterministicFieldValue(f.id)) === String(o.applied)) {
+                            setDeterministicFieldValue(f.id, o.prev);
+                            restored.push(f.label);
+                        } else {
+                            kept.push(f.label);
+                        }
+                    });
                     deterministicOverrides = null;
                 }
-                if (note) note.style.display = 'none';
+                const parts = [];
+                if (restored.length) parts.push(`Restored ${restored.join(', ')}.`);
+                if (kept.length) parts.push(`Kept your later change to ${kept.join(', ')}.`);
+                const eff = effectiveReproSettings();
+                const n = listedReplayTargets().length;
+                if (runOnSeveral() && n && (eff.mode === 'generic' || eff.mode === 'custom')) {
+                    parts.push(`Several servers needs Deterministic traffic, so this run connects only to the server in the <a href="#" class="goto-link" onclick="revealSetting(document.querySelector('[name=uri]')); return false;">MongoDB URI</a> field. The ${n} listed server${n === 1 ? ' is' : 's are'} kept for later.`);
+                }
+                show(parts.join(' '));
+                updateDeterministicDisclosure();
                 return;
             }
             if (!deterministicOverrides) {
-                deterministicOverrides = {
-                    drop: drop.checked,
-                    skip: skip.checked,
-                    loadProfile: lp ? lp.value : 'fixed'
-                };
+                deterministicOverrides = {};
+                deterministicFields.forEach(f => {
+                    deterministicOverrides[f.key] = { prev: deterministicFieldValue(f.id), applied: deterministicFieldValue(f.id) };
+                });
             }
-            drop.checked = true;
-            skip.checked = false;
-            if (lp && lp.value !== 'fixed') {
-                lp.value = 'fixed';
-                onLoadProfileKindChange();
+            const required = { drop: true, skip: false, loadProfile: 'fixed' };
+            const seed = (document.getElementById('randomSeedInput')?.value || '').trim();
+            if (!seed || Number(seed) === 0) required.seed = String(newDeterministicSeed());
+            Object.entries(required).forEach(([key, v]) => {
+                const f = deterministicFields.find(x => x.key === key);
+                if (String(deterministicFieldValue(f.id)) === String(v)) return;
+                setDeterministicFieldValue(f.id, v);
+                deterministicOverrides[key].applied = v;
+            });
+            const changed = deterministicFields.filter(f => {
+                const o = deterministicOverrides[f.key];
+                return o && String(o.prev) !== String(o.applied) && String(deterministicFieldValue(f.id)) === String(o.applied);
+            });
+            if (changed.length) {
+                const basic = changed.some(f => f.basic)
+                    ? ' (<a href="#" class="goto-link" onclick="revealSetting(\'dropColl\'); return false;">Basic settings</a>)'
+                    : '';
+                show(`Set for deterministic traffic: ${changed.map(f => describeDeterministicValue(f, deterministicFieldValue(f.id))).join(', ')}${basic}. Turning it off restores the previous values unless you change them first.`);
+            } else {
+                show('');
             }
-            if (note) {
-                note.style.display = 'block';
-                note.innerHTML = 'Drop Collections First is on, Skip Seed Phase is off, and Load Profile is Fixed (<a href="#" class="goto-link" onclick="revealSetting(\'dropColl\'); return false;">Basic settings</a>). Turning Deterministic traffic off restores the previous values.';
-            }
+            updateDeterministicDisclosure();
         }
         // Validation covers the whole effective configuration, including settings in
         // categories or levels that are not on screen. Each problem names the control
@@ -5284,8 +5728,9 @@
             [/Random Seed/, '#randomSeedInput'],
             [/Operations per Worker/, '#operationsPerWorker'],
             [/set Load Profile to Fixed/, '#loadProfileKind'],
-            [/Drop Collections on and Skip Seed off/, '#dropColl'],
-            [/^Replay Workload is on: enter the recording path/, '#workloadReplayPath'],
+            [/needs Seed documents on/, '#seedData'],
+            [/needs Drop Collections First on/, '#dropColl'],
+            [/^Replay Workload is on: choose a recording/, '#workloadReplayRecording'],
             [/^Result Checksums/, '#workloadRecordResultChecksums'],
             [/Replay Outcome File/, '#workloadReplayOutcomesPath'],
             [/Deterministic Outcome File/, '#workloadDeterministicOutcomesPath'],
@@ -5330,7 +5775,7 @@
                 add('The selected query definition cannot run until its sort order is reviewed. ' + definitionState.query.selected.sortOrderReview.message + '.', document.getElementById('queryDefinitionSelect'));
             }
             const uri = (q('uri')?.value || '').trim();
-            if (!uri && listedReplayTargets().length === 0) add('MongoDB URI is required.', q('uri'));
+            if (!uri && !serversReplaceUri()) add('MongoDB URI is required.', q('uri'));
             const maxPool = num('max_pool_size');
             const minPool = num('min_pool_size');
             if (maxPool > 0 && minPool > 0 && maxPool < minPool) {
@@ -6121,6 +6566,23 @@
             if (recordSource) recordSource.addEventListener('change', applyModeVisibility);
             initCharts();
             document.getElementById('workloadDeterministic').addEventListener('change', applyDeterministicRequirements);
+            document.getElementById('operationsPerWorker').addEventListener('input', updateDeterministicDisclosure);
+            updateDeterministicDisclosure();
+            // Replay Targets depend on these; recompute on every change.
+            ['workloadDeterministic', 'workloadRecordEnabled', 'workloadReplayEnabled', 'workloadRecordOutcomes', 'rawEnable',
+                'workloadReplayOutcomesPath', 'workloadDeterministicOutcomesPath'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('change', updateReplayDependencies);
+                if (el.type === 'text') el.addEventListener('input', updateReplayDependencies);
+            });
+            document.querySelectorAll('input[name="run_on"]').forEach(r => r.addEventListener('change', onRunOnChange));
+            document.getElementById('workloadReplayEnabled').addEventListener('change', e => {
+                if (e.target.value === 'true') loadServerRecordings();
+            });
+            document.getElementById('seedData').addEventListener('change', onSeedToggle);
+            document.getElementById('skipSeed').addEventListener('change', syncSeedToggle);
+            syncSeedToggle();
             ['dropColl', 'skipSeed', 'loadProfileKind'].forEach(id => {
                 document.getElementById(id).addEventListener('change', () => {
                     if (document.getElementById('workloadDeterministic')?.checked) applyDeterministicRequirements();
@@ -6137,120 +6599,9 @@
             wireHeatmapHoverPause();
             onLoadProfileKindChange();
             onAccessPatternKindChange();
+            document.getElementById('uiPassword').addEventListener('input', (e) => sessionStorage.setItem('plgm_password', e.target.value));
             fetch('/api/config').then(r => r.text()).then(parseJSONKeepingSeeds).then(cfg => {
-                document.querySelector('[name="uri"]').value = cfg.URI || '';
-                document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
-                document.querySelector('[name="duration"]').value = cfg.Duration || '60s';
-                document.querySelector('[name="iterations"]').value = cfg.Iterations || 1;
-                document.querySelector('[name="interval_delay"]').value = cfg.IntervalDelay || '0s';
-
-                const passInput = document.getElementById('uiPassword');
-
-                passInput.addEventListener('input', (e) => sessionStorage.setItem('plgm_password', e.target.value));
-
-                let bestPass = sessionStorage.getItem('plgm_password') || '';
-                if (cfg.ConnectionParams && cfg.ConnectionParams.Password) {
-                    bestPass = cfg.ConnectionParams.Password;
-                    sessionStorage.setItem('plgm_password', bestPass);
-                }
-                passInput.value = bestPass;
-
-                if (cfg.ConnectionParams) {
-                    document.querySelector('[name="username"]').value = cfg.ConnectionParams.Username || '';
-                    document.querySelector('[name="auth_source"]').value = cfg.ConnectionParams.AuthSource || 'admin';
-                    document.querySelector('[name="replicaset_name"]').value = cfg.ConnectionParams.ReplicaSetName || '';
-                    document.querySelector('[name="read_preference"]').value = cfg.ConnectionParams.ReadPreference || 'nearest';
-                    document.getElementById('tlsCaCurrent').value = cfg.ConnectionParams.TLSCAFile || '';
-                    document.getElementById('tlsCertCurrent').value = cfg.ConnectionParams.TLSCertificateKeyFile || '';
-                    document.getElementById('directConn').checked = cfg.ConnectionParams.DirectConnection;
-                    document.querySelector('[name="max_pool_size"]').value = cfg.ConnectionParams.MaxPoolSize || 200;
-                    document.querySelector('[name="min_pool_size"]').value = cfg.ConnectionParams.MinPoolSize || 10;
-                    document.querySelector('[name="max_idle_time"]').value = cfg.ConnectionParams.MaxIdleTime || 30;
-                }
-
-                document.getElementById('debugLogs').checked = cfg.Debug;
-                document.getElementById('dropColl').checked = cfg.DropCollections;
-                document.getElementById('skipSeed').checked = cfg.SkipSeed;
-                document.querySelector('[name="documents_count"]').value = cfg.DocumentsCount || 100000;
-                document.getElementById('useTx').checked = cfg.UseTransactions;
-                document.querySelector('[name="max_transaction_ops"]').value = cfg.MaxTransactionOps || 5;
-
-                document.querySelector('[name="find_percent"]').value = cfg.FindPercent || 0;
-                document.querySelector('[name="update_percent"]').value = cfg.UpdatePercent || 0;
-                document.querySelector('[name="delete_percent"]').value = cfg.DeletePercent || 0;
-                document.querySelector('[name="insert_percent"]').value = cfg.InsertPercent || 0;
-                document.querySelector('[name="bulk_insert_percent"]').value = cfg.BulkInsertPercent || 0;
-                document.querySelector('[name="aggregate_percent"]').value = cfg.AggregatePercent || 0;
-                document.querySelector('[name="transaction_percent"]').value = cfg.TransactionPercent || 0;
-                updateMixTotal();
-
-                document.querySelector('[name="find_batch_size"]').value = cfg.FindBatchSize || 10;
-                document.querySelector('[name="find_limit"]').value = cfg.FindLimit || 5;
-                document.querySelector('[name="insert_batch_size"]').value = cfg.InsertBatchSize || 10;
-                document.querySelector('[name="seed_batch_size"]').value = cfg.SeedBatchSize || 1000;
-                document.querySelector('[name="seed_concurrency"]').value = cfg.SeedConcurrency || 1;
-                document.getElementById('useFindOne').checked = cfg.UseFindOneForLimitOne;
-                document.getElementById('csvExport').checked = cfg.CSVExportEnabled || false;
-                document.getElementById('csvAppend').checked = cfg.CSVExportAppend || false;
-                document.querySelector('[name="csv_export_path"]').value = cfg.CSVExportPath || 'plgm_metrics_export.csv';
-                document.getElementById('insightsEnabled').checked = (cfg.InsightsEnabled !== undefined) ? !!cfg.InsightsEnabled : true;
-                document.querySelector('[name="insights_sampling_rate"]').value = cfg.InsightsSamplingRate || 0.10;
-                document.querySelector('[name="insights_slow_threshold_ms"]').value = cfg.InsightsSlowThresholdMs || 200;
-                document.querySelector('[name="insights_max_events"]').value = cfg.InsightsMaxEvents || 5000;
-                document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
-                document.getElementById('insightsExplainEnabled').checked = (cfg.InsightsExplainEnabled !== undefined) ? !!cfg.InsightsExplainEnabled : true;
-                updateExplainOffWarning();
-                document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
-                document.querySelector('[name="insights_explain_verbosity"]').value = cfg.InsightsExplainVerbosity || 'executionStats';
-                document.querySelector('[name="insights_explain_severity_mode"]').value = cfg.InsightsExplainSeverityMode || 'high_only';
-                document.querySelector('[name="insights_explain_efficiency_mode"]').value = cfg.InsightsExplainEfficiencyMode || 'impact_and_latency_tiers';
-                document.querySelector('[name="insights_latency_target_avg_ms"]').value = cfg.InsightsLatencyTargetAvgMs || '';
-                document.querySelector('[name="insights_latency_target_p95_ms"]').value = cfg.InsightsLatencyTargetP95Ms || '';
-                document.querySelector('[name="insights_latency_target_p99_ms"]').value = cfg.InsightsLatencyTargetP99Ms || '';
-                document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
-                document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
-                document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
-                document.querySelector('[name="insights_explain_backoff_ms"]').value = (cfg.InsightsExplainBackoffMS !== undefined) ? cfg.InsightsExplainBackoffMS : 150;
-                document.querySelector('[name="trend_history_runs"]').value = cfg.TrendHistoryRuns || 5;
-                document.querySelector('[name="trend_max_age_days"]').value = (cfg.TrendMaxAgeDays !== undefined && cfg.TrendMaxAgeDays !== null) ? cfg.TrendMaxAgeDays : 30;
-                document.querySelector('[name="trend_default_comparison"]').value = cfg.TrendDefaultComparison === 'pinned' ? 'pinned' : 'previous';
-                document.querySelector('[name="trend_run_label"]').value = cfg.TrendRunLabel || '';
-                document.querySelector('[name="trend_baseline_store"]').value = cfg.TrendBaselineStore || '';
-                document.getElementById('trendStoreQueryValues').checked = !!cfg.InsightsTrendStoreQueryValues;
-                document.querySelector('[name="sharding_mode"]').value = cfg.ShardingMode || 'auto';
-                document.getElementById('shardSkipNoConfig').checked = (cfg.ShardingSkipGenericWithoutConfig !== undefined) ? !!cfg.ShardingSkipGenericWithoutConfig : true;
-                document.getElementById('randomSeedInput').value = cfg.RandomSeed || 0;
-                document.getElementById('workloadRecordEnabled').value = cfg.WorkloadRecordEnabled ? 'true' : 'false';
-                document.getElementById('workloadRecordPath').value = cfg.WorkloadRecordPath || '';
-                document.getElementById('workloadRecordMaxBytes').value = cfg.WorkloadRecordMaxBytes ?? 536870912;
-                document.getElementById('workloadRecordBackpressure').value = cfg.WorkloadRecordBackpressure === 'block' ? 'block' : 'fail';
-                document.getElementById('workloadRecordCompression').value = ['zstd', 'gzip'].includes(cfg.WorkloadRecordCompression) ? cfg.WorkloadRecordCompression : 'none';
-                document.getElementById('workloadReplayEnabled').value = cfg.WorkloadReplayEnabled ? 'true' : 'false';
-                document.getElementById('workloadReplayPath').value = cfg.WorkloadReplayPath || '';
-                document.getElementById('workloadReplayMode').value = cfg.WorkloadReplayMode === 'timed' ? 'timed' : 'per_worker';
-                document.getElementById('workloadReplayAllowMismatch').value = cfg.WorkloadReplayAllowMismatch ? 'true' : 'false';
-                document.getElementById('workloadDeterministic').checked = !!cfg.WorkloadDeterministic;
-                applyDeterministicRequirements();
-                document.getElementById('operationsPerWorker').value = cfg.OperationsPerWorker || 0;
-                document.getElementById('workloadRecordOutcomes').value = cfg.WorkloadRecordOutcomes ? 'true' : 'false';
-                document.getElementById('workloadRecordResultChecksums').value = cfg.WorkloadRecordResultChecksums ? 'true' : 'false';
-                document.getElementById('workloadReplayOutcomesPath').value = cfg.WorkloadReplayOutcomesPath || '';
-                document.getElementById('workloadDeterministicOutcomesPath').value = cfg.WorkloadDeterministicOutcomesPath || '';
-                document.getElementById('workloadReplayOps').value = cfg.WorkloadReplayOps === 'reads_only' ? 'reads_only' : 'all';
-                document.getElementById('workloadReplayTargetsMode').value = cfg.WorkloadReplayTargetsMode === 'concurrent' ? 'concurrent' : 'sequential';
-                document.getElementById('workloadDataFingerprint').value = ['counts', 'dbhash'].includes(cfg.WorkloadDataFingerprint) ? cfg.WorkloadDataFingerprint : 'off';
-                setReplayTargetRows(cfg.WorkloadReplayTargets);
-
-                if (cfg.RawInjector) {
-                    document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
-                    document.querySelector('[name="raw_injector_type"]').value = cfg.RawInjector.Type || 'insert';
-                    document.querySelector('[name="raw_injector_doc_size"]').value = cfg.RawInjector.DocumentSize || 1024;
-                    document.querySelector('[name="raw_injector_batch_size"]').value = cfg.RawInjector.BatchSize || 1000;
-                    document.querySelector('[name="raw_injector_max_docs"]').value = cfg.RawInjector.MaxDocs || 10000000;
-                    document.querySelector('[name="raw_injector_db"]').value = cfg.RawInjector.DBName || 'plgm_injector';
-                    document.querySelector('[name="raw_injector_coll"]').value = cfg.RawInjector.CollectionName || 'injector_data';
-                    document.getElementById('rawDrop').checked = cfg.RawInjector.DropCollection;
-                }
+                applyConfigToForm(cfg);
                 loadDefinitionLibrary();
                 const inferred = inferModeFromConfig(cfg);
                 if (inferred) selectMode(inferred);
@@ -6868,6 +7219,31 @@
             closeInsightsDrawer();
         }
 
+        // The recording a record run writes and the outcome file of a
+        // single-target replay or deterministic run; multi-target runs list
+        // their outcome files per target.
+        function renderRunOutcomeFile(path, recording) {
+            const el = document.getElementById('runOutcomeFile');
+            if (!el) return;
+            const parts = [];
+            if (recording) parts.push(`Recording on the PLGM server: ${recording}`);
+            if (path) parts.push(`Outcome file on the PLGM server: ${path}`);
+            el.hidden = !parts.length;
+            el.textContent = parts.join(' · ');
+        }
+
+        // Comparison reports open in a new tab (served inline) or download
+        // as a file; both use the kept report's id, never a server path.
+        function comparisonReportURL(id) {
+            return `/api/replay-compare/${encodeURIComponent(id)}/report.html`;
+        }
+        function comparisonReportLinks(id, what) {
+            const url = comparisonReportURL(id);
+            const name = escHtml(what || 'comparison');
+            return `<a class="report-open" href="${url}" target="_blank" rel="noopener noreferrer">Open report<span class="sr-only"> for ${name} (opens in a new tab)</span></a>`
+                + ` · <a class="report-download" href="${url}?download=1" download="plgm-replay-compare-${escHtml(id)}.html">Download<span class="sr-only"> report for ${name}</span></a>`;
+        }
+
         // Shows the per-target progress of a multi-target replay or
         // deterministic run, then the comparisons with the first target.
         // Labels only; the API never returns target URIs.
@@ -6891,7 +7267,7 @@
                 const lag = t.lag_max_ms === undefined ? '-' : `max ${ms(t.lag_max_ms)}, avg ${ms(t.lag_avg_ms)}`;
                 const data = t.data_fingerprint_match === undefined ? '-' : (t.data_fingerprint_match ? 'matches recording' : 'differs from recording');
                 const status = escHtml(t.status || '') + (t.error ? `: ${escHtml(t.error)}` : '');
-                return `<tr data-target="${escHtml(t.label)}"><td>${t.index}. ${escHtml(t.label)}</td><td>${status}</td><td>${ops}</td><td>${Number(t.elapsed_sec || 0).toFixed(1)} s</td><td>${lag}</td><td>${data}</td></tr>`;
+                return `<tr data-target="${escHtml(t.label)}"><td>${t.index}. ${escHtml(t.label)}</td><td>${status}</td><td>${ops}</td><td>${Number(t.elapsed_sec || 0).toFixed(1)} s</td><td>${lag}</td><td>${data}</td><td class="mono-cell" title="${escHtml(t.outcome_file || '')}">${t.outcome_file ? escHtml(t.outcome_file.split('/').pop()) : '-'}</td></tr>`;
             }).join('');
             const comps = Array.isArray(mt.comparisons) ? mt.comparisons : [];
             let compHtml = '';
@@ -6901,10 +7277,17 @@
             compHtml += comps.map(c => {
                 const head = `${escHtml(c.reference)} vs ${escHtml(c.target)}`;
                 if (c.error) return `<div>${head}: not compared (${escHtml(c.error)})</div>`;
-                const link = c.report_id ? ` <a href="/api/replay-compare/${encodeURIComponent(c.report_id)}/report.html">HTML report</a>` : '';
+                const link = c.report_id ? ' ' + comparisonReportLinks(c.report_id, `${c.reference} vs ${c.target}`) : '';
                 return `<div>${head}: ${Number(c.differing_ops || 0)} differing operations, latency ${escHtml(String(c.latency_verdict || '').replace(/_/g, ' '))} (heuristic).${link}</div>`;
             }).join('');
+            // The table shows file names; the folder on the PLGM server is named once.
             document.getElementById('multiTargetComparisons').innerHTML = compHtml;
+            const dirs = [...new Set(mt.targets.filter(t => t.outcome_file).map(t => t.outcome_file.slice(0, t.outcome_file.lastIndexOf('/') + 1) || './'))];
+            const dirEl = document.getElementById('multiTargetOutcomeDir');
+            if (dirEl) {
+                dirEl.hidden = !dirs.length;
+                dirEl.innerHTML = dirs.length ? `Outcome files are on the PLGM server in <code>${escHtml(dirs.join(', '))}</code>.` : '';
+            }
             const notes = Array.isArray(mt.notes) ? mt.notes : [];
             document.getElementById('multiTargetNotes').textContent = notes.join(' ');
         }
@@ -8039,9 +8422,11 @@
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
             set('workloadReplayEnabled', 'true');
             set('workloadReplayPath', lastTrafficImport.server_path);
+            replayPathFromList = true;
             const up = document.getElementById('workloadReplayFile');
             if (up) up.value = '';
-            setTrafficImportStatus('Replay Workload is on with the imported recording. Each target should hold a copy of the captured data: turn Drop Collections off and Skip Seed on.');
+            loadServerRecordings();
+            setTrafficImportStatus('Replay Workload is on with the imported recording. Each target should hold a copy of the captured data: turn Drop Collections First off and Seed documents off.');
         }
 
         async function selectReplayComparison(id) {
@@ -8177,7 +8562,8 @@
                 <div class="insights-row-subtitle" id="replayIdentity">Matched by ${escHtml(matched)}; ${escHtml(ident)} ${escHtml(String(r.identity || '').slice(0, 12))} ${r.identity_match ? 'is the same on both sides' : 'DIFFERS between the sides (compared because a mismatch was allowed)'}.</div>
                 ${(r.warnings || []).length ? `<div id="replayWarnings">${r.warnings.map(w => `<div>⚠ ${escHtml(w)}</div>`).join('')}</div>` : ''}
                 <div class="eff-controls">
-                    <a id="replayDownloadHtml" class="insights-explore-btn" href="/api/replay-compare/${encodeURIComponent(r.id)}/report.html" download="plgm-replay-compare-${escHtml(r.id)}.html">Download HTML report</a>
+                    <a id="replayOpenHtml" class="insights-explore-btn" href="${comparisonReportURL(r.id)}" target="_blank" rel="noopener noreferrer">Open HTML report<span class="sr-only"> (opens in a new tab)</span></a>
+                    <a id="replayDownloadHtml" class="insights-explore-btn" href="${comparisonReportURL(r.id)}?download=1" download="plgm-replay-compare-${escHtml(r.id)}.html">Download HTML report</a>
                     <button type="button" id="replayDownloadJson" class="insights-explore-btn" onclick="downloadReplayJSON()">Download JSON</button>
                 </div>
                 <div class="replay-table-wrap"><table class="eff-table" id="replaySides">
@@ -8958,6 +9344,7 @@
                         // Latency heatmap (always update so the Latency Analysis tab is current).
                         renderLatencyHeatmap(stats.latencyHeatmap);
                         renderMultiTarget(stats.multi_target);
+                        renderRunOutcomeFile(stats.outcomeFile, stats.recordingFile);
 
                         // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
                         if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
@@ -9531,6 +9918,127 @@
             return fd;
         }
 
+        // Fills the settings form from a server configuration: the last run's
+        // on page load, or the startup configuration for "Use defaults" and "Reset to defaults".
+        function applyConfigToForm(cfg) {
+            document.querySelector('[name="uri"]').value = cfg.URI || '';
+            document.querySelector('[name="concurrency"]').value = cfg.Concurrency || 16;
+            document.querySelector('[name="duration"]').value = cfg.Duration || '60s';
+            document.querySelector('[name="iterations"]').value = cfg.Iterations || 1;
+            document.querySelector('[name="interval_delay"]').value = cfg.IntervalDelay || '0s';
+
+            const passInput = document.getElementById('uiPassword');
+
+
+            let bestPass = sessionStorage.getItem('plgm_password') || '';
+            if (cfg.ConnectionParams && cfg.ConnectionParams.Password) {
+                bestPass = cfg.ConnectionParams.Password;
+                sessionStorage.setItem('plgm_password', bestPass);
+            }
+            passInput.value = bestPass;
+
+            if (cfg.ConnectionParams) {
+                document.querySelector('[name="username"]').value = cfg.ConnectionParams.Username || '';
+                document.querySelector('[name="auth_source"]').value = cfg.ConnectionParams.AuthSource || 'admin';
+                document.querySelector('[name="replicaset_name"]').value = cfg.ConnectionParams.ReplicaSetName || '';
+                document.querySelector('[name="read_preference"]').value = cfg.ConnectionParams.ReadPreference || 'nearest';
+                document.getElementById('tlsCaCurrent').value = cfg.ConnectionParams.TLSCAFile || '';
+                document.getElementById('tlsCertCurrent').value = cfg.ConnectionParams.TLSCertificateKeyFile || '';
+                document.getElementById('directConn').checked = cfg.ConnectionParams.DirectConnection;
+                document.querySelector('[name="max_pool_size"]').value = cfg.ConnectionParams.MaxPoolSize || 200;
+                document.querySelector('[name="min_pool_size"]').value = cfg.ConnectionParams.MinPoolSize || 10;
+                document.querySelector('[name="max_idle_time"]').value = cfg.ConnectionParams.MaxIdleTime || 30;
+            }
+
+            document.getElementById('debugLogs').checked = cfg.Debug;
+            document.getElementById('dropColl').checked = cfg.DropCollections;
+            // Seeding is off unless the configuration turns it on (skip_seed defaults to true).
+            document.getElementById('skipSeed').checked = cfg.SkipSeed !== false;
+            syncSeedToggle();
+            document.querySelector('[name="documents_count"]').value = cfg.DocumentsCount || 100000;
+            document.getElementById('useTx').checked = cfg.UseTransactions;
+            document.querySelector('[name="max_transaction_ops"]').value = cfg.MaxTransactionOps || 5;
+
+            document.querySelector('[name="find_percent"]').value = cfg.FindPercent || 0;
+            document.querySelector('[name="update_percent"]').value = cfg.UpdatePercent || 0;
+            document.querySelector('[name="delete_percent"]').value = cfg.DeletePercent || 0;
+            document.querySelector('[name="insert_percent"]').value = cfg.InsertPercent || 0;
+            document.querySelector('[name="bulk_insert_percent"]').value = cfg.BulkInsertPercent || 0;
+            document.querySelector('[name="aggregate_percent"]').value = cfg.AggregatePercent || 0;
+            document.querySelector('[name="transaction_percent"]').value = cfg.TransactionPercent || 0;
+            updateMixTotal();
+
+            document.querySelector('[name="find_batch_size"]').value = cfg.FindBatchSize || 10;
+            document.querySelector('[name="find_limit"]').value = cfg.FindLimit || 5;
+            document.querySelector('[name="insert_batch_size"]').value = cfg.InsertBatchSize || 10;
+            document.querySelector('[name="seed_batch_size"]').value = cfg.SeedBatchSize || 1000;
+            document.querySelector('[name="seed_concurrency"]').value = cfg.SeedConcurrency || 1;
+            document.getElementById('useFindOne').checked = cfg.UseFindOneForLimitOne;
+            document.getElementById('csvExport').checked = cfg.CSVExportEnabled || false;
+            document.getElementById('csvAppend').checked = cfg.CSVExportAppend || false;
+            document.querySelector('[name="csv_export_path"]').value = cfg.CSVExportPath || 'plgm_metrics_export.csv';
+            document.getElementById('insightsEnabled').checked = (cfg.InsightsEnabled !== undefined) ? !!cfg.InsightsEnabled : true;
+            document.querySelector('[name="insights_sampling_rate"]').value = cfg.InsightsSamplingRate || 0.10;
+            document.querySelector('[name="insights_slow_threshold_ms"]').value = cfg.InsightsSlowThresholdMs || 200;
+            document.querySelector('[name="insights_max_events"]').value = cfg.InsightsMaxEvents || 5000;
+            document.querySelector('[name="insights_max_groups"]').value = cfg.InsightsMaxGroups || 300;
+            document.getElementById('insightsExplainEnabled').checked = (cfg.InsightsExplainEnabled !== undefined) ? !!cfg.InsightsExplainEnabled : true;
+            updateExplainOffWarning();
+            document.querySelector('[name="insights_explain_top_n"]').value = cfg.InsightsExplainTopN || 5;
+            document.querySelector('[name="insights_explain_verbosity"]').value = cfg.InsightsExplainVerbosity || 'executionStats';
+            document.querySelector('[name="insights_explain_severity_mode"]').value = cfg.InsightsExplainSeverityMode || 'high_only';
+            document.querySelector('[name="insights_explain_efficiency_mode"]').value = cfg.InsightsExplainEfficiencyMode || 'impact_and_latency_tiers';
+            document.querySelector('[name="insights_latency_target_avg_ms"]').value = cfg.InsightsLatencyTargetAvgMs || '';
+            document.querySelector('[name="insights_latency_target_p95_ms"]').value = cfg.InsightsLatencyTargetP95Ms || '';
+            document.querySelector('[name="insights_latency_target_p99_ms"]').value = cfg.InsightsLatencyTargetP99Ms || '';
+            document.querySelector('[name="insights_explain_max_time_ms"]').value = cfg.InsightsExplainMaxTimeMS || 1000;
+            document.querySelector('[name="insights_explain_workers"]').value = cfg.InsightsExplainWorkers || 1;
+            document.querySelector('[name="insights_explain_retries"]').value = (cfg.InsightsExplainRetries !== undefined) ? cfg.InsightsExplainRetries : 1;
+            document.querySelector('[name="insights_explain_backoff_ms"]').value = (cfg.InsightsExplainBackoffMS !== undefined) ? cfg.InsightsExplainBackoffMS : 150;
+            document.querySelector('[name="trend_history_runs"]').value = cfg.TrendHistoryRuns || 5;
+            document.querySelector('[name="trend_max_age_days"]').value = (cfg.TrendMaxAgeDays !== undefined && cfg.TrendMaxAgeDays !== null) ? cfg.TrendMaxAgeDays : 30;
+            document.querySelector('[name="trend_default_comparison"]').value = cfg.TrendDefaultComparison === 'pinned' ? 'pinned' : 'previous';
+            document.querySelector('[name="trend_run_label"]').value = cfg.TrendRunLabel || '';
+            document.querySelector('[name="trend_baseline_store"]').value = cfg.TrendBaselineStore || '';
+            document.getElementById('trendStoreQueryValues').checked = !!cfg.InsightsTrendStoreQueryValues;
+            document.querySelector('[name="sharding_mode"]').value = cfg.ShardingMode || 'auto';
+            document.getElementById('shardSkipNoConfig').checked = (cfg.ShardingSkipGenericWithoutConfig !== undefined) ? !!cfg.ShardingSkipGenericWithoutConfig : true;
+            document.getElementById('randomSeedInput').value = cfg.RandomSeed || 0;
+            document.getElementById('workloadRecordEnabled').value = cfg.WorkloadRecordEnabled ? 'true' : 'false';
+            document.getElementById('workloadRecordPath').value = cfg.WorkloadRecordPath || '';
+            document.getElementById('workloadRecordMaxBytes').value = cfg.WorkloadRecordMaxBytes ?? 536870912;
+            document.getElementById('workloadRecordBackpressure').value = cfg.WorkloadRecordBackpressure === 'block' ? 'block' : 'fail';
+            document.getElementById('workloadRecordCompression').value = ['zstd', 'gzip'].includes(cfg.WorkloadRecordCompression) ? cfg.WorkloadRecordCompression : 'none';
+            document.getElementById('workloadReplayEnabled').value = cfg.WorkloadReplayEnabled ? 'true' : 'false';
+            document.getElementById('workloadReplayPath').value = cfg.WorkloadReplayPath || '';
+            document.getElementById('workloadReplayMode').value = cfg.WorkloadReplayMode === 'timed' ? 'timed' : 'per_worker';
+            document.getElementById('workloadReplayAllowMismatch').value = cfg.WorkloadReplayAllowMismatch ? 'true' : 'false';
+            document.getElementById('operationsPerWorker').value = cfg.OperationsPerWorker || 0;
+            document.getElementById('workloadDeterministic').checked = !!cfg.WorkloadDeterministic;
+            // The loaded values are the new baseline: nothing from before is restored.
+            deterministicOverrides = null;
+            applyDeterministicRequirements();
+            document.getElementById('workloadRecordOutcomes').value = cfg.WorkloadRecordOutcomes ? 'true' : 'false';
+            document.getElementById('workloadRecordResultChecksums').value = cfg.WorkloadRecordResultChecksums ? 'true' : 'false';
+            document.getElementById('workloadReplayOutcomesPath').value = cfg.WorkloadReplayOutcomesPath || '';
+            document.getElementById('workloadDeterministicOutcomesPath').value = cfg.WorkloadDeterministicOutcomesPath || '';
+            document.getElementById('workloadReplayOps').value = cfg.WorkloadReplayOps === 'reads_only' ? 'reads_only' : 'all';
+            document.getElementById('workloadReplayTargetsMode').value = cfg.WorkloadReplayTargetsMode === 'concurrent' ? 'concurrent' : 'sequential';
+            document.getElementById('workloadDataFingerprint').value = ['counts', 'dbhash'].includes(cfg.WorkloadDataFingerprint) ? cfg.WorkloadDataFingerprint : 'off';
+            setReplayTargetRows(cfg.WorkloadReplayTargets);
+
+            if (cfg.RawInjector) {
+                document.getElementById('rawEnable').checked = cfg.RawInjector.Enabled;
+                document.querySelector('[name="raw_injector_type"]').value = cfg.RawInjector.Type || 'insert';
+                document.querySelector('[name="raw_injector_doc_size"]').value = cfg.RawInjector.DocumentSize || 1024;
+                document.querySelector('[name="raw_injector_batch_size"]').value = cfg.RawInjector.BatchSize || 1000;
+                document.querySelector('[name="raw_injector_max_docs"]').value = cfg.RawInjector.MaxDocs || 10000000;
+                document.querySelector('[name="raw_injector_db"]').value = cfg.RawInjector.DBName || 'plgm_injector';
+                document.querySelector('[name="raw_injector_coll"]').value = cfg.RawInjector.CollectionName || 'injector_data';
+                document.getElementById('rawDrop').checked = cfg.RawInjector.DropCollection;
+            }
+        }
+
         function inferModeFromConfig(cfg) {
             if (!cfg) return '';
             if (cfg.RawInjector && cfg.RawInjector.Enabled) return 'raw';
@@ -9542,6 +10050,59 @@
         let runModeLocked = false;
         let launchBusy = false;
 
+        // Connection fields survive "Use defaults" and "Reset to defaults": they say where to
+        // run, not how, and retyping a URI or password is no help.
+        const keptConnectionFields = ['uri', 'username', 'auth_source', 'replicaset_name', 'read_preference'];
+
+        // Starts a task from the settings PLGM started with (config.yaml and
+        // environment) instead of the last run's. The connection is kept, and
+        // the built-in definitions are selected again.
+        async function startFromDefaults(mode) {
+            if (runModeLocked) return;
+            mode = mode || (document.getElementById('operationMode')?.value || '').trim();
+            if (!mode) return;
+            const status = document.getElementById('defaultsStatus');
+            let cfg;
+            try {
+                const res = await fetch('/api/config?defaults=1');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                cfg = parseJSONKeepingSeeds(await res.text());
+            } catch (err) {
+                if (status) { status.hidden = false; status.textContent = `Could not load the default settings (${err && err.message ? err.message : err}).`; }
+                return;
+            }
+            const kept = {};
+            keptConnectionFields.forEach(n => { const el = document.querySelector(`[name="${n}"]`); if (el) kept[n] = el.value; });
+            const password = document.getElementById('uiPassword')?.value || '';
+            modeMemory = {};
+            deterministicOverrides = null;
+            targetOutcomesOverride = null;
+            replayPathFromList = false;
+            document.querySelectorAll('#configForm input[type="file"]').forEach(el => { el.value = ''; });
+            const source = document.getElementById('recordWorkloadSource');
+            if (source) source.value = 'generic';
+            const hidden = document.getElementById('operationMode');
+            if (hidden) hidden.value = '';
+            applyConfigToForm(cfg);
+            Object.entries(kept).forEach(([n, v]) => { const el = document.querySelector(`[name="${n}"]`); if (el) el.value = v; });
+            const pass = document.getElementById('uiPassword');
+            if (pass) pass.value = password;
+            ['collection', 'query'].forEach(kind => {
+                const id = builtinDefinitionId(kind);
+                const select = selectElFor(kind);
+                if (!id || !select) return;
+                select.value = id;
+                selectDefinition(kind, id);
+            });
+            clearFieldErrors();
+            clearConfigInlineError();
+            selectMode(mode);
+            if (status) {
+                status.hidden = false;
+                status.textContent = 'Default settings loaded. Your connection was kept.';
+            }
+        }
+
         function setRunModeLock(locked) {
             runModeLocked = !!locked;
             document.body.classList.toggle('run-locked', runModeLocked);
@@ -9552,6 +10113,7 @@
                 btn.setAttribute('aria-disabled', runModeLocked ? 'true' : 'false');
                 btn.title = runModeLocked ? 'Stop the workload before changing mode' : '';
             });
+            document.querySelectorAll('.mode-card-defaults, #modeResetDefaults').forEach(btn => { btn.disabled = runModeLocked; });
             const start = document.getElementById('startBtn');
             if (start && !launchBusy) start.disabled = runModeLocked;
         }
@@ -9629,6 +10191,11 @@
             applyModeVisibility();
             syncTierButtons();
             updateEffectiveSummary();
+            const resetBtn = document.getElementById('modeResetDefaults');
+            if (resetBtn) resetBtn.hidden = !mode;
+            const defaultsStatus = document.getElementById('defaultsStatus');
+            if (defaultsStatus && mode !== prev) defaultsStatus.hidden = true;
+            if (mode === 'replay' && prev !== 'replay') loadServerRecordings();
         }
 
         function toggleTier(name) {
@@ -9671,10 +10238,9 @@
                 ['Client Pacing & Access Pattern', 'generic,custom,record', 'advanced', 'execution'],
                 ['Sharding Strategy', 'generic,custom,record,replay', 'expert', 'execution'],
                 ['Reproducible Workload (Record & Replay)', 'record,replay', 'basic', 'reproducibility'],
-                ['Seed & Deterministic Traffic', 'generic,custom,record', 'advanced', 'reproducibility'],
+                ['Seed & Deterministic', 'generic,custom,record', 'advanced', 'reproducibility'],
                 ['Record', 'record', 'basic', 'reproducibility'],
                 ['Replay', 'replay', 'basic', 'reproducibility'],
-                ['Multi-Target Replay & Starting Data', 'generic,custom,record,replay', 'advanced', 'reproducibility'],
                 ['Outcome Capture', 'generic,custom,record,replay', 'advanced', 'reproducibility'],
                 ['Import Captured Traffic', 'replay', 'advanced', 'reproducibility'],
                 ['Data & Query Definitions', 'generic,custom,record,replay', 'basic', 'data'],
@@ -9738,6 +10304,12 @@
                 if (lead && text[mode]) lead.textContent = text[mode];
                 if (title && titles[mode]) title.textContent = titles[mode];
             }
+            // Starting-Data Fingerprint is stored by a recording and checked by
+            // a replay: it sits in the Record card or the Replay card.
+            const fpRow = document.getElementById('workloadDataFingerprint')?.closest('.setting-row');
+            const fpHome = document.querySelector(mode === 'record' ? '#rrRecordCard .setting-rows' : '#rrReplayCard .setting-rows');
+            if (fpRow && fpHome && fpRow.parentElement !== fpHome) fpHome.appendChild(fpRow);
+            updateReplayDependencies();
             applySettingsGroups();
         }
 
@@ -9749,13 +10321,15 @@
             const names = { generic: 'Generic workload', custom: 'Custom workload', record: 'Record', replay: 'Replay', raw: 'Raw injector' };
             const uri = (document.querySelector('[name="uri"]')?.value || '').trim() || 'URI required';
             const parts = [names[mode] || mode];
-            if (mode !== 'raw') parts.push(uri);
+            const targets = listedReplayTargets();
+            const targetsSent = !!(document.getElementById('workloadReplayTargets')?.value);
+            if (mode !== 'raw') parts.push(targetsSent ? `${targets.length} replay targets` : uri);
             if (mode === 'generic' || mode === 'custom' || mode === 'record' || mode === 'raw') {
                 parts.push((document.querySelector('[name="concurrency"]')?.value || '16') + ' workers');
                 parts.push(document.querySelector('[name="duration"]')?.value || '60s');
             }
             if (mode === 'generic' || mode === 'custom' || mode === 'record') {
-                parts.push((document.querySelector('[name="documents_count"]')?.value || '100000') + ' seed documents');
+                parts.push(document.getElementById('skipSeed')?.checked ? 'no seeding' : (document.querySelector('[name="documents_count"]')?.value || '100000') + ' seed documents');
             }
             if (mode === 'record') parts.push((document.getElementById('recordWorkloadSource')?.value === 'custom') ? 'custom definitions' : 'built-in workload');
             if (mode === 'replay') {
@@ -9764,6 +10338,7 @@
                 parts.push(file || path || 'recording required');
             }
             if (document.getElementById('workloadDeterministic')?.checked && mode !== 'replay' && mode !== 'raw') parts.push('deterministic traffic on');
+            if (targets.length && !targetsSent && runOnSeveral() && serverChoiceShown(effectiveReproSettings())) parts.push('replay targets not used');
             el.textContent = parts.join(' · ');
         }
 
@@ -9813,6 +10388,9 @@
                 if (role === 'alert' || role === 'status') return true;
                 if (note.querySelector('input, select, textarea, button')) return true;
                 const text = (note.textContent || '').trim();
+                // A card or subsection description always sits behind the
+                // heading's "?", so every heading looks the same.
+                if (note.classList.contains('settings-help') && helpTargetFor(note)?.matches('h3, h4, h5')) return false;
                 if (text.length < 80) return true;
                 return false;
             };
@@ -10023,7 +10601,9 @@
             const broken = run.status === 'damaged' || run.status === 'unsupported';
             const statusClass = (broken || run.status === 'failed') ? 'status-bad' : (run.outdated ? 'status-warn' : (run.status === 'completed' ? 'status-ok' : ''));
             const open = broken ? '' : `<button type="button" class="btn btn-secondary btn-small" onclick="openHistoricalRun('${escHtml(run.id)}')">Open dashboard</button>`;
-            const report = broken ? '' : `<a class="btn btn-flat btn-small" href="/api/run-history/${encodeURIComponent(run.id)}/report">HTML report</a>`;
+            const reportURL = `/api/run-history/${encodeURIComponent(run.id)}/report`;
+            const report = broken ? '' : `<a class="btn btn-flat btn-small" href="${reportURL}" target="_blank" rel="noopener noreferrer">HTML report<span class="sr-only"> (opens in a new tab)</span></a>`
+                + `<a class="btn btn-flat btn-small" href="${reportURL}?download=1" download="plgm-report-${escHtml(run.id)}.html">Download<span class="sr-only"> HTML report</span></a>`;
             const pin = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="pinHistoricalRun('${escHtml(run.id)}', ${run.pinned ? 'false' : 'true'})">${run.pinned ? 'Unpin' : 'Pin'}</button>`;
             return `<tr><td data-label="Run"><strong>${escHtml(run.label || run.id)}</strong><div class="history-sub">${escHtml(run.id)}</div></td><td data-label="When">${escHtml(when)}<div class="history-sub">${escHtml(dur)}</div></td><td data-label="Mode">${escHtml(run.mode || '—')}</td><td data-label="Status"><span class="status-chip ${statusClass}">${escHtml(status)}</span>${run.error ? `<div class="history-sub">${escHtml(run.error)}</div>` : ''}</td><td data-label="Summary">${escHtml(ops)}<div class="history-sub">${escHtml(lat)}</div></td><td data-label="Actions"><div class="history-actions">${open}${report}${pin}</div></td></tr>`;
         }

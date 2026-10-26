@@ -60,9 +60,11 @@ The Web UI saves reusable query and collection definition files so you do not ne
 5. To use a file once without saving it: choose it in the import section and launch without clicking **Save to Library**. An unsaved imported file is used for that run only and overrides the library selection.
 6. A short summary under each card shows which definition is selected for the run.
 
-**Basic settings** also holds [seeding and transactions](#seeding-the-initial-data) and the [operation mix](#operation-mix-and-transactions); [schema inference](./load-modeling.md#schema-inference-from-query-logs) is in **Data & queries** (Advanced). Here the `query_analysis_demo` files have been saved to the library and selected:
+The same page has [seeding](#seeding-the-initial-data) and the [operation mix](#operation-mix-and-transactions). Here the built-in definitions are selected, PLGM seeds 50,000 documents into freshly dropped collections, and the mix adds up to 100%:
 
-![Data & Query Definitions: Saved Definition Library, imports, seeding, operation mix, and schema inference](../images/settings_data_mix.png)
+![Data & Query Definitions with Seed documents checked, and Operation Mix Allocation](../images/settings_data_mix.png)
+
+[Schema inference](./load-modeling.md#schema-inference-from-query-logs) is in **Data & queries** (Advanced).
 
 Uploaded and edited definitions are validated before they are saved. PLGM rejects empty files, malformed JSON, invalid workload schemas, duplicate namespaces in collection definitions, duplicate query names in a query definition, duplicate saved definition names, and duplicate saved content.
 
@@ -245,13 +247,13 @@ Before the workload starts, PLGM can drop the collections, create indexes, and i
 **In the Web UI:**
 
 1. **Basic settings > Data & Query Definitions > Seeding & Transactions**:
+   - **Seed documents** (next to the heading, off by default): check it to insert a starting data set, then set **Seed Document Count**. Off skips only this step: inserts in the workload still run. The count is greyed out while it's off.
    - **Seed Document Count**: documents to insert per collection.
-   - **Drop Collections First**: drop and recreate the collections before seeding.
-   - **Skip Seed Phase**: on to run against data that is already there (for example a restored snapshot).
+   - **Drop Collections First** (Advanced): drop and recreate the collections before seeding.
 2. **Workload execution > Execution / Runtime Tuning** (Expert):
    - **Seed Batch Size**: documents per `InsertMany` call (1000 is a good default).
    - **Seed Concurrency**: parallel insert writers during seeding (see below).
-3. Optional, for identical data on every run or every server: **Record & replay > Seed & Deterministic Traffic > Random Seed** (Advanced) (see [Deterministic Generation](#deterministic-generation)).
+3. Optional, for identical data on every run or every server: **Seed & Deterministic > Random Seed** (Advanced) (see [Deterministic Generation](#deterministic-generation)).
 
 | Config Setting | Environment Variable | Description | Example |
 | :--- | :--- | :--- | :--- |
@@ -288,7 +290,7 @@ new batches, cancels in-flight writes, and waits for all writers before returnin
 Already accepted writes (including a partially successful batch) are not rolled back.
 
 ### Deterministic Generation
-Set `random_seed` (or `PLGM_RANDOM_SEED`, UI: **Record & replay > Seed & Deterministic Traffic > Random Seed**, Advanced) to a non-zero value to seed random generation.
+Set `random_seed` (or `PLGM_RANDOM_SEED`, UI: **Seed & Deterministic > Random Seed**, Advanced) to a non-zero value to seed random generation.
 The same seed, `documents_count`, and collection definitions seed identical documents on
 any instance: generated ObjectIds come from the seeded random stream, generated dates use a
 fixed reference time (2025-01-01 UTC) instead of the clock, and with `drop_collections` on

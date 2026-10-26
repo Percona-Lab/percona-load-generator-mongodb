@@ -33,11 +33,13 @@ Trends need the post-run query analysis. See [Query and Index Analysis](./query-
 3. Make sure **Query analysis > Post-Run Explain > Enable Post-Run Explain Sampling** is on (the default).
 4. Click **Launch Workload**. When the run finishes, it is added to the history.
 
-![Trends & history: Trend History settings and the Stored Runs list with rename, pin, and delete](../images/settings_trends.png)
+![Trends & history: Trend History settings](../images/settings_trends.png)
 
 ### Manage stored runs
 
 The **Stored Runs** list in the same category shows every run with its label, server version, age, and source.
+
+![Stored Runs: label, server, age, pin, and delete](../images/stored_runs.png)
 
 - **Rename** a run: edit the label and click **Rename**.
 - **Pin** a run you want to keep as a reference, for example "7.0 baseline" or "before the new index". Pinned runs never get cleaned up. You can pin up to 10.
@@ -54,11 +56,21 @@ The **Stored Runs** list in the same category shows every run with its label, se
 4. Click a shape to open its detail dialog.
 5. To compare several runs at once, open **Compare several runs (matrix)**, select up to 8 runs in **Runs (up to 8)**, and click **Show matrix**. Each column is one run, with average latency, p95, efficiency score, and impact share; the current run is highlighted.
 
-If a pair of runs cannot be compared (too few operations, partial explain output, a changed plan or server version), the cell says why instead of showing a verdict.
+The example below is two runs of the [demo workload](./query-analysis.md#try-it-with-the-demo-workload), both labeled `demo`. Between them, an index on `customer_email` was added:
 
-The screenshot shows run `record-8.0` compared with `baseline-8.0`, two runs of the same demo workload, with the matrix open below the table:
+![Trends: the updateOne on customer_email improved, the rest show no material change](../images/trends_compare.png)
 
-![Trends view: per-shape efficiency, latency, and impact verdicts against the baseline, with the run matrix below](../images/trends_compare.png)
+How to read a row:
+
+- **Baseline** says which earlier run the shape is compared with, and whether that comparison is valid (`comparable`).
+- **Scan efficiency**, **Latency**, and **Impact** each get their own verdict. They're never combined.
+- `IMPROVED` / `REGRESSED` appear only for a big enough change: 15 points of scan efficiency, or 1 ms and 20% of average latency. Below that you see `NO MATERIAL CHANGE` with the numbers.
+- `LARGER SHARE` / `SMALLER SHARE` under Impact means the shape now takes more or less of the total operation time. When one slow shape gets fast, the others get a larger share even if they didn't change.
+- `INSUFFICIENT EVIDENCE` or `NOT COMPARABLE` means there wasn't enough data, or something changed (plan, server version, explain coverage). The text says which.
+
+In the example, the email update went from scan efficiency 0 to 100 and from 81.71 ms to 1.25 ms on average. Its share of operation time dropped from 74.6% to 5.7%, so every other shape shows a larger share.
+
+These verdicts are rules of thumb. Cache state, data size, and other load can move the numbers too.
 
 ## Where history is stored
 
@@ -93,7 +105,7 @@ The same retention settings apply: `trend_history_runs` (default 5, range 1–50
 
 Files do not include the password, username, TLS file paths, or userinfo embedded in a URI. Target URIs are omitted; the file keeps target labels and a count. Query values are included only when **Store query values** is on, because that is the insights document already stored for trends. Chart samples keep the newest 3600 points (about 30 minutes at the default 500ms refresh). A run that ends before query analysis is built reopens without that analysis; the gap is labeled, not filled with zeros. A run that never started execution has no duration.
 
-`GET /api/run-history` lists runs. `GET /api/run-history/{id}` returns one dashboard. `GET /api/run-history/{id}/report` is the HTML report from the stored snapshot. `PATCH /api/run-history/{id}` with `{"pinned": true}` or `{"pinned": false}` changes the pin. These routes do not start a workload.
+`GET /api/run-history` lists runs. `GET /api/run-history/{id}` returns one dashboard. `GET /api/run-history/{id}/report` opens the HTML report from the stored snapshot in the browser (add `?download=1` to download it). `PATCH /api/run-history/{id}` with `{"pinned": true}` or `{"pinned": false}` changes the pin. These routes do not start a workload.
 
 In Docker or Kubernetes, mount the `plgm` config directory, or the parent of a custom trend-store path, on a volume. The container's writable layer is discarded when the container is removed, and the dashboard files go with it. See [Docker and Kubernetes](../k8s_and_docker.md#6-keep-completed-run-dashboards).
 

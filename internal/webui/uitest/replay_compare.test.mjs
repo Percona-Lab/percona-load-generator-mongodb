@@ -166,11 +166,17 @@ test('the compare form posts paths, labels, plan runs, and reports a refused mis
     assert.deepEqual(errors, []);
 });
 
-test('the report downloads as HTML from the server and as JSON', async () => {
+test('the report opens in a new tab, downloads as HTML from the server, and as JSON', async () => {
     const { doc, w, data, errors } = await replayPage();
     await openReport(doc);
+    const open = doc.getElementById('replayOpenHtml');
+    assert.equal(open.getAttribute('href'), '/api/replay-compare/fixture-compare-1/report.html');
+    assert.equal(open.getAttribute('target'), '_blank');
+    assert.equal(open.getAttribute('rel'), 'noopener noreferrer');
+    assert.equal(open.hasAttribute('download'), false, 'opening must not download');
     const html = doc.getElementById('replayDownloadHtml');
-    assert.equal(html.getAttribute('href'), '/api/replay-compare/fixture-compare-1/report.html');
+    assert.equal(html.getAttribute('href'), '/api/replay-compare/fixture-compare-1/report.html?download=1');
+    assert.equal(html.getAttribute('download'), 'plgm-replay-compare-fixture-compare-1.html');
     doc.getElementById('replayDownloadJson').click();
     const { href, name } = w.downloads[w.downloads.length - 1];
     assert.equal(name, 'plgm-replay-compare-fixture-compare-1.json');

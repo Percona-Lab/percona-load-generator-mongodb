@@ -231,3 +231,22 @@ func fmtSprint(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+func TestRunHistoryReportOpensInlineOrDownloads(t *testing.T) {
+	dir := t.TempDir()
+	s := &WebServer{runHistory: OpenRunHistory(dir), AppConfig: &config.AppConfig{}}
+	snap := &RunDashboard{RunSummary: RunSummary{ID: "run-1", Schema: runDashboardSchema, Status: "completed", StartedAt: time.Now().UTC().Format(time.RFC3339), Mode: "replay"}}
+	if err := s.runHistory.Save(snap, stats.DefaultTrendPolicy()); err != nil {
+		t.Fatal(err)
+	}
+	for target, want := range map[string]string{
+		"/api/run-history/run-1/report":            `inline; filename="plgm-report-run-1.html"`,
+		"/api/run-history/run-1/report?download=1": `attachment; filename="plgm-report-run-1.html"`,
+	} {
+		rec := httptest.NewRecorder()
+		s.handleRunHistoryItem(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusOK || rec.Header().Get("Content-Disposition") != want || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") {
+			t.Fatalf("%s: %d %v", target, rec.Code, rec.Header())
+		}
+	}
+}

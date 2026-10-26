@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	htmlstd "html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -98,7 +99,9 @@ func (s *WebServer) handleReplayCompare(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleReplayCompareItem serves {id} (JSON) and {id}/report.html.
+// handleReplayCompareItem serves {id} (JSON) and {id}/report.html. The
+// HTML report opens inline in a browser tab; ?download=1 sends it as an
+// attachment. Only kept reports are served, by id; nothing is read from disk.
 func (s *WebServer) handleReplayCompareItem(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
@@ -112,7 +115,12 @@ func (s *WebServer) handleReplayCompareItem(w http.ResponseWriter, r *http.Reque
 	}
 	rep := s.replayComparison(id)
 	if rep == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "replay comparison not found (reports are kept in memory until the server restarts, newest " + strconv.Itoa(maxReplayComparisons) + ")"})
+		msg := "replay comparison not found (reports are kept in memory until the server restarts, newest " + strconv.Itoa(maxReplayComparisons) + ")"
+		if html {
+			writeReportNotFound(w, "This comparison report is no longer available. Reports are kept in the PLGM server's memory until it restarts, newest "+strconv.Itoa(maxReplayComparisons)+" only. Run the comparison again (Query Analysis > Replay Comparison) to recreate it.")
+			return
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": msg})
 		return
 	}
 	if !html {
@@ -124,9 +132,31 @@ func (s *WebServer) handleReplayCompareItem(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="plgm-replay-compare-%s.html"`, rep.ID))
+	setReportHeaders(w)
+	disposition := "inline"
+	if r.URL.Query().Get("download") == "1" {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="plgm-replay-compare-%s.html"`, disposition, rep.ID))
 	_, _ = w.Write(buf.Bytes())
+}
+
+// setReportHeaders marks a self-contained HTML report: no scripts, no
+// outside resources, and never sniffed as another type.
+func setReportHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "no-store")
+}
+
+// writeReportNotFound answers a report link that no longer resolves with a
+// readable page instead of JSON, since it is opened in a browser tab.
+func writeReportNotFound(w http.ResponseWriter, message string) {
+	setReportHeaders(w)
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Report not available</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;color:#1f2937;line-height:1.5}h1{font-size:1.25rem}</style></head><body><h1>Report not available</h1><p>%s</p></body></html>`, htmlstd.EscapeString(message))
 }
 
 // comparisonInput returns the path of field's upload (copied to a temp file

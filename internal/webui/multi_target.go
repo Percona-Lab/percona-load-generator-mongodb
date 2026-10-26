@@ -2,7 +2,6 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,8 +23,12 @@ func multiTargetStatus(plan *multitarget.Plan) map[string]interface{} {
 	if plan == nil {
 		return nil
 	}
+	states := plan.States()
+	for i := range states {
+		states[i].OutcomeFile = absPath(states[i].OutcomeFile)
+	}
 	out := map[string]interface{}{
-		"kind": plan.Kind, "mode": plan.Mode, "reference": plan.Targets[0].Label, "targets": plan.States(),
+		"kind": plan.Kind, "mode": plan.Mode, "reference": plan.Targets[0].Label, "targets": states,
 	}
 	if res := plan.Result(); res != nil {
 		out["comparisons"] = res.Comparisons
@@ -86,12 +89,13 @@ func multiTargetReportItems(plan *multitarget.Plan) ([]report.KV, []string) {
 // that target), and trend run; the comparisons with the first target are
 // kept in memory like the Replay Compare reports. The dashboard follows the
 // running target (sequential) or the first target (concurrent).
-func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context, cancel context.CancelFunc, cfg *config.AppConfig, collectionsCfg *config.CollectionsFile, queriesCfg *config.QueriesFile, dbName, replayUpload string) {
+func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context, cancel context.CancelFunc, cfg *config.AppConfig, collectionsCfg *config.CollectionsFile, queriesCfg *config.QueriesFile, dbName, replayUpload string, generated []*generatedFile) {
 	plan, err := multitarget.NewPlan(cfg, dbName, collectionsCfg.Collections, queriesCfg.Queries)
 	if err != nil {
 		if replayUpload != "" {
 			_ = os.Remove(replayUpload)
 		}
+		removeEmptyFiles(generatedPaths(generated))
 		s.abortRun(err.Error())
 		cancel()
 		writeStartError(w, http.StatusBadRequest, err.Error())
@@ -208,8 +212,7 @@ func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context,
 	s.addLifecycleEventLocked("init", fmt.Sprintf("Multi-target %s: %d targets (%s), each compared with %s", plan.Kind, len(plan.Targets), plan.Mode, plan.Targets[0].Label))
 	s.mu.Unlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	writeJSON(w, http.StatusOK, startedResponse(generated))
 
 	s.runWG.Add(1)
 	go func() {
@@ -218,6 +221,7 @@ func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context,
 		if replayUpload != "" {
 			defer s.removeReplayUpload(replayUpload)
 		}
+		defer removeEmptyFiles(generatedPaths(generated))
 		defer cancel()
 		defer func() {
 			if r := recover(); r != nil {

@@ -250,7 +250,7 @@ func ValidateWorkloadTargets(cfg *AppConfig) error {
 		return fmt.Errorf(prefix + "workload_replay_targets needs workload_replay_enabled or workload_deterministic")
 	}
 	if cfg.WorkloadRecordEnabled {
-		return fmt.Errorf(prefix + "workload_replay_targets cannot be combined with workload_record_enabled: every target would write the same recording file")
+		return fmt.Errorf(prefix + "workload_replay_targets cannot be combined with workload_record_enabled: every target would write the same recording file. Record on one instance first (workload_record_enabled, no targets), then replay that recording on the targets (workload_replay_enabled with workload_replay_targets)")
 	}
 	labels, uris := map[string]bool{}, map[string]bool{}
 	for i, t := range targets {

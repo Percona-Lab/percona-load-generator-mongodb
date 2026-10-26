@@ -1,5 +1,5 @@
 // DOM tests for deterministic generated traffic: the checkbox and budget on
-// the Record & Replay tab (default off, loading, submission, validation) and the
+// the Seed & Deterministic section (default off, loading, submission, validation) and the
 // traffic fingerprint card on the dashboard.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,10 +67,11 @@ test('incomplete deterministic settings block the run on the Record & Replay tab
     check(/fixed worker count/, 'tab-workload');
     set('loadProfileKind', 'fixed');
     doc.getElementById('dropColl').checked = false;
-    check(/Drop Collections on and Skip Seed off/, 'tab-mix');
+    check(/needs Drop Collections First on/, 'tab-mix');
     doc.getElementById('dropColl').checked = true;
     doc.getElementById('skipSeed').checked = true;
-    check(/Drop Collections on and Skip Seed off/, 'tab-mix');
+    check(/needs Seed documents on/, 'tab-mix');
+    assert.equal(doc.activeElement.id, 'seedData', 'the visible Seed documents switch is focused');
     doc.getElementById('skipSeed').checked = false;
     set('workloadReplayEnabled', 'true');
     set('workloadReplayPath', 'in.ndjson');
@@ -118,7 +119,9 @@ test('selecting deterministic traffic sets drop, seed, and a fixed load profile'
     assert.equal(doc.getElementById('dropColl').checked, false);
     assert.equal(doc.getElementById('skipSeed').checked, true);
     assert.equal(profile.value, 'ramp');
-    assert.equal(note.style.display, 'none');
+    assert.equal(doc.getElementById('randomSeedInput').value, '0', 'the seed set for deterministic traffic is put back');
+    assert.equal(note.style.display, 'block', 'turning it off says what was put back');
+    assert.match(note.textContent, /Restored Random Seed, Drop Collections First, Seed documents, Load Profile\./);
     assert.deepEqual(errors, []);
 });
 

@@ -90,7 +90,7 @@ test('Convert needs files, sends the options, and shows the summary and actions'
     doc.getElementById('trafficImportUseBtn').click();
     assert.equal(doc.getElementById('workloadReplayEnabled').value, 'true');
     assert.equal(doc.getElementById('workloadReplayPath').value, data.import.server_path);
-    assert.ok(doc.getElementById('trafficImportStatus').textContent.includes('Skip Seed on'));
+    assert.ok(doc.getElementById('trafficImportStatus').textContent.includes('Seed documents off'));
     assert.deepEqual(errors, []);
 });
 

@@ -16,73 +16,84 @@ This page covers setup and the views. The full reference (explain support matrix
 
 ## Set up the analysis in the Web UI
 
-> **Post-Run Explain Sampling is required for the full query analysis.** Scan efficiency, execution overhead (sorts and disk spills), plan-based index recommendations, and efficiency trends are built from explain output collected after the workload finishes. The setting (`insights_explain_enabled`, Web UI: **Query analysis** category, Advanced) is on by default. With it off, the analysis reports only latency and workload impact, and the dashboard and HTML report state that explain was turned off. Explain does not run during the measured workload, so benchmark results are unaffected.
+It's on by default. To check or change it:
 
-1. Start the UI with `./plgm --webui`, choose a task, and turn on **Advanced** (and **Expert** for the explain limits and latency targets).
-2. **Metrics & reporting > Insights Capture (Sampling & Retention)**:
-   - **Enable Post-Run Insights Analysis**: on.
-   - **Insights Sampling Rate (0-1)**: share of operations captured for analysis (default `0.10`).
-   - **Slow Threshold (ms)**: operations above this are classified as slow (default `200`).
-   - **Max Retained Events** and **Max Group Entries**: memory limits for captured events and shape groups.
-3. **Query analysis**:
-   - **Enable Post-Run Explain Sampling**: keep it on (the default).
-   - **Which Queries Are Explained** (Expert): **Explain Top N Shapes**, **Explain Severity Mode** (High Only is recommended), and **Explain Efficiency Slots** (Impact + latency tiers is recommended; it also explains fast shapes with high workload impact).
-   - **Explain Execution Limits** (Expert): **Explain Verbosity** (`executionStats` is recommended; `queryPlanner` is lighter), **Explain Max Time (ms)**, **Explain Workers (Post-Run)**, **Explain Timeout Retries**, and **Explain Retry Backoff (ms)**.
-   - **Query Latency Targets** (Expert): optional **Latency Target Avg / p95 / p99 (ms)**. Each shape is then marked as within or above target. Leave them at `0` and no rating is made up.
-4. Optional: configure run history in **Trends & history**. See [Trends and History](./trends-and-history.md).
+1. Choose a task and turn on **Advanced** (and **Expert** for the limits and latency targets).
+2. **Metrics & reporting > Insights Capture**: keep **Enable Post-Run Insights Analysis** on. **Slow Threshold (ms)** decides which operations count as slow (default 200). **Insights Sampling Rate** is the share of operations kept for analysis (default 0.10).
+
+   ![Metrics & reporting: CSV export and Insights Capture](../images/settings_metrics_insights.png)
+
+3. **Query analysis > Post-Run Explain**: keep **Enable Post-Run Explain Sampling** on. Without it you get latency and workload impact, but no scan efficiency, sort and spill details, or index advice.
+
+   ![Query analysis category: explain on, which queries are explained, limits, and latency targets](../images/settings_query_analysis.png)
+
+4. Optional (Expert): set **Latency Target Avg / p95 / p99 (ms)** to have each query rated against your targets. Left empty, latency is shown but not rated.
 5. Click **Launch Workload**.
 
-![Insights Capture (Sampling & Retention)](../images/settings_metrics_insights.png)
-
-![Query analysis: post-run explain, which queries are explained, explain limits, and latency targets](../images/settings_query_analysis.png)
+Explain runs after the workload ends, so it doesn't affect your benchmark numbers.
 
 ## Read the results
 
-When the run completes, open the **Query & Index Analysis** tab on the dashboard. It has four views:
+When the run ends, open **Query & Index Analysis**. It has four views.
 
-- **Efficiency**: one row per query shape, with separate columns. Measurements are never blended into one score.
-  - **Scan efficiency (0 to 100, higher is better)**: documents and index keys examined per result returned, and collection scans where there shouldn't be one. One document examined per result scores 100; 1,000 or more scores 0. Latency is not part of this score, small amounts of work are not flagged, a full scan you asked for is not a problem, and `$group` pipelines are judged on the documents going into the group. This is a PLGM rule of thumb, not an official MongoDB metric.
-  - **Latency**: average and max for every shape, plus p95 and p99 when there are enough samples, rated against your targets if you set them.
-  - **Workload impact**: operations, operations per second, and share of total operation time. A 2 ms query run 10,000 times a second can matter more than a 300 ms report run twice.
-  - **Execution overhead**: in-memory sorts and disk spills, with sort bytes, spill counts, spilled size, memory limit, and peak memory per sample.
-  - **$lookup work**: documents and keys examined in the joined collection, when explain reports them.
-- **Slow Queries & Indexes**: slow-query groups and index recommendations. Suggested keys follow equality, then sort, then range, and are checked against the indexes that already exist. Each recommendation lists the shapes it helps, the reasoning and confidence, the write and storage cost, and how to validate it. Test on a non-production system first.
-- **Trends**: comparison with earlier runs. See [Trends and History](./trends-and-history.md).
-- **Replay Comparison**: operation-by-operation comparison of two replays. See [Record and Replay](./record-and-replay.md#compare-replays).
+### Efficiency
 
-The screenshots below come from the [demo workload](#try-it-with-the-demo-workload). In the **Efficiency** view, the unindexed `updateOne` on `customer_email` scores 0 (inefficient) while the shapes backed by an index score 100:
+One row per query shape, worst first.
 
-![Efficiency view: scan efficiency, band, confidence, latency, workload impact, execution overhead, and coverage per query shape](../images/query_efficiency.png)
+![Efficiency view: the unindexed updateOne scores 0, the rest score 100](../images/query_efficiency.png)
 
-Click any row (or **Details**) to open the shape's detail dialog. It shows the redacted query, how the scan efficiency score was reached, the measured metrics of each explained sample, latency, workload impact, and execution overhead:
+- **Scan efficiency** (0 to 100, higher is better) compares documents and index keys examined with documents returned. 100 means about one document examined per result. 0 means a thousand or more, or a collection scan where an index should be used. It's a PLGM rule of thumb, not a MongoDB metric.
+- **Band** sums it up: efficient, moderate, or inefficient. Shapes that weren't explained show "no score"; inserts show "not applicable".
+- **Query latency**: avg, p95, and p99. Rated only if you set targets.
+- **Workload impact**: how often the shape ran and its share of total operation time. A fast query run thousands of times a second can cost more than a slow report run twice.
+- **Execution overhead**: in-memory sorts and disk spills.
 
-![Shape detail dialog for the unindexed updateOne: a collection scan examining 49,467 documents per result](../images/query_shape_details.png)
+Click a row (or **Details**) for the full story of one shape:
 
-In **Slow Queries & Indexes**, each slow query and index issue has an **Explore** button. It opens the **Finding Details** drawer with **Summary**, **Execution Plan**, **Recommendation**, **Diagnostics**, and **Query Reference** (which maps the finding back to your query definition). This run used a **Slow Threshold** of 10 ms so the demo's slow shape is listed:
+![Shape details: the updateOne on customer_email scans 146,183 documents and matches none](../images/query_shape_details.png)
 
-![Slow Queries & Indexes: a critical slow updateOne, the matching collection-scan index issue, and ranked recommended actions](../images/query_findings.png)
+Here the explained plan is `UPDATE -> COLLSCAN`: every update by email reads the whole collection.
 
-![Finding Details drawer, Recommendation tab: interpretation, next step, confidence, and evidence](../images/query_finding_drawer.png)
+### Slow Queries & Indexes
 
-The **Insights** tab adds **Overview**, **Iterations**, and **Timeline** views: workload impact ranking, affected collections, a per-iteration overlay, and a time-sliced drill-down.
+Slow queries, likely index problems, and a ranked list of things to try. **Explore** opens the details.
 
-![Insights Overview: workload impact ranked by summed concurrent operation time](../images/insights_overview.png)
+![Slow Queries & Indexes: the critical updateOne, its collection scan, and recommendations](../images/query_findings.png)
 
-The analysis is also included in the **Download Summary** JSON (`insights` section) and the **Export HTML Report**. See [Reports and Exports](./reports-and-exports.md).
+The **Recommendation** tab says what PLGM saw, what to try, and how sure it is:
 
-The analysis covers reads and writes. Updates, deletes, and `$out`/`$merge` pipelines are explained without being applied. Mixed sharded and non-sharded runs are supported, with per-collection detection and explicit sharding strategy controls (**Workload execution > Sharding Strategy**, Expert).
+![Finding Details, Recommendation tab](../images/query_finding_drawer.png)
+
+Suggested index keys follow equality, then sort, then range, and are checked against your existing indexes. Test them on a non-production copy first.
+
+### Trends
+
+Compares each shape with the same shape in earlier runs. See [Trends and History](./trends-and-history.md).
+
+### Replay Comparison
+
+Compares two replays operation by operation. See [Record and Replay](./record-and-replay.md#read-the-results).
+
+### Insights tab
+
+**Overview** ranks shapes by their share of total operation time and lists the affected collections. **Iterations** and **Timeline** split the run by iteration and by time.
+
+![Insights Overview: workload impact ranked by operation time](../images/insights_overview.png)
+
+The same analysis is in **Download Summary** (JSON) and **Export HTML Report**. See [Reports and Exports](./reports-and-exports.md).
 
 ## Try it with the demo workload
 
-The repo ships a demo in [`resources/collections/query_analysis_demo.json`](../resources/collections/query_analysis_demo.json) and [`resources/queries/query_analysis_demo.json`](../resources/queries/query_analysis_demo.json): an orders collection with some queries backed by good indexes, some clearly not (a lookup by customer email with no index, a sort that doesn't match any index, an update that scans), and one report that is meant to read the whole collection.
+The repo includes a demo with one deliberately unindexed query: [`resources/collections/query_analysis_demo.json`](../resources/collections/query_analysis_demo.json) and [`resources/queries/query_analysis_demo.json`](../resources/queries/query_analysis_demo.json). The screenshots above come from it.
 
-1. Choose **Run a custom workload**. In **Data & Query Definitions**, import both files with **Save to Library** and select them in the **Saved Definition Library** dropdowns.
-2. Set **Seed Document Count** to `100000`, and in **Workload Control** set **Duration** to `60s`.
-3. Click **Launch Workload**, and open **Query & Index Analysis** when it finishes.
+1. Choose **Run a custom workload**. In **Data & Query Definitions**, import both files with **Save to Library**. They're selected for you.
+2. Set **Seed Document Count** to `100000` and **Duration** to `60s`.
+3. Optional: set **Slow Threshold** to `10` ms so the slow update is listed under Slow Queries.
+4. Click **Launch Workload**, then open **Query & Index Analysis** when it finishes.
 
-This walkthrough shows the full flow, from configuration to the post-run analysis:
+You should see `updateOne on fields: customer_email` at the top: scan efficiency 0, a collection scan, and most of the operation time. Add an index on `customer_email` to the collection definition, run again with the same **Run label**, and **Trends** shows it go from 0 to 100.
 
-https://github.com/user-attachments/assets/f133fd5a-baf8-4d6f-89e1-c179b83c4bef
+For a quick look at the whole UI, including the analysis view after a run, see the [walkthrough video](../images/plgm_walkthrough.mp4).
 
 ## Settings reference
 

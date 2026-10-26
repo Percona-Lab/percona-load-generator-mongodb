@@ -5,6 +5,64 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v6.1.0 - Multi-target replay and easier set up
+
+Multi-target replay in the Web UI is easier to set up: pick a recording from a list instead of typing its path, get the settings targets need turned on for you, leave the outcome file blank for a new name per run, and open comparison reports in a browser tab. The CLI, `config.yaml`, and environment variables are unchanged.
+
+**Highlights**
+
+**New: Choose a recording on the PLGM server**
+- **Recording to Replay** is now a list of the recordings the PLGM server can replay, newest first, with operation count (uncompressed files), size, time, and where each came from (recordings directory, Import Traffic, or a run of this server). **Refresh** reloads it and keeps the selection while the file exists; a chosen file that disappears is cleared with a message. Empty and error states say what to do next.
+- Manual entry stays available under **Enter a server path or upload a file**. Saved configurations keep their path; a path that is not in the list is shown as used.
+- Listing is bounded: only regular files directly in the folder of the server's `workload_record_path` (no subfolders, no symbolic links), at most 200 inspected and 100 listed, reading only each file's header line. Form values never add folders. Files that look like recordings but cannot be replayed (unreadable, damaged header, unsupported format) are listed as disabled with the reason.
+- When a replay starts, the chosen recording is checked again; a missing, unreadable, or non-recording file is rejected before anything connects.
+
+**New: Prerequisites and conflicts for Replay Targets**
+- Listing Replay Targets turns **Record Outcomes** on, with a note; removing the targets restores the previous value.
+- In **Record a workload**, listed targets are kept but disabled and not sent, with a note: record on one instance, then replay that recording on the targets. The "Replay Targets cannot be combined with Record Workload" error no longer appears for this case. The API still rejects the combination, now with the same guidance.
+- In a generic or custom run without Deterministic traffic, listed targets are kept but not sent, so the run uses MongoDB URI as before. The targets note says how to use them (turn on Deterministic traffic or choose **Replay a recording**), and the launch bar shows `replay targets not used`.
+
+**New: Several servers next to the connection**
+- Replay targets moved from the Advanced **Multi-Target** section to **Target Connection** in Basic settings: **Run on: One server / Several servers**. Several servers replaces the MongoDB URI field with the server list and Targets Mode; choosing it adds two empty rows. One server keeps the list but doesn't send it. Run on is shown for replays, and for generic or custom runs with Deterministic traffic; recording runs never show it.
+- **Starting-Data Fingerprint** moved to the **Record** section when recording and the **Replay** section otherwise. The **Multi-Target** section and its tab are gone. Setting keys, the API, and saved configurations are unchanged.
+
+**Improved: Seed & Deterministic**
+- The **Record & replay** category is now **Seed & Deterministic** (**Outcomes & import** in a replay, which uses neither). **Deterministic traffic** comes first, then **Random Seed**. **Operations per Worker** shows only while Deterministic traffic is on, and says so right away when it is still 0.
+- In a generic or custom run, **Run on** and the server list appear right under Deterministic traffic, so a multi-server deterministic run is set up in one place. They are the same controls as in Target Connection, so a change in one place shows in the other.
+- Turning Deterministic traffic on fills in a Random Seed when it is 0, and the note lists only what it changed. Turning it off restores those values unless you changed them since, and says what it restored or kept. If several servers were listed, it says the run now connects only to the server in the MongoDB URI field, and keeps the list.
+- The help states what deterministic traffic does not guarantee: identical latency, throughput, ordering across workers, or results.
+- Replay target rows wrap on narrow screens, and their fields have accessible names.
+- **One server** and **Several servers** each explain what they do in a **?** tooltip; the text no longer shows under the choice. One server connects to the MongoDB URI field; Several servers connects to each listed server with its own URI and ignores that field.
+- All settings cards share one layout: title, level tag, and **?** with the description behind it, then the fields. Dividers only separate subsections, the tag pills are gone in a task, and the gap under Seed & Deterministic's title is gone.
+
+**Improved: Seed documents switch**
+- **Data & Query Definitions** has a **Seed documents** checkbox next to **Seeding & Transactions** (Basic, off by default, matching `skip_seed: true`). Check it to seed and enter **Seed Document Count**; unchecked, nothing is seeded and the count is greyed out but keeps its value. It replaces the Advanced **Skip Seed Phase** checkbox and still sets `skip_seed`, so configs, the API, and the CLI are unchanged. The bottom bar says `no seeding` when it's off.
+
+**New: Use defaults / Reset to defaults**
+- Each task card has a **Use defaults** button, and **Reset to defaults** sits under the task title once a task is open. Both load the settings PLGM started with (`config.yaml` and environment) instead of the last run's, selects the built-in definitions, and keeps the URI and credentials. Clicking a card itself still starts from the last run's settings. `GET /api/config?defaults=1` returns that startup configuration.
+
+**New: Newest recording selected for you**
+- Opening **Replay a recorded workload** with no recording chosen selects the newest one that can be replayed, and says so. A recording you picked, or a saved path, is kept.
+
+**New: A new file for every recording**
+- In the Web UI, a blank **Recording File** now gives each run its own file, `plgm_workload_record-<UTC time>-<random>.ndjson` (`.zst` or `.gz` when compressed), instead of reusing `plgm_workload_record.ndjson` and replacing the last recording. It's created exclusively, returned by `POST /api/start` (`recording_file`), shown on the dashboard, and listed for replay. A name you type is used as before. The CLI default is unchanged.
+
+**New: Generated outcome file names**
+- With Record Outcomes on and **Replay Outcome File** (or **Deterministic Outcome File**) blank, the Web UI server names the file for the run: `plgm_replay_outcomes-<UTC time>-<random>.ndjson` in the folder of `workload_record_path`, with the target label before the extension for each target. Files are created exclusively (mode 0600), so a generated name never replaces a file, and the next run always gets a new name. A name you enter is used as before.
+- The resolved files are returned by `POST /api/start` (`outcome_files`), logged in the run events, shown on the dashboard for single runs, and listed per target in the multi-target table.
+- The multi-target table lists each target's outcome file by name (full path on hover) and names the folder once below the comparisons.
+
+**New: Open reports in the browser**
+- Comparison links in the multi-target card and in **Replay Comparison** now offer **Open report** (new tab) and **Download**. **Completed Runs** has the same pair.
+- `GET /api/replay-compare/<id>/report.html` and `GET /api/run-history/<id>/report` are served inline; add `?download=1` for a file. Comparison reports carry a restrictive Content-Security-Policy and `nosniff`. A report that is no longer kept returns a short page that says so.
+
+**Fixes**
+- Comparison report links downloaded the report instead of opening it.
+- Replay without an outcome file path failed validation even though the path could be chosen automatically.
+
+**Testing & Docs**
+- `docs/web-ui.md`, `docs/record-and-replay.md`, `docs/query-analysis.md`, `docs/trends-and-history.md`, `docs/reports-and-exports.md`, and `docs/load-modeling.md` were rewritten around short steps and how to read each result. `docs/load-modeling.md` no longer says the dashboard shows active worker counts (they're in `/api/stats` and the report).
+
 ## v6.0.0 - Revamped Web UI, Settings Categories, and Completed Run Dashboards
 
 This release redesigns Web UI setup around what you want to do. You pick a task first (generic workload, custom workload, stress test, record, or replay), and the page shows only the settings that task uses. Basic settings are always on screen; Advanced and Expert settings are grouped into categories, so you no longer scroll through one long page. Launch checks every setting the run uses, including ones that are not on screen, and takes you to the field that needs fixing. Finished runs are now saved, so you can reopen their dashboards and HTML reports after the browser or PLGM is closed.

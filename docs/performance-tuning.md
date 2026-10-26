@@ -41,7 +41,7 @@ export GOMAXPROCS=2
 
 **Web UI:** turn on **Expert**, then **Connection > Runtime Transport & Pooling**: **Max Pool Size**, **Min Pool Size**, **Max Idle Time (m)**, and **Direct Connection (Bypass Topology)**.
 
-![Runtime Transport & Pooling and Execution / Runtime Tuning settings](../images/settings_execution.png)
+![Connection category (Expert): TLS client files and the connection pool](../images/settings_execution.png)
 
 These settings control the MongoDB driver's connection pool. Proper sizing prevents workers from waiting for available connections.
 
@@ -144,4 +144,4 @@ PLGM sets `tls=true` in the generated MongoDB URI when both TLS client files are
 
 Further configuration and examples for [Kubernetes environments with TLS are here](../k8s_and_docker.md#3-running-plgm-with-tls-on-kubernetes).
 
-For TLS on the Web UI itself (HTTPS), see [The Web UI](./web-ui.md#http-vs-https-no-certificate-warnings).
+For TLS on the Web UI itself (HTTPS), see [Web UI](./web-ui.md#https-and-remote-access).

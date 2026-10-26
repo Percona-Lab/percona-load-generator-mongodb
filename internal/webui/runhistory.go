@@ -647,7 +647,7 @@ func (s *WebServer) handleRunHistoryItem(w http.ResponseWriter, r *http.Request)
 			writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		s.handleRunHistoryReport(w, id)
+		s.handleRunHistoryReport(w, id, r.URL.Query().Get("download") == "1")
 		return
 	}
 	if len(parts) != 1 {
@@ -697,7 +697,9 @@ func (s *WebServer) handleRunHistoryItem(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (s *WebServer) handleRunHistoryReport(w http.ResponseWriter, id string) {
+// handleRunHistoryReport serves a stored run's HTML report inline, so it
+// opens in a browser tab; download sends it as an attachment.
+func (s *WebServer) handleRunHistoryReport(w http.ResponseWriter, id string, download bool) {
 	snap, err := s.runHistory.Read(id)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -717,6 +719,12 @@ func (s *WebServer) handleRunHistoryReport(w http.ResponseWriter, id string) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	disposition := "inline"
+	if download {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="plgm-report-%s.html"`, disposition, id))
 	_, _ = w.Write(html)
 }
 

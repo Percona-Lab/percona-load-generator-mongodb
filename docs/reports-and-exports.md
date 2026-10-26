@@ -22,7 +22,7 @@ When CSV export is enabled, PLGM writes a new row to the file every time the `st
 4. Optional: turn on **Append to existing file (do not overwrite)** to collect several runs in one file.
 5. Click **Launch Workload**.
 
-![Export & Reporting (CSV) and Insights Capture](../images/settings_metrics_insights.png)
+![Metrics & reporting category: CSV export and Insights Capture](../images/settings_metrics_insights.png)
 
 **In `config.yaml`:**
 
@@ -137,11 +137,21 @@ Example Summary Snippet:
 
 ## Shareable HTML Run Reports
 
-When a run finishes, click **Export HTML Report** (or open `GET /api/report`) to generate a
-self-contained HTML report, with no external assets or JavaScript. It includes the
-run summary, full configuration, load profile, pacing, access pattern, latency
-table, an inline latency-over-time chart, notable insights and warnings, and the recording, replay, and per-target sections when Record & Replay was used. Use the
-browser's Print → Save as PDF to export a PDF.
-Add `?download=1` to download the HTML file directly.
+When a run finishes, click **Export HTML Report**. The report opens in a new browser tab. It's one self-contained file with no scripts or outside assets, so you can save it and send it to anyone. Use the browser's **Print > Save as PDF** for a PDF.
 
-![Top of an HTML run report: summary, configuration, load profile, pacing and access pattern, and latency by operation](../images/html_report.png)
+![Top of an HTML run report](../images/html_report.png)
+
+What's in it, top to bottom:
+
+- **Duration, total ops, and average throughput** for the whole run.
+- **Configuration**: target, workers, duration, and the operation mix.
+- **Load Profile** and **Pacing & Access Pattern**, when you used them.
+- **Latency by Operation**: count, avg, min, max, p95, and p99 per operation type. This is the table to quote.
+- **Latency Over Time** and the latency heatmap.
+- Post-run insights and warnings, and the recording, replay, and per-target sections for Record & Replay runs.
+
+Earlier runs: **Completed Runs > HTML report** opens a stored run's report the same way, and **Download** saves it. See [Web UI](./web-ui.md#completed-runs).
+
+Replay comparisons have their own report. See [Record and Replay](./record-and-replay.md#read-the-results).
+
+From the API: `GET /api/report` returns the current or last run's report. Add `?download=1` to download it as a file.

@@ -48,7 +48,13 @@ Write a field as a label followed by its control and, optionally, a `.settings-n
 
 The label is inline with end padding that the button overlaps, so the button always stays on the same line as the label's last word, including when the label wraps. The button is outside the `<label>`, so the control's accessible name is not affected. The note stays in place in the DOM (hidden) and moves into a floating panel while open. Hover, focus, click, or tap opens it; Escape or a click outside closes it.
 
-Notes shorter than 80 characters, `role="alert"`/`role="status"` messages, validation errors, and warnings that change what the run does stay visible inline. Labels written without `for=` are tied to the following control by `associateLabels()`.
+A card or subsection description (a `.settings-help` right after its heading) always goes behind the heading's **?**, whatever its length, so every heading looks the same. A radio option can carry its own **?**: wrap the option's `<label>` in `.label-help` and put its note right after that wrapper (see **Run on**).
+
+Other notes shorter than 80 characters, `role="alert"`/`role="status"` messages, validation errors, and warnings that change what the run does stay visible inline. Labels written without `for=` are tied to the following control by `associateLabels()`.
+
+## Settings card layout
+
+Every settings card has the same shape: the title (with its level tag and **?**), then the fields 12px below. There's no visible lead text under the title. A 1px divider (`.settings-subhead`, `.det-servers`) only opens a subsection inside a card, and never sits right under the card title or above a button row. Section tags such as "Any run" are hidden once a task is chosen.
 
 ## Components
 

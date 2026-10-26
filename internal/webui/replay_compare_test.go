@@ -203,7 +203,11 @@ func TestReplayCompareAPIUploadsListAndDownload(t *testing.T) {
 	code, _, rec := replayCall(t, s, http.MethodGet, "/api/replay-compare/"+id+"/report.html", nil, "")
 	html := rec.Body.String()
 	if code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/html") ||
-		!strings.Contains(rec.Header().Get("Content-Disposition"), "attachment") || !strings.Contains(html, "Contains literal query values") || !strings.Contains(html, "MongoDB 9.0") {
+		!strings.HasPrefix(rec.Header().Get("Content-Disposition"), "inline") || !strings.Contains(html, "Contains literal query values") || !strings.Contains(html, "MongoDB 9.0") {
+		t.Fatalf("HTML report opened in the browser: %d %v", code, rec.Header())
+	}
+	code, _, rec = replayCall(t, s, http.MethodGet, "/api/replay-compare/"+id+"/report.html?download=1", nil, "")
+	if code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Disposition"), "attachment") || rec.Body.String() != html {
 		t.Fatalf("HTML download: %d %v", code, rec.Header())
 	}
 	if code, _, _ := replayCall(t, s, http.MethodGet, "/api/replay-compare/unknown", nil, ""); code != http.StatusNotFound {

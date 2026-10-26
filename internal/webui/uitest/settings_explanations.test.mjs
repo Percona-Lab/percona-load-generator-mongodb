@@ -45,11 +45,11 @@ const SETTINGS = {
         ['0600', 'iteration, worker, and operation number', 'traffic fingerprint', 'PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH']],
     workloadReplayOps: ['workloadReplayOpsNote', 'tab-replay', 'rrReplayCard', 'Reads only:', 'All (default):',
         ['skips every write', 'counted and reported', 'workload_replay_ops', 'PLGM_WORKLOAD_REPLAY_OPS']],
-    workloadReplayTargetsList: ['workloadReplayTargetsNote', 'tab-replay', 'rrTargetsCard', 'Listed (2&ndash;8 targets):'.replace('&ndash;', '\u2013'), 'Empty (default):',
-        ['only on those', 'MongoDB URI is not used', 'own client, workers, stats, outcome file', 'compared with the first target', 'workload_replay_targets', 'PLGM_WORKLOAD_REPLAY_TARGETS']],
-    workloadReplayTargetsMode: ['workloadReplayTargetsModeNote', 'tab-replay', 'rrTargetsCard', 'Concurrent:', 'Sequential (default):',
+    workloadReplayTargetsList: ['workloadReplayTargetsNote', 'tab-conn', null, 'Listed (2&ndash;8 targets):'.replace('&ndash;', '\u2013'), 'Empty (default):',
+        ['only on those', 'each with the URI entered for it', 'own client, workers, stats, outcome file', 'compared with the first target', 'workload_replay_targets', 'PLGM_WORKLOAD_REPLAY_TARGETS']],
+    workloadReplayTargetsMode: ['workloadReplayTargetsModeNote', 'tab-conn', null, 'Concurrent:', 'Sequential (default):',
         ['latencies may be affected', 'client-side lag', 'workload_replay_targets_mode', 'PLGM_WORKLOAD_REPLAY_TARGETS_MODE']],
-    workloadDataFingerprint: ['workloadDataFingerprintNote', 'tab-replay', 'rrTargetsCard', 'Counts / dbHash:', 'Off (default):',
+    workloadDataFingerprint: ['workloadDataFingerprintNote', 'tab-replay', 'rrReplayCard', 'Counts / dbHash:', 'Off (default):',
         ['document count and index list', 'fails on a difference', 'byte-identical copies', 'workload_data_fingerprint', 'PLGM_WORKLOAD_DATA_FINGERPRINT']],
 };
 

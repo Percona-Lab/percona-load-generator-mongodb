@@ -32,6 +32,7 @@ test('multi-target settings default off and submit no targets', async () => {
 
 test('loaded targets fill the editor and edits are submitted as JSON', async () => {
     const { w, doc, errors } = await page({
+        WorkloadReplayEnabled: true, WorkloadReplayPath: 'rec.ndjson',
         WorkloadReplayTargets: [{ label: 'm7', uri: 'mongodb://a:1' }, { label: 'm8', uri: 'mongodb://b:2' }],
         WorkloadReplayTargetsMode: 'concurrent', WorkloadReplayOps: 'reads_only', WorkloadDataFingerprint: 'dbhash',
     });
@@ -57,9 +58,10 @@ test('loaded targets fill the editor and edits are submitted as JSON', async () 
 test('invalid multi-target settings block the run on the Record & Replay tab', async () => {
     const { w, doc, errors } = await page();
     const set = (id, v) => { doc.getElementById(id).value = v; };
-    const check = msg => {
+    // Server list problems are fixed in Target Connection (Basic settings).
+    const check = (msg, tab = 'tab-replay') => {
         assert.equal(w.validateConfigForm(), false);
-        assert.equal(doc.activeElement.closest('.tab-content')?.id, 'tab-replay', 'focus moves to the setting to fix');
+        assert.equal(doc.activeElement.closest('.tab-content')?.id, tab, 'focus moves to the setting to fix');
         assert.match(doc.getElementById('configInlineError').textContent, msg);
     };
     set('workloadReplayOps', 'reads_only');
@@ -69,24 +71,28 @@ test('invalid multi-target settings block the run on the Record & Replay tab', a
     check(/Starting-Data Fingerprint needs Record Workload/);
     set('workloadDataFingerprint', 'off');
 
-    w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }]);
-    check(/2 to 8 targets/);
-    w.addReplayTargetRow('m9', 'mongodb://b:2');
-    check(/needs Replay Workload or Deterministic traffic/);
+    w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'm9', uri: 'mongodb://b:2' }]);
+    // Without a replay or deterministic traffic the targets are kept but not sent.
+    assert.equal(w.validateWorkloadRecordReplay(), '');
+    assert.equal(formData(doc).get('workload_replay_targets'), '');
+    assert.match(doc.getElementById('replayTargetsStatus').textContent, /connects only to the server in the MongoDB URI field/);
     set('workloadReplayEnabled', 'true');
     set('workloadReplayPath', 'rec.ndjson');
-    check(/needs Record Outcomes on and the Replay Outcome File/);
-    set('workloadRecordOutcomes', 'true');
+    w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }]);
+    check(/2 to 8 targets/, 'tab-conn');
+    w.addReplayTargetRow('m9', 'mongodb://b:2');
+    assert.equal(w.validateWorkloadRecordReplay(), '', 'Record Outcomes is turned on and a blank outcome file is generated');
+    assert.equal(doc.getElementById('workloadRecordOutcomes').value, 'true');
     set('workloadReplayOutcomesPath', 'out.ndjson');
     assert.equal(w.validateWorkloadRecordReplay(), '');
     w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'M8', uri: 'mongodb://b:2' }]);
-    check(/used twice/);
+    check(/used twice/, 'tab-conn');
     w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'bad label', uri: 'mongodb://b:2' }]);
-    check(/label must be/);
+    check(/label must be/, 'tab-conn');
     w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'm9', uri: 'http://b:2' }]);
-    check(/must start with mongodb/);
+    check(/must start with mongodb/, 'tab-conn');
     w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'm9', uri: 'mongodb://a:1' }]);
-    check(/same URI is listed twice/);
+    check(/same URI is listed twice/, 'tab-conn');
     w.setReplayTargetRows([{ label: 'm8', uri: 'mongodb://a:1' }, { label: 'm9', uri: 'mongodb://b:2' }]);
     set('workloadReplayEnabled', 'false');
     set('workloadReplayOutcomesPath', '');
@@ -96,7 +102,12 @@ test('invalid multi-target settings block the run on the Record & Replay tab', a
     set('operationsPerWorker', '10');
     doc.getElementById('dropColl').checked = true;
     doc.getElementById('skipSeed').checked = false;
-    check(/cannot be combined with Record Workload/);
+    // Recording cannot use targets: they are kept, disabled, and not submitted.
+    assert.equal(w.validateWorkloadRecordReplay(), '');
+    assert.equal(formData(doc).get('workload_replay_targets'), '');
+    assert.equal(doc.querySelectorAll('.replay-target-label').length, 2);
+    assert.ok(doc.querySelector('.replay-target-label').disabled);
+    assert.match(doc.getElementById('replayTargetsStatus').textContent, /not used while recording.*Replay a recording/);
     doc.getElementById('workloadDeterministic').checked = false;
     set('workloadRecordEnabled', 'false');
     set('workloadReplayEnabled', 'true');
