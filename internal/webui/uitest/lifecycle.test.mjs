@@ -184,14 +184,19 @@ test('a reload restores chart history from the start of the run', async () => {
     });
     await settle();
     try {
-        assert.equal(doc.getElementById('timeScrubber').max, '2');
-        assert.equal(doc.getElementById('rate-finds').textContent, '12 ops/sec');
+        // The Time Machine runs in seconds since the run started.
+        assert.equal(doc.getElementById('timeScrubber').max, '10');
+        doc.querySelector('#msOps [data-op="find"]').click();
+        const findLine = () => Array.from(w.eval('msCharts').throughput.data.datasets[0].data, p => [p.x, p.y]);
+        assert.deepEqual(findLine(), [[1, 10], [5, 20], [10, 12]]);
+        assert.equal(doc.querySelector('.ms-tile[data-op="find"] .ms-v').textContent, '5,000');
         assert.equal(doc.getElementById('timerDisplay').textContent, '00:10 / 01:00');
         w.applyLiveStats({ ...running, chartHistory: [point(4, 11, 15, 5100)] });
-        assert.equal(doc.getElementById('timeScrubber').max, '3');
-        assert.equal(doc.getElementById('rate-finds').textContent, '15 ops/sec');
+        assert.equal(doc.getElementById('timeScrubber').max, '11');
+        assert.deepEqual(findLine().at(-1), [11, 15]);
         w.applyLiveStats({ ...running, chartHistory: [point(1, 1, 10, 10, 'Iter 1'), point(2, 5, 20, 100)] });
-        assert.equal(doc.getElementById('timeScrubber').max, '3');
+        assert.equal(findLine().length, 4, 'samples already drawn are not added again');
+        assert.match(w.liveStatsURL(), /chartSince=4/);
     } finally {
         w.stopPolling();
     }

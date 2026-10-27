@@ -1825,6 +1825,15 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	initDurationSec := s.InitDurationSec
 	lifecycleEvents := append([]lifecycleEvent(nil), s.LifecycleEvents...)
 	plan := s.multiTarget
+	// Target iterations are written under s.mu by the run.
+	targetIterations := map[*stats.Collector]int{}
+	if plan != nil {
+		for _, t := range plan.Targets {
+			if t.Collector != nil {
+				targetIterations[t.Collector] = t.Collector.CurrentIteration
+			}
+		}
+	}
 	s.mu.Unlock()
 
 	now := time.Now()
@@ -1964,13 +1973,19 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	// rate produced tiny samples where the per-window p99 collapsed onto the
 	// single slowest op, badly overstating tail latency versus the cumulative
 	// distribution. A 1s window keeps each bucket statistically meaningful.
-	collector.CaptureLatencyIntervalEvery(time.Second)
 	concTarget, concActive := collector.ConcurrencySnapshot()
 	// Snapshot the UI interval once, keep the point, and return only samples
 	// newer than chartSince so a reloaded page can redraw the run so far.
-	intervalLatency := collector.GetUILatencyTimelineAndReset()
-	if lifecyclePhase == "running" || lifecyclePhase == "completed" || lifecyclePhase == "failed" {
-		collector.RecordUIChartSample(execElapsedSec, curIter, isWait, intervalLatency)
+	// With replay targets, every running target is sampled on its own clock.
+	var intervalLatency map[string]map[string]float64
+	if plan != nil {
+		intervalLatency = sampleRunningTargets(plan, collector, targetIterations, isWait, now)
+	} else {
+		collector.CaptureLatencyIntervalEvery(time.Second)
+		intervalLatency = collector.GetUILatencyTimelineAndReset()
+		if lifecyclePhase == "running" || lifecyclePhase == "completed" || lifecyclePhase == "failed" {
+			collector.RecordUIChartSample(execElapsedSec, curIter, isWait, intervalLatency)
+		}
 	}
 	chartHistory := collector.UIChartHistory(chartSinceParam(r))
 
@@ -2042,6 +2057,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt
+		statsResp["targets"] = multiTargetSeries(plan, parseTargetSince(r))
 	} else if outcomeFile != "" && lifecyclePhase != "idle" {
 		statsResp["outcomeFile"] = outcomeFile
 	}

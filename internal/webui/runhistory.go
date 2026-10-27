@@ -598,6 +598,7 @@ func dashboardStats(s *WebServer, collector *stats.Collector, charts []stats.UIC
 	}
 	if mt := multiTargetStatus(s.multiTarget); mt != nil {
 		statsOut["multi_target"] = mt
+		statsOut["targets"] = multiTargetSeries(s.multiTarget, nil)
 	}
 	return statsOut
 }

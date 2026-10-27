@@ -328,7 +328,7 @@ test('completed runs open a stored dashboard and a damaged file does not hide th
     assert.equal(w.fetchCalls.some(c => c.url === '/api/start'), false);
     assert.match(doc.getElementById('historyBanner').textContent, /does not start a workload/);
     assert.match(doc.getElementById('historyGapNotice').textContent, /3600/);
-    assert.equal(doc.getElementById('stat-total').textContent, '10');
+    assert.equal(doc.querySelector('.ms-tile[data-op="all"] .ms-v').textContent, '10');
     assert.equal(doc.getElementById('dashboard').style.display === 'none', false);
 });
 

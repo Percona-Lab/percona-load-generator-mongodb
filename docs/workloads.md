@@ -312,7 +312,7 @@ Leave `0` for time-based, non-deterministic generation.
 
 1. **Basic settings > Operation Mix Allocation**: set **Find (%)**, **Update (%)**, **Delete (%)**, **Insert (%)**, **Bulk Insert (%)**, **Aggregate (%)**, and **Transaction (%)**. The live total must reach 100%.
 2. For transactions: **Basic settings > Data & Query Definitions > Seeding & Transactions**: turn on **Use Transactions** and set **Max Transaction Ops** (shown when **Advanced** is on).
-3. During the run, the **Workload Anatomy** chart on the dashboard confirms the database is executing the mix you asked for.
+3. During the run, the total cards on the dashboard show how many operations of each type were sent, so you can check they match the mix you asked for.
 
 By default, the tool comes preconfigured with the following workload distribution:
 

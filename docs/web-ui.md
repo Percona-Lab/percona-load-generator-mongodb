@@ -26,9 +26,9 @@ The Web UI does everything the CLI does. You pick a task, fill in a few fields, 
 
 PLGM listens on `127.0.0.1:9999` and opens your browser.
 
-90-second walkthrough: record a workload, replay it on three servers, and open the comparison.
+2½-minute walkthrough: record a workload, replay it on three servers, compare them on the dashboard charts, and open the comparison report.
 
-https://github.com/user-attachments/assets/daf25637-7d0d-4f3a-9d97-eeaa3b4835e4
+https://github.com/user-attachments/assets/68e07543-2c99-492c-8f1e-e783c0521964
 
 ## Your first run
 
@@ -86,30 +86,38 @@ The dashboard has four tabs: **Live Metrics**, **Latency Analysis**, **Query & I
 
 ![Live Metrics during a ramp from 2 to 24 workers](../images/dashboard_live.png)
 
+The bar at the top of **Live Metrics** and **Latency Analysis** picks what the charts show:
+
+- **Operation**: All operations, Find, Insert, Update, Delete, Aggregate, or Transaction. The total cards and every chart on both tabs switch together. Clicking a total card picks its operation too. Transactions have latency but no throughput.
+- **Servers** (only on several servers): click a server to hide or show it everywhere.
+
 How to read **Live Metrics**:
 
-- The tiles at the top are totals and the current rate for each operation type.
-- **Live Throughput** is operations per second per type. **Live Latency** is the average latency per type.
-- **Workload Anatomy** shows the operation mix actually sent. It should match the mix you set.
-- The dashed lines mark when an iteration and the measured run started.
+- The total cards are the operations of each type so far and their average rate.
+- **Live Throughput** is operations per second, and **Live Latency** the average latency, for the operation you picked.
+- **Tail latency** shows p99 or p95 over time (on several servers it's called **Compare servers**).
+- The x-axis is seconds since the run started. Dashed lines mark each iteration, a wait between iterations, and the end of the run.
 
 ![Latency Analysis: percentile timeline, latency table, and heatmap](../images/dashboard_latency.png)
 
 How to read **Latency Analysis**:
 
-- **Latency percentile timeline**: pick Avg, P95, or P99 and the operation types to plot.
-- **Cumulative Latency Distribution**: avg, min, max, p95, and p99 for the whole run, per operation type.
-- **Latency heatmap**: one bar per second. Height is that second's p99 compared with the run's worst second. Color is the actual p99: green is 10 ms or less, red is 250 ms or more. See [Load Modeling](./load-modeling.md#latency-heatmap-over-time).
+- **Latency percentile timeline**: pick Avg, P95, or P99.
+- **Cumulative Latency Distribution**: avg, min, max, p95, and p99 for the whole run, for the operation you picked.
+- **Latency heatmap**: one bar per second, all operations combined. Height is that second's p99 compared with the worst second. Color is the actual p99: green is 10 ms or less, red is 250 ms or more. A wait between iterations stays empty. See [Load Modeling](./load-modeling.md#latency-heatmap-over-time).
 
-The other tabs are covered in [Query and Index Analysis](./query-analysis.md#read-the-results). Replay runs also show a table with one row per target; see [Record and Replay](./record-and-replay.md#multi-target-replay).
+The other tabs are covered in [Query and Index Analysis](./query-analysis.md#read-the-results).
+
+**On several servers** (Run on: Several servers), the same charts draw one line per server, each aligned on seconds since that server started; the cards and the latency table have one row per server. See [Record and Replay](./record-and-replay.md#read-the-results).
 
 ## Time Machine and zoom
 
-- Drag the **Time Machine** slider to go back to any second of the run. Every chart, tile, and sparkline shows that moment.
-- Drag across a chart to zoom into a time range. Everything on the page shows that range only.
-- **Reset Zoom** goes back to the normal window. **Back to Live** returns to the live feed.
+- Drag the **Time Machine** slider to go back to any second of the run. The charts and the heatmap stop at that second, and the total cards show the totals at that moment.
+- Drag across a chart to zoom into a time range. Every chart and the heatmap show that range, and the cards count only the operations in it.
+- **Reset Zoom** goes back to the whole run. **Back to Live** returns to the live feed.
+- The latency distribution table always covers the whole run.
 
-![Zoomed to 00:17-00:24: the tiles and charts show only that window](../images/dashboard_time_machine_zoom.png)
+![Zoomed to 00:17-00:24: the cards and charts show only that window](../images/dashboard_time_machine_zoom.png)
 
 ## Completed runs
 

@@ -697,6 +697,58 @@
             display: block;
         }
 
+        /* --- Several servers: toolbar, total cards, and per-server charts --- */
+        .ms-bar { position: sticky; top: var(--ms-bar-top, 0px); z-index: 15; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin: 0 0 var(--space-3); padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--elevation-1); }
+        .ms-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+        .ms-label { font-weight: 600; color: var(--text-strong); }
+        .ms-hint { flex-basis: 100%; margin: -2px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
+        .ms-segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); }
+        .ms-segmented.ms-end { margin-left: auto; }
+        .ms-segmented [role="radio"] { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--fs-base); font-weight: 500; cursor: pointer; }
+        .ms-segmented [role="radio"]:hover { color: var(--text-strong); background: rgba(255, 255, 255, 0.7); }
+        .ms-segmented [role="radio"][aria-checked="true"] { background: var(--surface); color: var(--accent); font-weight: 600; box-shadow: var(--elevation-1); }
+        .ms-server { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font: inherit; font-size: var(--fs-base); font-weight: 500; color: var(--text); cursor: pointer; }
+        .ms-server i { width: 10px; height: 10px; border-radius: 50%; background: var(--ms-color); }
+        .ms-server small { font-size: var(--fs-xs); font-weight: 400; color: var(--text-muted); }
+        .ms-server[aria-pressed="false"] { color: var(--text-muted); background: var(--surface-sunken); }
+        .ms-server[aria-pressed="false"] i { background: transparent; box-shadow: inset 0 0 0 2px var(--border-strong); }
+        .ms-dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: var(--ms-color); }
+        .ms-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ms-tile { display: block; width: 100%; margin: 0; padding: 10px 14px 12px; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+        .ms-tile:hover { background: var(--surface-muted); }
+        .ms-tile[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+        .ms-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+        .ms-tile-head span:first-child { font-size: var(--fs-sm); font-weight: 600; color: var(--p-night); }
+        .ms-tile-shown { padding: 0 7px; border-radius: 999px; background: var(--surface); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; visibility: hidden; }
+        .ms-tile[aria-pressed="true"] .ms-tile-shown { visibility: visible; }
+        .ms-tile-row { display: grid; grid-template-columns: minmax(3.5rem, auto) 1fr auto; align-items: baseline; gap: 6px; padding: 1px 0; font-variant-numeric: tabular-nums; }
+        .ms-tiles-single .ms-tile-row { grid-template-columns: 1fr auto; }
+        .ms-tiles-single .ms-srv { display: none; }
+        .ms-tiles-single .ms-tile-row .ms-v { font-size: var(--fs-xl); }
+        .ms-tile-row .ms-srv { font-size: var(--fs-sm); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ms-tile-row .ms-v { font-size: var(--fs-lg); font-weight: 600; color: var(--text-strong); }
+        .ms-tile-row .ms-r { font-size: var(--fs-xs); color: var(--text-muted); text-align: right; white-space: nowrap; }
+        .ms-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; margin-bottom: 12px; }
+        .ms-grid > .ms-card { margin-bottom: 0; }
+        .ms-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+        .ms-card-head .mat-card-title { margin-bottom: 0; }
+        .ms-sub { font-size: var(--fs-sm); color: var(--text-secondary); }
+        .ms-op { display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: var(--fs-sm); font-weight: 600; }
+        .ms-chart { position: relative; height: 240px; }
+        .ms-chart-lg { height: 300px; }
+        .ms-table-wrap { overflow-x: auto; }
+        .ms-dist td, .ms-dist th { white-space: nowrap; }
+        .ms-dist tr.ms-ref td { background: var(--surface-muted); }
+        .ms-diff { display: block; font-size: var(--fs-xs); font-weight: 500; }
+        .ms-better { color: var(--ok); } .ms-worse { color: var(--danger); } .ms-same { color: var(--text-muted); }
+        .ms-note { margin: 8px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
+        .ms-hm-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); align-items: end; gap: 10px; margin-top: 10px; }
+        .ms-hm-label { font-weight: 600; color: var(--text-strong); padding-bottom: 2px; overflow-wrap: anywhere; }
+        .ms-hm-label small { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--text-muted); }
+        .ms-hm-bars { display: flex; align-items: flex-end; gap: 2px; height: 64px; border-bottom: 1px solid var(--border); overflow: hidden; }
+        .ms-hm-bars .heatmap-col { flex: 1 1 0; min-width: 2px; }
+        @media (max-width: 640px) { .ms-bar { position: static; } .ms-hm-row { grid-template-columns: 4.5rem minmax(0, 1fr); } .ms-segmented.ms-end { margin-left: 0; } }
+
         /* Sticky run-summary header keeps key counters visible across tabs */
         .run-summary-sticky {
             position: sticky;
@@ -708,19 +760,6 @@
         }
 
         /* --- Latency heatmap (over time) --- */
-        .heatmap-wrap {
-            overflow-x: auto;
-            padding-bottom: 6px;
-        }
-
-        .heatmap-grid {
-            display: flex;
-            align-items: flex-end;
-            gap: 2px;
-            min-height: 140px;
-            height: 160px;
-        }
-
         .heatmap-col {
             width: 12px;
             min-width: 8px;
@@ -1454,80 +1493,6 @@
             margin-bottom: 8px;
         }
 
-        .stats-grid-6 {
-            display: grid;
-            grid-template-columns: 1.25fr repeat(5, minmax(0, 1fr));
-            gap: 0;
-            margin-bottom: 14px;
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .stats-grid-6 .mat-card {
-            padding: 12px 14px 34px;
-            margin: 0;
-            border: 0;
-            border-radius: 0;
-            border-right: 1px solid var(--border);
-            background: transparent;
-            box-shadow: none;
-        }
-
-        .stats-grid-6 .mat-card:last-child {
-            border-right: 0;
-        }
-
-        .stats-grid-6 .sparkline-container {
-            height: 30px;
-        }
-
-        .chart-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        @media (max-width: 900px) {
-            .chart-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .stat-value {
-            font-size: 26px;
-            font-weight: 500;
-            color: var(--text);
-            font-variant-numeric: tabular-nums;
-            letter-spacing: -0.02em;
-            line-height: 1.15;
-        }
-
-        .stat-card-total {
-            background: #f7f9fc;
-        }
-
-        .stat-card-total .stat-value {
-            font-size: 30px;
-        }
-
-        .stat-subtitle {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
-
-        .sparkline-container {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 36px;
-            opacity: 0.72;
-        }
-
         .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.05em; background: var(--surface-sunken); border: 1px solid var(--border); color: #334155; }
 
         .status-badge.status-idle { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
@@ -1579,45 +1544,6 @@
             gap: 8px;
             margin-bottom: 10px;
             align-items: center;
-        }
-
-        .line-style-key {
-            margin-left: auto;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-
-        .line-style-key-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .line-style-key-swatch {
-            width: 22px;
-            height: 0;
-            border-top: 2px solid var(--p-night);
-            display: inline-block;
-        }
-
-        .line-style-key-swatch.dashed {
-            border-top-style: dashed;
-        }
-
-        .line-style-key-swatch.dash-dot {
-            border-top: none;
-            height: 2px;
-            background-image: repeating-linear-gradient(
-                to right,
-                var(--p-night) 0 8px,
-                transparent 8px 12px,
-                var(--p-night) 12px 14px,
-                transparent 14px 18px
-            );
         }
 
         .insights-header {
@@ -2132,13 +2058,6 @@
 
         .toggle-chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border); font-weight: 600; }
 
-        .toggle-chip.total.active { background: var(--p-night); border-color: var(--p-night); }
-        .toggle-chip.find.active { background: var(--p-sky); border-color: var(--p-sky); }
-        .toggle-chip.insert.active { background: var(--p-aqua); border-color: var(--p-aqua); }
-        .toggle-chip.update.active { background: var(--p-sunrise); border-color: var(--p-sunrise); color: #1f2937; }
-        .toggle-chip.delete.active { background: var(--p-amethyst); border-color: var(--p-amethyst); }
-        .toggle-chip.aggregate.active { background: var(--p-pink); border-color: var(--p-pink); }
-        .toggle-chip.transaction.active { background: var(--p-night); border-color: var(--p-night); }
 
         .adv-layout {
             display: grid;
@@ -2528,20 +2447,12 @@
         .dashboard-actions-row { justify-content: space-between; }
         .action-group { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
-        @media (max-width: 1100px) {
-            .stats-grid-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-            .stats-grid-6 .mat-card:nth-child(3) { border-right: 0; }
-        }
         @media (max-width: 700px) {
             .header h1 span { display: block; margin: 2px 0 0; font-size: var(--fs-sm); }
             .header-primary { min-width: 0; }
             .header-runtime { width: 100%; gap: var(--space-2); justify-content: flex-start; }
             .header-runtime .timer-text { font-size: var(--fs-base); margin-right: auto; }
             .btn-header, .btn-exit { min-height: 30px; padding: 4px 9px; font-size: var(--fs-sm); }
-            .stats-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .stats-grid-6 .mat-card:nth-child(3) { border-right: 1px solid var(--border); }
-            .stats-grid-6 .mat-card:nth-child(even) { border-right: 0; }
-            .stat-value, .stat-card-total .stat-value { font-size: 22px; }
             .run-history-table, .run-history-table tbody, .run-history-table tr, .run-history-table td { display: block; }
             .run-history-table thead { display: none; }
             .run-history-table td { border-bottom: 0; padding: 4px 14px; }
@@ -2631,51 +2542,12 @@
                 <div id="progressBar" class="progress-bar"></div>
             </div>
 
-            <div class="time-machine-bar">
+            <div class="time-machine-bar" id="timeMachineBar">
                 <span>Time Machine</span>
                 <input type="range" id="timeScrubber" min="0" max="0" value="0" step="1">
                 <span id="zoomRangeLabel" class="zoom-range-label">Drag a graph to zoom</span>
                 <button id="resetZoomBtn" class="btn-live" style="display:none;" onclick="resetChartZoom()">Reset Zoom</button>
                 <button id="liveBtn" class="btn-live active" onclick="goToLive()">Back to Live</button>
-            </div>
-
-            <div class="stats-grid-6">
-                <div class="mat-card stat-card-total" style="margin-bottom:0;">
-                <div class="mat-card-title" style="color: var(--p-night);">Total Ops</div>
-                    <div class="stat-value" id="stat-total" style="font-weight: 500;">0</div>
-                    <div class="stat-subtitle" id="rate-total" style="font-weight: 500;">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-total"></canvas></div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-sky);">Find Ops</div>
-                    <div class="stat-value" id="stat-finds">0</div>
-                    <div class="stat-subtitle" id="rate-finds">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-find"></canvas></div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-aqua);">Insert Ops</div>
-                    <div class="stat-value" id="stat-inserts">0</div>
-                    <div class="stat-subtitle" id="rate-inserts">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-insert"></canvas></div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-sunrise);">Update Ops</div>
-                    <div class="stat-value" id="stat-updates">0</div>
-                    <div class="stat-subtitle" id="rate-updates">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-update"></canvas></div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-amethyst);">Delete Ops</div>
-                    <div class="stat-value" id="stat-deletes">0</div>
-                    <div class="stat-subtitle" id="rate-deletes">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-delete"></canvas></div>
-                </div>
-                <div class="mat-card" style="margin-bottom:0;">
-                    <div class="mat-card-title" style="color: var(--p-pink);">Aggregate Ops</div>
-                    <div class="stat-value" id="ops-aggregate">0</div>
-                    <div class="stat-subtitle" id="rate-aggregate">0 ops/sec</div>
-                    <div class="sparkline-container"><canvas id="spark-aggregate"></canvas></div>
-                </div>
             </div>
 
             <div class="dash-tabs run-summary-sticky" id="dashTabs">
@@ -2685,144 +2557,64 @@
                 <button type="button" class="dash-tab-btn" data-dashtab="insights" onclick="showDashTab('insights', this)">Insights</button>
             </div>
 
-            <div class="chart-grid" id="dashpanel-throughput">
-                <div class="mat-card" style="height: 320px; margin-bottom: 0;">
-                    <div class="mat-card-title">Live Throughput (Ops/sec)</div>
-                    <div style="position: relative; height: 260px; width: 100%;">
-                        <canvas id="throughputChart"></canvas>
+            <!-- Several servers: one line per server on every chart. Shown instead
+                 of the single-server tiles and charts when a run has targets. -->
+            <div class="ms-bar" id="mspanel-bar" role="region" aria-label="Servers and operation shown">
+                <div class="ms-group" id="msServersGroup">
+                    <span class="ms-label" id="msServersLabel">Servers</span>
+                    <div class="ms-group" id="msServers" role="group" aria-labelledby="msServersLabel"></div>
+                </div>
+                <div class="ms-group">
+                    <span class="ms-label" id="msOpLabel">Operation</span>
+                    <div class="ms-segmented" id="msOps" role="radiogroup" aria-labelledby="msOpLabel"></div>
+                </div>
+                <p class="ms-hint" id="msHint" aria-live="polite"></p>
+            </div>
+            <div class="ms-tiles" id="mspanel-tiles"></div>
+            <div class="ms-grid" id="mspanel-live">
+                <div class="mat-card ms-card">
+                    <div class="ms-card-head"><div class="mat-card-title">Live Throughput (Ops/sec)</div><span class="ms-sub" id="msSubThroughput"></span></div>
+                    <div class="ms-chart"><canvas id="msThroughputChart"></canvas></div>
+                </div>
+                <div class="mat-card ms-card">
+                    <div class="ms-card-head"><div class="mat-card-title">Live Latency (ms)</div><span class="ms-sub" id="msSubLatency"></span></div>
+                    <div class="ms-chart"><canvas id="msLatencyChart"></canvas></div>
+                </div>
+            </div>
+            <div class="mat-card ms-card" id="mspanel-compare">
+                <div class="ms-card-head">
+                    <div class="mat-card-title" id="msCompareTitle">Compare servers</div><span class="ms-sub" id="msSubCompare"></span>
+                    <div class="ms-segmented ms-end" id="msCompareMetric" role="radiogroup" aria-label="Compare servers metric">
+                        <button type="button" role="radio" data-metric="p99" aria-checked="true" tabindex="0">p99 latency</button>
+                        <button type="button" role="radio" data-metric="p95" aria-checked="false" tabindex="-1">p95 latency</button>
                     </div>
                 </div>
-                <div class="mat-card" style="height: 320px; display: flex; flex-direction: column; margin-bottom: 0;">
-                    <div class="mat-card-title">Workload Anatomy</div>
-                    <div
-                        style="position: relative; height: 100%; width: 100%; display: flex; align-items: center; justify-content: center;">
-                        <canvas id="donutChart"></canvas>
+                <div class="ms-chart ms-chart-lg"><canvas id="msCompareChart"></canvas></div>
+            </div>
+            <div class="mat-card ms-card" id="mspanel-timeline">
+                <div class="ms-card-head">
+                    <div class="mat-card-title">Latency percentile timeline (ms)</div><span class="ms-sub" id="msSubTimeline"></span>
+                    <div class="ms-segmented ms-end" id="msTimelineMetric" role="radiogroup" aria-label="Percentile">
+                        <button type="button" role="radio" data-metric="avg" aria-checked="false" tabindex="-1">Avg</button>
+                        <button type="button" role="radio" data-metric="p95" aria-checked="false" tabindex="-1">P95</button>
+                        <button type="button" role="radio" data-metric="p99" aria-checked="true" tabindex="0">P99</button>
                     </div>
                 </div>
+                <div class="ms-chart ms-chart-lg"><canvas id="msTimelineChart"></canvas></div>
             </div>
-
-            <div class="mat-card" style="height: 280px;" id="dashpanel-livelatency">
-                <div class="mat-card-title">Live Latency (ms)</div>
-                <div style="position: relative; height: 220px; width: 100%;">
-                    <canvas id="latencyChart"></canvas>
-                </div>
+            <div class="mat-card ms-card" id="mspanel-distribution">
+                <div class="ms-card-head"><div class="mat-card-title">Cumulative Latency Distribution (ms)</div><span class="ms-sub" id="msSubDistribution"></span></div>
+                <div class="ms-table-wrap"><table class="latency-table ms-dist">
+                    <thead><tr><th id="msDistHead">Server</th><th>AVG</th><th>MIN</th><th>MAX</th><th>P95</th><th>P99</th></tr></thead>
+                    <tbody id="msDistRows"></tbody>
+                </table></div>
+                <p class="ms-note" id="msDistNote"></p>
             </div>
-
-            <div class="mat-card" style="height: 380px;" id="dashpanel-timeline">
-                <div class="mat-card-title">Latency percentile timeline (ms)</div>
-                <div class="latency-toggles">
-                    <button type="button" id="toggleMetricAvg" class="toggle-chip active" onclick="toggleLatencyMetric('avg')">Avg</button>
-                    <button type="button" id="toggleMetricP95" class="toggle-chip" onclick="toggleLatencyMetric('p95')">P95</button>
-                    <button type="button" id="toggleMetricP99" class="toggle-chip active" onclick="toggleLatencyMetric('p99')">P99</button>
-                    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;"></span>
-                    <button type="button" id="quickFilterAll" class="toggle-chip" onclick="setLatencyQuickFilter('all')">All</button>
-                    <button type="button" id="quickFilterNone" class="toggle-chip" onclick="setLatencyQuickFilter('none')">None</button>
-                    <button type="button" id="quickFilterTotal" class="toggle-chip" onclick="setLatencyQuickFilter('total')">Only Total</button>
-                    <div class="line-style-key">
-                        <span class="line-style-key-item"><span class="line-style-key-swatch"></span>Solid = Avg</span>
-                        <span class="line-style-key-item"><span class="line-style-key-swatch dash-dot"></span>Dash-dot = P95</span>
-                        <span class="line-style-key-item"><span class="line-style-key-swatch dashed"></span>Dashed = P99</span>
-                    </div>
-                </div>
-                <div class="latency-toggles" style="margin-bottom: 8px;">
-                    <button type="button" id="toggleOpTotal" class="toggle-chip total active" onclick="toggleLatencyOp('total')">Total</button>
-                    <button type="button" id="toggleOpFind" class="toggle-chip find" onclick="toggleLatencyOp('find')">Find</button>
-                    <button type="button" id="toggleOpInsert" class="toggle-chip insert" onclick="toggleLatencyOp('insert')">Insert</button>
-                    <button type="button" id="toggleOpUpdate" class="toggle-chip update" onclick="toggleLatencyOp('update')">Update</button>
-                    <button type="button" id="toggleOpDelete" class="toggle-chip delete" onclick="toggleLatencyOp('delete')">Delete</button>
-                    <button type="button" id="toggleOpAggregate" class="toggle-chip aggregate" onclick="toggleLatencyOp('aggregate')">Aggregate</button>
-                    <button type="button" id="toggleOpTransaction" class="toggle-chip transaction" onclick="toggleLatencyOp('transaction')">Transaction</button>
-                </div>
-                <div style="position: relative; height: 280px; width: 100%;">
-                    <canvas id="latencyTimelineChart"></canvas>
-                </div>
-            </div>
-
-            <div class="mat-card" style="margin-bottom: 16px; padding: 0;" id="dashpanel-distribution">
-                <div class="mat-card-title" style="padding: 16px 20px 0 20px; margin-bottom: 12px;">Cumulative Latency
-                    Distribution
-                    (ms)</div>
-                <div style="overflow-x: auto;">
-                    <table class="latency-table">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>AVG</th>
-                                <th>MIN</th>
-                                <th>MAX</th>
-                                <th>P95</th>
-                                <th>P99</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr style="background-color: #e2e8f0; font-weight: 700;">
-                                <td style="color: var(--p-night);">Total</td>
-                                <td id="dist-total-avg">-</td>
-                                <td id="dist-total-min">-</td>
-                                <td id="dist-total-max">-</td>
-                                <td id="dist-total-p95">-</td>
-                                <td id="dist-total-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-sky);">Find</td>
-                                <td id="dist-find-avg">-</td>
-                                <td id="dist-find-min">-</td>
-                                <td id="dist-find-max">-</td>
-                                <td id="dist-find-p95">-</td>
-                                <td id="dist-find-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-aqua);">Insert</td>
-                                <td id="dist-insert-avg">-</td>
-                                <td id="dist-insert-min">-</td>
-                                <td id="dist-insert-max">-</td>
-                                <td id="dist-insert-p95">-</td>
-                                <td id="dist-insert-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-sunrise);">Update</td>
-                                <td id="dist-update-avg">-</td>
-                                <td id="dist-update-min">-</td>
-                                <td id="dist-update-max">-</td>
-                                <td id="dist-update-p95">-</td>
-                                <td id="dist-update-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-amethyst);">Delete</td>
-                                <td id="dist-delete-avg">-</td>
-                                <td id="dist-delete-min">-</td>
-                                <td id="dist-delete-max">-</td>
-                                <td id="dist-delete-p95">-</td>
-                                <td id="dist-delete-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-pink);">Aggregate</td>
-                                <td id="dist-agg-avg">-</td>
-                                <td id="dist-agg-min">-</td>
-                                <td id="dist-agg-max">-</td>
-                                <td id="dist-agg-p95">-</td>
-                                <td id="dist-agg-p99">-</td>
-                            </tr>
-                            <tr>
-                                <td style="color: var(--p-night);">Transaction</td>
-                                <td id="dist-trans-avg">-</td>
-                                <td id="dist-trans-min">-</td>
-                                <td id="dist-trans-max">-</td>
-                                <td id="dist-trans-p95">-</td>
-                                <td id="dist-trans-p99">-</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="mat-card" id="dashpanel-heatmap" style="margin-bottom: 16px;">
-                <div class="mat-card-title">Latency heatmap over time</div>
-                <div class="settings-help">Each column is a ~1&nbsp;second time window covering <strong>all operation types combined</strong>. <strong>Color</strong> reflects that window's p99 on an <strong>absolute</strong> scale (green &le;10&nbsp;ms is excellent, red is &ge;250&nbsp;ms, dark red &ge;1&nbsp;s), so a fast run stays green. <strong>Bar height</strong> is relative to this run's own peak so you can still see <em>when</em> tail latency drifted up. Hover a bar for the full p50/p95/p99/max breakdown. Because each window is short, an occasional slow op (e.g. an aggregate) can lift a single window's p99 above the cumulative p99.</div>
-                <div class="heatmap-wrap">
-                    <div class="heatmap-grid" id="heatmapGrid"></div>
-                </div>
-                <div class="heatmap-empty" id="heatmapEmpty">No latency-over-time data captured yet.</div>
+            <div class="mat-card ms-card" id="mspanel-heatmap">
+                <div class="ms-card-head"><div class="mat-card-title">Latency heatmap over time</div><span class="ms-sub" id="msSubHeatmap"></span></div>
+                <div class="settings-help">One bar per ~1&nbsp;second window, <strong>all operation types combined</strong>. <strong>Color</strong> is that window's p99 on a fixed scale (green is 10&nbsp;ms or less, red is 250&nbsp;ms or more, dark red 1&nbsp;s or more). <strong>Height</strong> is relative to the worst window shown, across every server, so strips can be compared. Hover a bar for its values.</div>
+                <div id="msHeatmapRows"></div>
+                <div class="heatmap-empty" id="msHeatmapEmpty">No latency-over-time data captured yet.</div>
                 <div class="heatmap-legend">
                     <span class="heatmap-scale">p99 latency:</span>
                     <span class="hm-key"><i style="background:#22c55e"></i>&le;10&nbsp;ms</span>
@@ -2832,9 +2624,8 @@
                     <span class="hm-key"><i style="background:#ef4444"></i>250</span>
                     <span class="hm-key"><i style="background:#dc2626"></i>500</span>
                     <span class="hm-key"><i style="background:#991b1b"></i>&ge;1&nbsp;s</span>
-                    <span id="heatmapMaxLabel"></span>
                 </div>
-                <div id="heatmapTooltip" class="heatmap-tooltip" style="display:none;"></div>
+                <div class="heatmap-tooltip" style="display:none;"></div>
             </div>
 
             <div id="activeActions" class="action-bar">
@@ -4314,56 +4105,7 @@
 
     <script>
         const colors = { night: '#0e1a53', sky: '#1486ff', aqua: '#30d1b2', sunrise: '#f0b336', amethyst: '#8b5cf6', pink: '#ec4899', forest: '#059669', red: '#dc2626' };
-        const WINDOW_SIZE = 45; 
-        let globalMarkers = [];
-        let lastKnownIteration = 0;
-        let lastKnownWaiting = false;
         let lastLifecyclePhase = 'idle';
-
-        // Custom plugin to draw vertical lines safely
-        const verticalLinePlugin = {
-            id: 'verticalLines',
-            afterDraw: (chart) => {
-                try {
-                    if (!chart.data.markers) return;
-                    const ctx = chart.ctx;
-                    const yAxis = chart.scales.y || Object.values(chart.scales).find(s => s.axis === 'y');
-                    if (!yAxis) return;
-
-                    chart.data.markers.forEach((marker, index) => {
-                        if (marker) {
-                            const meta = chart.getDatasetMeta(0);
-                            if (!meta || !meta.data || !meta.data[index]) return;
-                            const x = meta.data[index].x;
-                            if (x === undefined || isNaN(x)) return;
-
-                            ctx.save();
-                            ctx.beginPath();
-                            ctx.moveTo(x, yAxis.top);
-                            ctx.lineTo(x, yAxis.bottom);
-                            ctx.lineWidth = 2;
-                            ctx.strokeStyle = marker.color;
-                            ctx.setLineDash([4, 4]);
-                            ctx.stroke();
-
-                            ctx.fillStyle = marker.color;
-                            ctx.font = 'bold 11px ' + getComputedStyle(document.body).fontFamily;
-
-                            const textWidth = ctx.measureText(marker.text).width;
-                            let textX = x + 4;
-                            if (textX + textWidth > chart.chartArea.right) {
-                                textX = x - textWidth - 4; // Shift text to the left side of the line
-                            }
-
-                            ctx.fillText(marker.text, textX, yAxis.top + 15);
-                            ctx.restore();
-                        }
-                    });
-                } catch (e) {
-                    console.error("Marker Plugin Error (Ignored):", e);
-                }
-            }
-        };
 
         // Settings categories. Basic cards always form the first category; the
         // settings that Advanced and Expert add are grouped by what they control.
@@ -4541,8 +4283,8 @@
         // which tab is active, so no data is lost when switching tabs. We only
         // toggle visibility and resize charts when a tab becomes visible.
         const dashTabPanels = {
-            overview: ['dashpanel-throughput', 'dashpanel-livelatency'],
-            latency: ['dashpanel-timeline', 'dashpanel-distribution', 'dashpanel-heatmap'],
+            overview: ['mspanel-bar', 'mspanel-tiles', 'mspanel-live', 'mspanel-compare'],
+            latency: ['mspanel-bar', 'mspanel-timeline', 'mspanel-distribution', 'mspanel-heatmap'],
             queries: ['queryAnalysisPanel'],
             insights: ['insightsPanel']
         };
@@ -4569,8 +4311,8 @@
 
         function resizeDashCharts() {
             try {
-                [throughputChart, donutChart, latencyChart, latencyTimelineChart].forEach(c => { if (c) c.resize(); });
-                Object.values(sparkCharts).forEach(c => { if (c) c.resize(); });
+                if (msCharts) Object.values(msCharts).forEach(c => c.resize());
+                renderMultiServer();
             } catch (e) { /* charts may not be initialized yet */ }
         }
 
@@ -4608,79 +4350,13 @@
             return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
         }
 
-        let lastHeatmapSig = '';
-        // While the cursor is over the heatmap we freeze rendering so the user can
-        // inspect a bar without it shifting/rebuilding underneath them. The most
-        // recent series is stashed and flushed the moment the cursor leaves.
-        let heatmapPaused = false;
-        let latestHeatmapPoints = null;
-        function renderLatencyHeatmap(points) {
-            const grid = document.getElementById('heatmapGrid');
-            const empty = document.getElementById('heatmapEmpty');
-            const maxLabel = document.getElementById('heatmapMaxLabel');
-            if (!grid) return;
-            // Always remember the freshest data, even while paused, so we can catch
-            // up to "now" as soon as the user moves off the heatmap.
-            latestHeatmapPoints = points;
-            if (!Array.isArray(points) || points.length === 0) {
-                lastHeatmapSig = '';
-                grid.innerHTML = '';
-                if (empty) empty.style.display = 'block';
-                if (maxLabel) maxLabel.textContent = '';
-                hideHeatmapTooltip();
-                return;
-            }
-            // Paused (hovering): keep the current bars and tooltip stable.
-            if (heatmapPaused) return;
-            // Skip re-render (and tooltip flicker) when the series is unchanged.
-            const last = points[points.length - 1];
-            const sig = points.length + ':' + (last.elapsedSec || 0).toFixed(2) + ':' + (last.p99 || 0).toFixed(2);
-            if (sig === lastHeatmapSig) return;
-            lastHeatmapSig = sig;
-            if (empty) empty.style.display = 'none';
-            let maxP99 = 0;
-            points.forEach(p => { if (p.p99 > maxP99) maxP99 = p.p99; });
-            if (maxLabel) maxLabel.textContent = `max p99 ≈ ${maxP99.toFixed(1)} ms over ${points.length} windows (combined ops, ~1s each)`;
-            // Cap rendered columns to keep the DOM light on long runs.
-            const maxCols = 240;
-            const offset = points.length > maxCols ? points.length - maxCols : 0;
-            const shown = points.slice(offset);
-            const frag = document.createDocumentFragment();
-            shown.forEach((p, i) => {
-                const col = document.createElement('div');
-                col.className = 'heatmap-col';
-                const h = maxP99 > 0 ? Math.max(4, (p.p99 / maxP99) * 100) : 4;
-                col.style.height = h + '%';
-                col.style.background = heatmapColor(p.p99);
-                // Window duration (for ops/sec) from the gap to the previous bucket.
-                const globalIdx = offset + i;
-                const prevElapsed = globalIdx > 0 ? (points[globalIdx - 1].elapsedSec || 0) : 0;
-                const windowSec = Math.max(0.001, (p.elapsedSec || 0) - prevElapsed);
-                col._hm = {
-                    elapsedSec: p.elapsedSec || 0,
-                    windowSec: windowSec,
-                    count: p.count || 0,
-                    opsPerSec: (p.count || 0) / windowSec,
-                    p50: p.p50 || 0,
-                    p95: p.p95 || 0,
-                    p99: p.p99 || 0,
-                    max: p.max || 0
-                };
-                col.addEventListener('mousemove', onHeatmapHover);
-                col.addEventListener('mouseleave', hideHeatmapTooltip);
-                frag.appendChild(col);
-            });
-            grid.innerHTML = '';
-            grid.appendChild(frag);
-        }
-
         function onHeatmapHover(e) {
             const d = e.currentTarget._hm;
-            const tip = document.getElementById('heatmapTooltip');
+            const tip = e.currentTarget.closest('.mat-card')?.querySelector('.heatmap-tooltip') || document.getElementById('heatmapTooltip');
             if (!d || !tip) return;
             const row = (k, v) => `<div class="htt-row"><span class="htt-k">${k}</span><span class="htt-v">${v}</span></div>`;
             tip.innerHTML =
-                `<div class="htt-title">Window @ ${d.elapsedSec.toFixed(1)}s</div>` +
+                `<div class="htt-title">${d.title ? escHtml(d.title) : `Window @ ${d.elapsedSec.toFixed(1)}s`}</div>` +
                 row('Ops in window', d.count.toLocaleString()) +
                 row('Throughput', d.opsPerSec.toFixed(0) + ' ops/s') +
                 row('p50', d.p50.toFixed(1) + ' ms') +
@@ -4700,26 +4376,7 @@
         }
 
         function hideHeatmapTooltip() {
-            const tip = document.getElementById('heatmapTooltip');
-            if (tip) tip.style.display = 'none';
-        }
-
-        // Pause the live heatmap while the cursor is over it; resume (and catch up
-        // to the latest data) once the cursor leaves. Wired once on load.
-        let heatmapHoverWired = false;
-        function wireHeatmapHoverPause() {
-            if (heatmapHoverWired) return;
-            const grid = document.getElementById('heatmapGrid');
-            if (!grid) return;
-            grid.addEventListener('mouseenter', () => { heatmapPaused = true; });
-            grid.addEventListener('mouseleave', () => {
-                heatmapPaused = false;
-                hideHeatmapTooltip();
-                // Immediately render whatever arrived while paused so the view
-                // jumps back in sync with the running workload.
-                if (latestHeatmapPoints) renderLatencyHeatmap(latestHeatmapPoints);
-            });
-            heatmapHoverWired = true;
+            document.querySelectorAll('.heatmap-tooltip').forEach(tip => { tip.style.display = 'none'; });
         }
 
         const definitionState = {
@@ -5928,552 +5585,6 @@
             document.getElementById('errorModal').style.display = 'none';
         }
 
-        const latencyOps = ['total', 'find', 'insert', 'update', 'delete', 'aggregate', 'transaction'];
-        const latencyOpMeta = {
-            total: { label: 'Total', color: colors.night },
-            find: { label: 'Find', color: colors.sky },
-            insert: { label: 'Insert', color: colors.aqua },
-            update: { label: 'Update', color: colors.sunrise },
-            delete: { label: 'Delete', color: colors.amethyst },
-            aggregate: { label: 'Aggregate', color: colors.pink },
-            transaction: { label: 'Transaction', color: colors.night }
-        };
-
-        let histLabels = [];
-        let histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-        let histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-        let histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-        let histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-        let histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-        let histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-
-        let latencyMetricVisibility = { avg: false, p95: false, p99: true };
-        let latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
-        let isLiveMode = true;
-        let zoomState = {
-            active: false,
-            start: 0,
-            end: 0,
-            dragging: false,
-            dragStart: 0,
-            dragEnd: 0,
-            sourceCanvasId: ''
-        };
-
-        let throughputChart, latencyChart, latencyTimelineChart, donutChart;
-        let sparkCharts = {};
-
-        function updateLatencyToggleUI() {
-            const metricButtons = { avg: 'toggleMetricAvg', p95: 'toggleMetricP95', p99: 'toggleMetricP99' };
-            Object.keys(metricButtons).forEach(metric => {
-                const el = document.getElementById(metricButtons[metric]);
-                if (!el) return;
-                el.classList.toggle('active', !!latencyMetricVisibility[metric]);
-            });
-
-            latencyOps.forEach(op => {
-                const el = document.getElementById('toggleOp' + op.charAt(0).toUpperCase() + op.slice(1));
-                if (!el) return;
-                el.classList.toggle('active', !!latencyOpVisibility[op]);
-            });
-
-            // Reflect the quick-filter buttons against the current derived state so
-            // they highlight when their preset is active (All / None / Only Total).
-            const visibleOps = latencyOps.filter(op => latencyOpVisibility[op]);
-            const allOn = visibleOps.length === latencyOps.length;
-            const noneOn = visibleOps.length === 0;
-            const onlyTotal = visibleOps.length === 1 && visibleOps[0] === 'total';
-            const setQF = (id, on) => {
-                const el = document.getElementById(id);
-                if (el) el.classList.toggle('active', on);
-            };
-            setQF('quickFilterAll', allOn);
-            setQF('quickFilterNone', noneOn);
-            setQF('quickFilterTotal', onlyTotal);
-        }
-
-        function toggleLatencyMetric(metric) {
-            latencyMetricVisibility[metric] = !latencyMetricVisibility[metric];
-            updateLatencyToggleUI();
-            const scrubber = document.getElementById('timeScrubber');
-            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
-        }
-
-        function toggleLatencyOp(op) {
-            latencyOpVisibility[op] = !latencyOpVisibility[op];
-            updateLatencyToggleUI();
-            const scrubber = document.getElementById('timeScrubber');
-            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
-        }
-
-        function setLatencyQuickFilter(mode) {
-            if (mode === 'all') {
-                latencyOps.forEach(op => latencyOpVisibility[op] = true);
-            } else if (mode === 'none') {
-                latencyOps.forEach(op => latencyOpVisibility[op] = false);
-            } else if (mode === 'total') {
-                latencyOps.forEach(op => latencyOpVisibility[op] = (op === 'total'));
-            }
-            updateLatencyToggleUI();
-            const scrubber = document.getElementById('timeScrubber');
-            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
-        }
-
-        function buildLatencyTimelineDatasets(start, endIndex) {
-            const datasets = [];
-            const getSlice = (arr) => arr.slice(start, endIndex + 1);
-
-            latencyOps.forEach(op => {
-                if (!latencyOpVisibility[op]) return;
-                const meta = latencyOpMeta[op];
-                if (latencyMetricVisibility.avg) {
-                    datasets.push({
-                        label: `${meta.label} Avg (Solid)`,
-                        data: getSlice(histLatTimelineAvg[op]),
-                        borderColor: meta.color,
-                        backgroundColor: meta.color,
-                        borderWidth: op === 'total' ? 2.5 : 2,
-                        tension: 0.35,
-                        pointRadius: 0,
-                        hoverRadius: 4,
-                        spanGaps: true,
-                        borderDash: []
-                    });
-                }
-                if (latencyMetricVisibility.p95) {
-                    datasets.push({
-                        label: `${meta.label} P95 (Dash-dot)`,
-                        data: getSlice(histLatTimelineP95[op]),
-                        borderColor: meta.color,
-                        backgroundColor: meta.color,
-                        borderWidth: op === 'total' ? 2.5 : 2,
-                        tension: 0.35,
-                        pointRadius: 0,
-                        hoverRadius: 4,
-                        spanGaps: true,
-                        borderDash: [8, 4, 2, 4]
-                    });
-                }
-                if (latencyMetricVisibility.p99) {
-                    datasets.push({
-                        label: `${meta.label} P99 (Dashed)`,
-                        data: getSlice(histLatTimelineP99[op]),
-                        borderColor: meta.color,
-                        backgroundColor: meta.color,
-                        borderWidth: op === 'total' ? 2.5 : 2,
-                        tension: 0.35,
-                        pointRadius: 0,
-                        hoverRadius: 4,
-                        spanGaps: true,
-                        borderDash: [6, 4]
-                    });
-                }
-            });
-            return datasets;
-        }
-
-        const handleCrossHover = (sourceChartId) => {
-            return (e, activeEls, chart) => {
-                const targetChart = sourceChartId === 'throughput' ? latencyChart : throughputChart;
-                if (!targetChart) return;
-
-                if (activeEls.length > 0) {
-                    const idx = activeEls[0].index;
-                    const els = targetChart.data.datasets.map((_, i) => ({ datasetIndex: i, index: idx }));
-                    targetChart.setActiveElements(els);
-                    targetChart.tooltip.setActiveElements(els, { x: 0, y: 0 });
-                    targetChart.update();
-                } else {
-                    targetChart.setActiveElements([]);
-                    targetChart.tooltip.setActiveElements([], { x: 0, y: 0 });
-                    targetChart.update();
-                }
-            };
-        };
-
-        const zoomSelectionPlugin = {
-            id: 'zoomSelection',
-            afterDraw(chart) {
-                if (!zoomState.dragging || zoomState.sourceCanvasId !== chart.canvas.id) return;
-                const area = chart.chartArea;
-                if (!area) return;
-                const left = Math.max(area.left, Math.min(zoomState.dragStart, zoomState.dragEnd));
-                const right = Math.min(area.right, Math.max(zoomState.dragStart, zoomState.dragEnd));
-                if (right - left < 2) return;
-
-                const ctx = chart.ctx;
-                ctx.save();
-                ctx.fillStyle = 'rgba(20, 134, 255, 0.14)';
-                ctx.strokeStyle = 'rgba(20, 134, 255, 0.85)';
-                ctx.lineWidth = 1;
-                ctx.fillRect(left, area.top, right - left, area.bottom - area.top);
-                ctx.strokeRect(left, area.top, right - left, area.bottom - area.top);
-                ctx.restore();
-            }
-        };
-
-        function clampIndex(idx) {
-            const max = Math.max(0, histLabels.length - 1);
-            if (!Number.isFinite(idx)) return 0;
-            return Math.max(0, Math.min(max, Math.round(idx)));
-        }
-
-        function visibleRangeFor(endIndex) {
-            const max = Math.max(0, histLabels.length - 1);
-            if (zoomState.active) {
-                const start = clampIndex(Math.min(zoomState.start, zoomState.end));
-                const end = clampIndex(Math.max(zoomState.start, zoomState.end));
-                return { start, end: Math.max(start, end) };
-            }
-            const end = clampIndex(Math.min(endIndex, max));
-            return { start: Math.max(0, end - WINDOW_SIZE + 1), end };
-        }
-
-        function updateZoomControls() {
-            const label = document.getElementById('zoomRangeLabel');
-            const resetBtn = document.getElementById('resetZoomBtn');
-            if (!label || !resetBtn) return;
-
-            if (zoomState.active && histLabels.length > 0) {
-                const range = visibleRangeFor(zoomState.end);
-                label.textContent = `Zoom: ${histLabels[range.start] || '-'} - ${histLabels[range.end] || '-'}`;
-                resetBtn.style.display = 'inline-flex';
-            } else {
-                label.textContent = 'Drag a graph to zoom';
-                resetBtn.style.display = 'none';
-            }
-        }
-
-        function setChartZoom(startIdx, endIdx) {
-            const start = clampIndex(Math.min(startIdx, endIdx));
-            const end = clampIndex(Math.max(startIdx, endIdx));
-            if (end <= start) return;
-            zoomState.active = true;
-            zoomState.start = start;
-            zoomState.end = end;
-            zoomState.dragging = false;
-            isLiveMode = false;
-            document.getElementById('liveBtn').classList.add('active');
-            const scrubber = document.getElementById('timeScrubber');
-            if (scrubber) scrubber.value = end;
-            updateZoomControls();
-            renderChartsAt(end);
-        }
-
-        function resetChartZoom() {
-            zoomState.active = false;
-            zoomState.dragging = false;
-            zoomState.sourceCanvasId = '';
-            updateZoomControls();
-            const scrubber = document.getElementById('timeScrubber');
-            renderChartsAt(parseInt(scrubber.value || scrubber.max || 0));
-        }
-
-        function clearZoomForManualScrub() {
-            if (!zoomState.active) return;
-            zoomState.active = false;
-            zoomState.dragging = false;
-            zoomState.sourceCanvasId = '';
-            updateZoomControls();
-        }
-
-        function chartIndexFromEvent(chart, evt) {
-            const area = chart.chartArea;
-            const xScale = chart.scales.x;
-            if (!area || !xScale) return null;
-            const rect = chart.canvas.getBoundingClientRect();
-            const x = evt.clientX - rect.left;
-            if (x < area.left || x > area.right) return null;
-            const renderedIdx = Math.max(0, Math.round(xScale.getValueForPixel(x)));
-            return clampIndex((chart.$visibleStart || 0) + renderedIdx);
-        }
-
-        function installDragZoom(chart) {
-            if (!chart || !chart.canvas) return;
-            const canvas = chart.canvas;
-
-            canvas.addEventListener('mousedown', (evt) => {
-                const idx = chartIndexFromEvent(chart, evt);
-                if (idx === null) return;
-                const rect = canvas.getBoundingClientRect();
-                zoomState.dragging = true;
-                zoomState.dragStart = evt.clientX - rect.left;
-                zoomState.dragEnd = zoomState.dragStart;
-                zoomState.sourceCanvasId = canvas.id;
-                zoomState.start = idx;
-                zoomState.end = idx;
-                chart.update('none');
-            });
-
-            canvas.addEventListener('mousemove', (evt) => {
-                if (!zoomState.dragging || zoomState.sourceCanvasId !== canvas.id) return;
-                const idx = chartIndexFromEvent(chart, evt);
-                const rect = canvas.getBoundingClientRect();
-                zoomState.dragEnd = evt.clientX - rect.left;
-                if (idx !== null) zoomState.end = idx;
-                chart.update('none');
-            });
-
-            const finish = (evt) => {
-                if (!zoomState.dragging || zoomState.sourceCanvasId !== canvas.id) return;
-                const idx = chartIndexFromEvent(chart, evt);
-                if (idx !== null) zoomState.end = idx;
-                const start = zoomState.start;
-                const end = zoomState.end;
-                zoomState.dragging = false;
-                zoomState.sourceCanvasId = '';
-                chart.update('none');
-                if (Math.abs(end - start) >= 1) {
-                    setChartZoom(start, end);
-                }
-            };
-
-            canvas.addEventListener('mouseup', finish);
-            canvas.addEventListener('mouseleave', (evt) => {
-                if (zoomState.dragging && zoomState.sourceCanvasId === canvas.id) {
-                    finish(evt);
-                }
-            });
-        }
-
-        function initCharts() {
-            Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-            Chart.defaults.font.size = 12;
-            Chart.defaults.color = '#5c6b80';
-
-            const createSparkline = (ctxId, color) => {
-                return new Chart(document.getElementById(ctxId), {
-                    type: 'line',
-                    data: { labels: Array(WINDOW_SIZE).fill(''), datasets: [{ data: Array(WINDOW_SIZE).fill(0), borderColor: color, borderWidth: 2, fill: true, backgroundColor: color + '20', tension: 0.4 }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false, min: 0 } }, elements: { point: { radius: 0 } } }
-                });
-            };
-
-            sparkCharts.total = createSparkline('spark-total', colors.night);
-            sparkCharts.find = createSparkline('spark-find', colors.sky);
-            sparkCharts.insert = createSparkline('spark-insert', colors.aqua);
-            sparkCharts.update = createSparkline('spark-update', colors.sunrise);
-            sparkCharts.delete = createSparkline('spark-delete', colors.amethyst);
-            sparkCharts.aggregate = createSparkline('spark-aggregate', colors.pink);
-
-            const getLineOptions = (sourceId) => ({
-                responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-                interaction: { mode: 'index', intersect: false },
-                onHover: handleCrossHover(sourceId),
-                scales: {
-                    x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 11 } } },
-                    y: { beginAtZero: true, grid: { color: '#e2e8f0' } }
-                },
-                plugins: {
-                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 20 } },
-                    tooltip: { mode: 'index', intersect: false }
-                }
-            });
-
-            throughputChart = new Chart(document.getElementById('throughputChart'), {
-                type: 'line',
-                data: {
-                    labels: Array(WINDOW_SIZE).fill(''),
-                    datasets: [
-                        { label: 'Total/s', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Find/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Insert/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Update/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete/s', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Aggregate/s', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
-                    ]
-                }, options: getLineOptions('throughput'),
-                plugins: [verticalLinePlugin, zoomSelectionPlugin]
-            });
-
-            latencyChart = new Chart(document.getElementById('latencyChart'), {
-                type: 'line',
-                data: {
-                    labels: Array(WINDOW_SIZE).fill(''),
-                    datasets: [
-                        { label: 'Total (ms)', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.night, borderDash: [5, 5], tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Find (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sky, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Insert (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.aqua, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Update (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.sunrise, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Delete (ms)', data: Array(WINDOW_SIZE).fill(0), borderColor: colors.amethyst, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 },
-                        { label: 'Aggregate (ms)', hidden: true, data: Array(WINDOW_SIZE).fill(0), borderColor: colors.pink, tension: 0.4, borderWidth: 2, pointRadius: 0, hoverRadius: 5 }
-                    ]
-                }, options: getLineOptions('latency'),
-                plugins: [verticalLinePlugin, zoomSelectionPlugin]
-            });
-
-            latencyTimelineChart = new Chart(document.getElementById('latencyTimelineChart'), {
-                type: 'line',
-                data: {
-                    labels: Array(WINDOW_SIZE).fill(''),
-                    datasets: []
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    animation: { duration: 0 },
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            callbacks: {
-                                title: (items) => items && items.length ? `Time: ${items[0].label}` : '',
-                                label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y || 0).toFixed(2)} ms`
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { display: true, grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 11 } } },
-                        y: { beginAtZero: true, grid: { color: '#e2e8f0' }, title: { display: true, text: 'ms' } }
-                    }
-                }
-                ,
-                plugins: [zoomSelectionPlugin]
-            });
-
-            donutChart = new Chart(document.getElementById('donutChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Find', 'Insert', 'Update', 'Delete', 'Aggregate'],
-                    datasets: [{
-                        data: [0, 0, 0, 0, 0],
-                        backgroundColor: [colors.sky, colors.aqua, colors.sunrise, colors.amethyst, colors.pink],
-                        borderWidth: 0
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, cutout: '70%', animation: { duration: 0 }, plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } } } }
-            });
-
-            const clearHovers = () => {
-                [throughputChart, latencyChart, latencyTimelineChart].forEach(c => {
-                    if (c) {
-                        c.setActiveElements([]);
-                        c.tooltip.setActiveElements([], { x: 0, y: 0 });
-                        c.update();
-                    }
-                });
-            };
-            document.getElementById('throughputChart').addEventListener('mouseleave', clearHovers);
-            document.getElementById('latencyChart').addEventListener('mouseleave', clearHovers);
-            document.getElementById('latencyTimelineChart').addEventListener('mouseleave', clearHovers);
-            installDragZoom(throughputChart);
-            installDragZoom(latencyChart);
-            installDragZoom(latencyTimelineChart);
-            updateLatencyToggleUI();
-        }
-
-        function renderChartsAt(endIndex) {
-            try {
-                if (endIndex < 0) return;
-                const range = visibleRangeFor(endIndex);
-                const start = range.start;
-                endIndex = range.end;
-
-                const getSlice = (arr) => {
-                    return arr.slice(start, endIndex + 1);
-                };
-
-                const labelsSlice = getSlice(histLabels);
-                const markersSlice = getSlice(globalMarkers, null);
-
-                throughputChart.data.markers = markersSlice;
-                latencyChart.data.markers = markersSlice;
-                throughputChart.$visibleStart = start;
-                latencyChart.$visibleStart = start;
-                latencyTimelineChart.$visibleStart = start;
-
-                throughputChart.data.labels = labelsSlice;
-                throughputChart.data.datasets[0].data = getSlice(histRates.total);
-                throughputChart.data.datasets[1].data = getSlice(histRates.find);
-                throughputChart.data.datasets[2].data = getSlice(histRates.insert);
-                throughputChart.data.datasets[3].data = getSlice(histRates.update);
-                throughputChart.data.datasets[4].data = getSlice(histRates.delete);
-                throughputChart.data.datasets[5].data = getSlice(histRates.aggregate);
-                throughputChart.update();
-
-                latencyChart.data.labels = labelsSlice;
-                latencyChart.data.datasets[0].data = getSlice(histLats.total);
-                latencyChart.data.datasets[1].data = getSlice(histLats.find);
-                latencyChart.data.datasets[2].data = getSlice(histLats.insert);
-                latencyChart.data.datasets[3].data = getSlice(histLats.update);
-                latencyChart.data.datasets[4].data = getSlice(histLats.delete);
-                latencyChart.data.datasets[5].data = getSlice(histLats.aggregate);
-                latencyChart.update();
-
-                latencyTimelineChart.data.labels = labelsSlice;
-                latencyTimelineChart.data.datasets = buildLatencyTimelineDatasets(start, endIndex);
-                latencyTimelineChart.update();
-
-                sparkCharts.total.data.datasets[0].data = getSlice(histRates.total); sparkCharts.total.update();
-                sparkCharts.find.data.datasets[0].data = getSlice(histRates.find); sparkCharts.find.update();
-                sparkCharts.insert.data.datasets[0].data = getSlice(histRates.insert); sparkCharts.insert.update();
-                sparkCharts.update.data.datasets[0].data = getSlice(histRates.update); sparkCharts.update.update();
-                sparkCharts.delete.data.datasets[0].data = getSlice(histRates.delete); sparkCharts.delete.update();
-                sparkCharts.aggregate.data.datasets[0].data = getSlice(histRates.aggregate); sparkCharts.aggregate.update();
-
-                document.getElementById('rate-total').textContent = (histRates.total[endIndex] || 0).toLocaleString() + ' ops/sec';
-                document.getElementById('rate-finds').textContent = (histRates.find[endIndex] || 0).toLocaleString() + ' ops/sec';
-                document.getElementById('rate-inserts').textContent = (histRates.insert[endIndex] || 0).toLocaleString() + ' ops/sec';
-                document.getElementById('rate-updates').textContent = (histRates.update[endIndex] || 0).toLocaleString() + ' ops/sec';
-                document.getElementById('rate-deletes').textContent = (histRates.delete[endIndex] || 0).toLocaleString() + ' ops/sec';
-                document.getElementById('rate-aggregate').textContent = (histRates.aggregate[endIndex] || 0).toLocaleString() + ' ops/sec';
-
-                const baselineIndex = start - 1;
-                const rangeTotal = (arr) => Math.max(0, (arr[endIndex] || 0) - (baselineIndex >= 0 ? (arr[baselineIndex] || 0) : 0));
-                const tT = zoomState.active ? rangeTotal(histTotals.total) : (histTotals.total[endIndex] || 0);
-                const tF = zoomState.active ? rangeTotal(histTotals.find) : (histTotals.find[endIndex] || 0);
-                const tI = zoomState.active ? rangeTotal(histTotals.insert) : (histTotals.insert[endIndex] || 0);
-                const tU = zoomState.active ? rangeTotal(histTotals.update) : (histTotals.update[endIndex] || 0);
-                const tD = zoomState.active ? rangeTotal(histTotals.delete) : (histTotals.delete[endIndex] || 0);
-                const tA = zoomState.active ? rangeTotal(histTotals.aggregate) : (histTotals.aggregate[endIndex] || 0);
-
-                document.getElementById('stat-total').textContent = tT.toLocaleString();
-                document.getElementById('stat-finds').textContent = tF.toLocaleString();
-                document.getElementById('stat-inserts').textContent = tI.toLocaleString();
-                document.getElementById('stat-updates').textContent = tU.toLocaleString();
-                document.getElementById('stat-deletes').textContent = tD.toLocaleString();
-                document.getElementById('ops-aggregate').textContent = tA.toLocaleString();
-
-                if (tF > 0 || tI > 0 || tU > 0 || tD > 0 || tA > 0) {
-                    donutChart.data.datasets[0].data = [tF, tI, tU, tD, tA];
-                    donutChart.update();
-                }
-                updateZoomControls();
-            } catch (e) {
-                console.error("Chart render error:", e);
-            }
-        }
-
-        document.getElementById('timeScrubber').addEventListener('input', function () {
-            clearZoomForManualScrub();
-            const maxIdx = parseInt(this.max);
-            const val = parseInt(this.value);
-            const liveBtn = document.getElementById('liveBtn');
-
-            if (val >= maxIdx) {
-                isLiveMode = true;
-                liveBtn.classList.remove('active');
-            } else {
-                isLiveMode = false;
-                liveBtn.classList.add('active');
-            }
-            renderChartsAt(val);
-        });
-
-        function goToLive() {
-            isLiveMode = true;
-            zoomState.active = false;
-            zoomState.dragging = false;
-            zoomState.sourceCanvasId = '';
-            updateZoomControls();
-            const scrubber = document.getElementById('timeScrubber');
-            scrubber.value = scrubber.max;
-            document.getElementById('liveBtn').classList.remove('active');
-            renderChartsAt(parseInt(scrubber.max));
-        }
-
         let pollInterval;
         let currentRefreshRate = 500;
         let startTime;
@@ -6481,17 +5592,6 @@
         let lastFormData = null;
         let historicalView = '';
         let lastRuntimeErrorShown = '';
-        let lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
-        let lastExecutionElapsed = 0;
-        let chartPointsApplied = 0;
-        let lastLat = {
-            total: { sum: 0, count: 0 },
-            find: { sum: 0, count: 0 },
-            insert: { sum: 0, count: 0 },
-            update: { sum: 0, count: 0 },
-            delete: { sum: 0, count: 0 },
-            aggregate: { sum: 0, count: 0 }
-        };
         let finalReportData = null;
         let finalInsightsData = null;
         let insightsDrawerCurrent = null;
@@ -6564,7 +5664,8 @@
             }
             const recordSource = document.getElementById('recordWorkloadSource');
             if (recordSource) recordSource.addEventListener('change', applyModeVisibility);
-            initCharts();
+            setChartDefaults();
+            document.getElementById('timeScrubber').addEventListener('input', e => onTimeScrub(e.target.value));
             document.getElementById('workloadDeterministic').addEventListener('change', applyDeterministicRequirements);
             document.getElementById('operationsPerWorker').addEventListener('input', updateDeterministicDisclosure);
             updateDeterministicDisclosure();
@@ -6596,7 +5697,6 @@
                 if (shapeDetail) closeShapeDetail(); else closeInsightsDrawer();
             });
             updateInsightsDrawerNavButtons();
-            wireHeatmapHoverPause();
             onLoadProfileKindChange();
             onAccessPatternKindChange();
             document.getElementById('uiPassword').addEventListener('input', (e) => sessionStorage.setItem('plgm_password', e.target.value));
@@ -7247,6 +6347,634 @@
         // Shows the per-target progress of a multi-target replay or
         // deterministic run, then the comparisons with the first target.
         // Labels only; the API never returns target URIs.
+        // --- Live dashboard charts ---
+        // Every run draws the same view: one line per server (a single line for
+        // a run on one server), aligned on seconds since that server started.
+        // One Servers / Operation choice drives the total cards and every chart
+        // on Live Metrics and Latency Analysis. The Time Machine and drag-to-zoom
+        // work on that same time axis.
+        const MS_COLORS = ['#1486ff', '#ff7e1a', '#30d1b2', '#8b5cf6', '#f0b336', '#ec4899', '#059669', '#697793'];
+        // [key, picker name, total card title]; transactions have latency only.
+        const MS_OPS = [
+            ['all', 'All operations', 'Total Ops'],
+            ['find', 'Find', 'Find Ops'],
+            ['insert', 'Insert', 'Insert Ops'],
+            ['update', 'Update', 'Update Ops'],
+            ['delete', 'Delete', 'Delete Ops'],
+            ['aggregate', 'Aggregate', 'Aggregate Ops'],
+            ['transaction', 'Transaction', '']
+        ];
+        const MS_MAX_POINTS = 600;
+        const MS_MAX_HEAT_COLS = 240;
+        const MS_SINGLE_LABEL = 'This run';
+        let msServers = [];
+        let msCharts = null;
+        let msTopSeq = 0;
+        let msHeatPaused = false;
+        // until: the Time Machine second (null = live); zoom: [from, to] seconds.
+        const msView = { op: 'all', hidden: new Set(), compare: 'p99', timeline: 'p99', until: null, zoom: null };
+        const msDrag = { chart: null, from: null, to: null };
+
+        function setChartDefaults() {
+            if (typeof Chart === 'undefined' || !Chart.defaults) return;
+            Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+            Chart.defaults.font.size = 12;
+            Chart.defaults.color = '#5c6b80';
+        }
+
+        function msReset() {
+            msServers = [];
+            msTopSeq = 0;
+            msView.op = 'all';
+            msView.hidden = new Set();
+            msView.compare = 'p99';
+            msView.timeline = 'p99';
+            msView.until = null;
+            msView.zoom = null;
+            msDrag.chart = null;
+            if (msCharts) Object.values(msCharts).forEach(c => { c.data.datasets = []; c.$msMarkers = []; c.update('none'); });
+            renderMultiServer();
+        }
+
+        // Query for /api/stats: the samples after the last one drawn, per server.
+        function dashboardStatsQuery() {
+            let q = '?chartSince=' + msTopSeq;
+            if (msServers.length > 1) q += '&targetSince=' + msServers.map(t => `${t.index}:${t.seq}:${t.heatMs}`).join(',');
+            return q;
+        }
+
+        function msAppendPoints(s, samples) {
+            (Array.isArray(samples) ? samples : []).forEach(p => {
+                const seq = Number(p && p.seq || 0);
+                if (seq <= s.seq) return;
+                s.seq = seq;
+                // Overlapping polls can record a sample out of order; a
+                // line never goes back in time.
+                const last = s.points[s.points.length - 1];
+                if (last && Number(p.elapsedSec || 0) < Number(last.elapsedSec || 0)) return;
+                s.points.push(p);
+            });
+        }
+
+        // Merges one /api/stats reply (or a stored run): the per-server list
+        // of a run on several servers, or the run itself as one server.
+        function applyMultiServerStats(stats) {
+            if (!stats) return;
+            (Array.isArray(stats.chartHistory) ? stats.chartHistory : []).forEach(p => { msTopSeq = Math.max(msTopSeq, Number(p && p.seq || 0)); });
+            const targets = Array.isArray(stats.targets) && stats.targets.length >= 2 ? stats.targets : null;
+            if (targets) {
+                if (msServers.some(s => s.single)) msServers = [];
+                targets.forEach(t => {
+                    let s = msServers.find(x => x.index === t.index);
+                    if (!s) {
+                        s = { index: t.index, label: t.label || `target ${t.index}`, points: [], heat: [], seq: 0, heatMs: 0 };
+                        msServers.push(s);
+                        msServers.sort((a, b) => a.index - b.index);
+                    }
+                    s.status = t.status || '';
+                    s.elapsedSec = Number(t.elapsedSec || 0);
+                    s.ops = t.ops || {};
+                    s.dist = t.dist || {};
+                    msAppendPoints(s, t.chartHistory);
+                    (Array.isArray(t.latencyHeatmap) ? t.latencyHeatmap : []).forEach(b => {
+                        const ms = Number(b && b.timestampUnixMs || 0);
+                        if (ms <= s.heatMs) return;
+                        s.heat.push(b);
+                        s.heatMs = ms;
+                    });
+                });
+            } else if (msServers.length <= 1) {
+                let s = msServers[0];
+                if (!s) {
+                    s = { index: 1, label: MS_SINGLE_LABEL, single: true, points: [], heat: [], seq: 0, heatMs: 0 };
+                    msServers = [s];
+                }
+                const phase = stats.lifecyclePhase || (stats.isRunning ? 'running' : 'completed');
+                s.status = { running: 'running', completed: 'complete', failed: 'failed', initializing: 'preparing' }[phase] || phase;
+                s.elapsedSec = Number(stats.executionElapsedSec || 0);
+                const find = Number(stats.findOps || 0), insert = Number(stats.insertOps || 0), update = Number(stats.updateOps || 0) + Number(stats.upsertOps || 0), del = Number(stats.deleteOps || 0), agg = Number(stats.aggOps || 0);
+                s.ops = { total: find + insert + update + del + agg, find, insert, update, delete: del, aggregate: agg };
+                s.dist = { total: stats.distTotal, find: stats.distFind, insert: stats.distInsert, update: stats.distUpdate, delete: stats.distDelete, aggregate: stats.distAgg, transaction: stats.distTrans };
+                msAppendPoints(s, stats.chartHistory);
+                if (Array.isArray(stats.latencyHeatmap)) s.heat = stats.latencyHeatmap.slice();
+            }
+            msServers.forEach((s, i) => { s.color = MS_COLORS[i % MS_COLORS.length]; });
+            renderMultiServer();
+        }
+
+        const msShown = () => msServers.filter(s => !msView.hidden.has(s.label));
+        const msOpName = () => (MS_OPS.find(o => o[0] === msView.op) || MS_OPS[0])[1];
+        const msKey = op => op === 'all' ? 'total' : op;
+        const msOpChip = extra => `<span class="ms-op">${escHtml(msOpName())}</span> ${extra}`;
+        const msMaxElapsed = () => Math.max(0, ...msServers.map(s => Math.max(Number(s.elapsedSec || 0), s.points.length ? Number(s.points[s.points.length - 1].elapsedSec || 0) : 0)));
+
+        // The time range on screen: a zoom, the Time Machine second, or live.
+        function msRange() {
+            if (msView.zoom) return { lo: msView.zoom[0], hi: msView.zoom[1], live: false };
+            if (msView.until !== null) return { lo: 0, hi: msView.until, live: false };
+            return { lo: 0, hi: Infinity, live: true };
+        }
+
+        function msStatusText(s) {
+            const st = s.status || 'pending';
+            if (st === 'running') return s.single ? 'running' : `running ${Math.round(s.elapsedSec || 0)}s`;
+            if (st === 'pending') return 'waiting';
+            return st;
+        }
+
+        // Keyboard for a radiogroup: arrow keys move and select, Home/End jump.
+        function msRadioKeys(group, onPick) {
+            if (!group || group.dataset.keys) return;
+            group.dataset.keys = '1';
+            group.addEventListener('keydown', e => {
+                const items = [...group.querySelectorAll('[role="radio"]')];
+                const i = items.indexOf(document.activeElement);
+                if (i < 0) return;
+                const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+                let next = null;
+                if (step) next = items[(i + step + items.length) % items.length];
+                else if (e.key === 'Home') next = items[0];
+                else if (e.key === 'End') next = items[items.length - 1];
+                if (!next) return;
+                e.preventDefault();
+                onPick(next);
+                const again = group.querySelector(`[role="radio"][data-op="${next.dataset.op || ''}"], [role="radio"][data-metric="${next.dataset.metric || ''}"]`);
+                (again || next).focus();
+            });
+        }
+        function msSetChecked(group, attr, value) {
+            group.querySelectorAll('[role="radio"]').forEach(b => {
+                const on = b.dataset[attr] === value;
+                b.setAttribute('aria-checked', on ? 'true' : 'false');
+                b.tabIndex = on ? 0 : -1;
+            });
+        }
+
+        function msPickOp(op) {
+            if (!MS_OPS.some(o => o[0] === op)) return;
+            msView.op = op;
+            renderMultiServer();
+        }
+        function msToggleServer(label) {
+            if (msView.hidden.has(label)) msView.hidden.delete(label);
+            else if (msShown().length > 1) msView.hidden.add(label);
+            renderMultiServer();
+        }
+
+        function renderMultiServerToolbar() {
+            const several = msServers.length > 1;
+            const group = document.getElementById('msServersGroup');
+            if (group) group.hidden = !several;
+            const servers = document.getElementById('msServers');
+            if (servers) {
+                const html = several ? msServers.map(s => `<button type="button" class="ms-server" style="--ms-color:${s.color}" aria-pressed="${!msView.hidden.has(s.label)}" data-label="${escHtml(s.label)}" title="Show or hide ${escHtml(s.label)} in the cards and charts"><i aria-hidden="true"></i>${escHtml(s.label)} <small>${s.index === 1 ? 'reference · ' : ''}${escHtml(msStatusText(s))}</small></button>`).join('') : '';
+                if (servers.dataset.html !== html) {
+                    const focused = document.activeElement && servers.contains(document.activeElement) ? document.activeElement.dataset.label : null;
+                    servers.innerHTML = html;
+                    servers.dataset.html = html;
+                    servers.querySelectorAll('.ms-server').forEach(b => b.addEventListener('click', () => msToggleServer(b.dataset.label)));
+                    if (focused) [...servers.querySelectorAll('.ms-server')].find(b => b.dataset.label === focused)?.focus();
+                }
+            }
+            const ops = document.getElementById('msOps');
+            if (ops) {
+                if (!ops.children.length) {
+                    ops.innerHTML = MS_OPS.map(([k, name]) => `<button type="button" role="radio" data-op="${k}" aria-checked="false" tabindex="-1">${name}</button>`).join('');
+                    ops.querySelectorAll('[role="radio"]').forEach(b => b.addEventListener('click', () => msPickOp(b.dataset.op)));
+                    msRadioKeys(ops, b => msPickOp(b.dataset.op));
+                }
+                msSetChecked(ops, 'op', msView.op);
+            }
+            const hint = document.getElementById('msHint');
+            if (hint) {
+                const who = several ? ` for ${msShown().map(s => s.label).join(', ')}` : '';
+                hint.textContent = `Showing ${msOpName().toLowerCase()}${who} in the cards and the charts on Live Metrics and Latency Analysis.`;
+            }
+            const bar = document.getElementById('mspanel-bar');
+            const tabs = document.getElementById('dashTabs');
+            if (bar && tabs) bar.style.setProperty('--ms-bar-top', tabs.offsetHeight + 'px');
+        }
+
+        // Operations of one type at second t, from the samples' running totals.
+        function msTotalAt(s, key, t) {
+            let v = 0;
+            for (const p of s.points) {
+                if (Number(p.elapsedSec || 0) > t) break;
+                v = Number((p.totals || {})[key] || 0);
+            }
+            return v;
+        }
+        // Count and average rate of one type in the range on screen.
+        function msCount(s, key) {
+            const r = msRange();
+            if (r.live) {
+                const count = Number((s.ops || {})[key] || 0);
+                return { count, rate: s.elapsedSec > 0 ? count / s.elapsedSec : 0 };
+            }
+            const hi = Math.min(r.hi, Number(s.elapsedSec || 0) || r.hi);
+            const count = Math.max(0, msTotalAt(s, key, r.hi) - (r.lo > 0 ? msTotalAt(s, key, r.lo) : 0));
+            const span = Math.max(0, hi - r.lo);
+            return { count, rate: span > 0 ? count / span : 0 };
+        }
+
+        function renderMultiServerTiles() {
+            const el = document.getElementById('mspanel-tiles');
+            if (!el) return;
+            el.classList.toggle('ms-tiles-single', msServers.length <= 1);
+            const html = MS_OPS.filter(o => o[2]).map(([k, name, title]) => {
+                const rows = msShown().map(s => {
+                    const { count, rate } = msCount(s, msKey(k));
+                    return `<span class="ms-tile-row"><span class="ms-srv"><span class="ms-dot" style="--ms-color:${s.color}"></span>${escHtml(s.label)}</span><span class="ms-v">${Math.round(count).toLocaleString()}</span><span class="ms-r">${Math.round(rate).toLocaleString()}/s avg</span></span>`;
+                }).join('');
+                return `<button type="button" class="ms-tile" data-op="${k}" aria-pressed="${k === msView.op}" aria-label="${title}: show ${name} in the charts"><span class="ms-tile-head"><span>${title}</span><span class="ms-tile-shown">In charts</span></span>${rows}</button>`;
+            }).join('');
+            if (el.dataset.html === html) return;
+            const focused = document.activeElement && el.contains(document.activeElement) ? document.activeElement.dataset.op : null;
+            el.innerHTML = html;
+            el.dataset.html = html;
+            el.querySelectorAll('.ms-tile').forEach(b => b.addEventListener('click', () => msPickOp(b.dataset.op)));
+            if (focused) el.querySelector(`.ms-tile[data-op="${focused}"]`)?.focus();
+        }
+
+        // Keeps at most MS_MAX_POINTS per line so long runs stay quick to draw.
+        function msThin(points) {
+            if (points.length <= MS_MAX_POINTS) return points;
+            const step = Math.ceil(points.length / MS_MAX_POINTS);
+            const out = points.filter((_, i) => i % step === 0);
+            if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
+            return out;
+        }
+        function msSeries(s, metric) {
+            const key = msKey(msView.op);
+            const r = msRange();
+            const inRange = s.points.filter(p => { const x = Number(p.elapsedSec || 0); return x >= r.lo && x <= r.hi; });
+            return msThin(inRange).map(p => {
+                const bucket = metric === 'rates' ? p.rates : p[metric];
+                const v = bucket ? bucket[key] : null;
+                return { x: Number(p.elapsedSec || 0), y: v === null || v === undefined ? null : Number(v) };
+            });
+        }
+        // Iteration and wait markers, and how the run ended; drawn when one
+        // server is shown.
+        function msMarkers(s) {
+            const out = [];
+            s.points.forEach(p => {
+                const m = markerFromSample(p);
+                if (m) out.push({ x: Number(p.elapsedSec || 0), ...m });
+            });
+            const last = s.points[s.points.length - 1];
+            if (last && (s.status === 'complete' || s.status === 'failed')) {
+                out.push({ x: Number(last.elapsedSec || 0), text: s.status === 'failed' ? 'Failed' : 'Finished', color: s.status === 'failed' ? colors.red : colors.forest });
+            }
+            return out;
+        }
+        function markerFromSample(sample) {
+            const text = sample && sample.marker ? String(sample.marker) : '';
+            if (!text) return null;
+            let color = colors.amethyst;
+            if (text === 'Wait') color = colors.sunrise;
+            return { text, color };
+        }
+
+        // Draws markers and the drag-to-zoom selection.
+        const msOverlayPlugin = {
+            id: 'msOverlay',
+            afterDraw(chart) {
+                const area = chart.chartArea;
+                const x = chart.scales && chart.scales.x;
+                if (!area || !x) return;
+                const ctx = chart.ctx;
+                (chart.$msMarkers || []).forEach(m => {
+                    const px = x.getPixelForValue(m.x);
+                    if (!Number.isFinite(px) || px < area.left || px > area.right) return;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(px, area.top);
+                    ctx.lineTo(px, area.bottom);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = m.color;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.fillStyle = m.color;
+                    ctx.font = 'bold 11px ' + getComputedStyle(document.body).fontFamily;
+                    const w = ctx.measureText(m.text).width;
+                    ctx.fillText(m.text, px + 4 + w > area.right ? px - w - 4 : px + 4, area.top + 14);
+                    ctx.restore();
+                });
+                if (msDrag.chart === chart && msDrag.from !== null && msDrag.to !== null) {
+                    const a = x.getPixelForValue(Math.min(msDrag.from, msDrag.to));
+                    const b = x.getPixelForValue(Math.max(msDrag.from, msDrag.to));
+                    if (b - a < 2) return;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(20, 134, 255, 0.14)';
+                    ctx.strokeStyle = 'rgba(20, 134, 255, 0.85)';
+                    ctx.fillRect(a, area.top, b - a, area.bottom - area.top);
+                    ctx.strokeRect(a, area.top, b - a, area.bottom - area.top);
+                    ctx.restore();
+                }
+            }
+        };
+
+        // Drag across a chart to zoom every chart and the cards to that range.
+        function msInstallDragZoom(chart) {
+            const canvas = chart && chart.canvas;
+            if (!canvas || typeof canvas.addEventListener !== 'function') return;
+            const valueAt = evt => {
+                const area = chart.chartArea, x = chart.scales && chart.scales.x;
+                if (!area || !x) return null;
+                const px = evt.clientX - canvas.getBoundingClientRect().left;
+                if (px < area.left || px > area.right) return null;
+                return x.getValueForPixel(px);
+            };
+            canvas.addEventListener('mousedown', evt => {
+                const v = valueAt(evt);
+                if (v === null) return;
+                msDrag.chart = chart; msDrag.from = v; msDrag.to = v;
+            });
+            canvas.addEventListener('mousemove', evt => {
+                if (msDrag.chart !== chart) return;
+                const v = valueAt(evt);
+                if (v !== null) { msDrag.to = v; chart.draw(); }
+            });
+            const finish = () => {
+                if (msDrag.chart !== chart) return;
+                const a = Math.min(msDrag.from, msDrag.to), b = Math.max(msDrag.from, msDrag.to);
+                msDrag.chart = null; msDrag.from = null; msDrag.to = null;
+                if (b - a >= 0.5) msView.zoom = [Math.max(0, a), b];
+                renderMultiServer();
+            };
+            canvas.addEventListener('mouseup', finish);
+            canvas.addEventListener('mouseleave', finish);
+        }
+
+        function msChart(id, yTitle) {
+            const el = document.getElementById(id);
+            if (!el || typeof Chart === 'undefined') return null;
+            const chart = new Chart(el, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    elements: { point: { radius: 0, hoverRadius: 3 }, line: { borderWidth: 2, cubicInterpolationMode: 'monotone' } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since start · ${msOpName()}` : '' } }
+                    },
+                    scales: {
+                        x: { type: 'linear', min: 0, title: { display: true, text: 'Seconds since the server started', color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } },
+                        y: { beginAtZero: true, title: { display: true, text: yTitle, color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } }
+                    }
+                },
+                plugins: [msOverlayPlugin]
+            });
+            msInstallDragZoom(chart);
+            return chart;
+        }
+        function msEnsureCharts() {
+            if (msCharts) return msCharts;
+            const charts = {
+                throughput: msChart('msThroughputChart', 'ops/s'),
+                latency: msChart('msLatencyChart', 'ms (average)'),
+                compare: msChart('msCompareChart', 'p99 latency (ms)'),
+                timeline: msChart('msTimelineChart', 'ms')
+            };
+            if (Object.values(charts).some(c => !c)) return null;
+            msCharts = charts;
+            const wire = (id, key) => {
+                const g = document.getElementById(id);
+                if (!g) return;
+                const pick = b => { msView[key] = b.dataset.metric; renderMultiServer(); };
+                g.querySelectorAll('[role="radio"]').forEach(b => b.addEventListener('click', () => pick(b)));
+                msRadioKeys(g, pick);
+            };
+            wire('msCompareMetric', 'compare');
+            wire('msTimelineMetric', 'timeline');
+            return msCharts;
+        }
+
+        function renderMultiServerCharts() {
+            const charts = msEnsureCharts();
+            if (!charts) return;
+            const r = msRange();
+            const xMin = r.lo;
+            const xMax = r.live ? Math.max(1, Math.ceil(msMaxElapsed())) : r.hi;
+            const shown = msShown();
+            const markers = shown.length === 1 ? msMarkers(shown[0]) : [];
+            const lines = metric => shown.map(s => ({
+                label: s.label + (s.status === 'running' && !s.single ? ' (running)' : ''),
+                data: msSeries(s, metric),
+                borderColor: s.color,
+                backgroundColor: s.color,
+                spanGaps: false
+            }));
+            const pct = { avg: 'Average', p95: 'P95', p99: 'P99' };
+            const draw = (chart, metric, yTitle) => {
+                chart.data.datasets = lines(metric);
+                chart.options.scales.x.min = xMin;
+                chart.options.scales.x.max = xMax;
+                chart.$msMarkers = markers;
+                if (yTitle) chart.options.scales.y.title.text = yTitle;
+                chart.update('none');
+            };
+            draw(charts.throughput, 'rates');
+            draw(charts.latency, 'avg');
+            draw(charts.compare, msView.compare, `${msView.compare} latency (ms)`);
+            draw(charts.timeline, msView.timeline, `${pct[msView.timeline]} latency (ms)`);
+            const who = msServers.length > 1 ? 'all servers' : 'this run';
+            const axis = msServers.length > 1 ? 'Seconds since the server started' : 'Seconds since the run started';
+            Object.values(charts).forEach(c => { c.options.scales.x.title.text = axis; });
+            const title = document.getElementById('msCompareTitle');
+            if (title) title.textContent = msServers.length > 1 ? 'Compare servers' : 'Tail latency';
+            const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+            set('msSubThroughput', msOpChip(msView.op === 'transaction' ? '· throughput is not tracked per transaction' : `· ${who}`));
+            set('msSubLatency', msOpChip(`· average, ${who}`));
+            set('msSubCompare', msOpChip(msServers.length > 1 ? '· seconds since each server started' : '· seconds since the run started'));
+            set('msSubTimeline', msOpChip(`· ${pct[msView.timeline]} · seconds since ${msServers.length > 1 ? 'each server' : 'the run'} started`));
+            const cmp = document.getElementById('msCompareMetric');
+            if (cmp) msSetChecked(cmp, 'metric', msView.compare);
+            const tl = document.getElementById('msTimelineMetric');
+            if (tl) msSetChecked(tl, 'metric', msView.timeline);
+        }
+
+        function renderMultiServerDistribution() {
+            const body = document.getElementById('msDistRows');
+            if (!body) return;
+            const several = msServers.length > 1;
+            const head = document.getElementById('msDistHead');
+            if (head) head.textContent = several ? 'Server' : 'Run';
+            const key = msKey(msView.op);
+            const ref = several ? msServers.find(s => s.index === 1) : null;
+            const refDist = ref && ref.dist ? ref.dist[key] : null;
+            const fmt = v => `${Number(v).toFixed(2)} ms`;
+            const diff = (v, r) => {
+                if (!r || !(r > 0)) return '';
+                const d = (v / r - 1) * 100;
+                const cls = Math.abs(d) < 5 ? 'ms-same' : (d < 0 ? 'ms-better' : 'ms-worse');
+                return `<span class="ms-diff ${cls}">${d > 0 ? '+' : ''}${d.toFixed(1)}% vs ${escHtml(ref.label)}</span>`;
+            };
+            body.innerHTML = msShown().map(s => {
+                const d = s.dist ? s.dist[key] : null;
+                const isRef = s === ref;
+                const note = isRef ? 'reference' : (several && s.status === 'running' ? 'running' : '');
+                const name = `<td><span class="ms-dot" style="--ms-color:${s.color}"></span><strong>${escHtml(s.label)}</strong>${note ? ` <span class="ms-sub">${note}</span>` : ''}</td>`;
+                if (!d || !(Number(d.count) > 0)) return `<tr class="${isRef ? 'ms-ref' : ''}">${name}${'<td><span class="empty-dash">-</span></td>'.repeat(5)}</tr>`;
+                const cell = (k, withDiff) => `<td>${fmt(d[k])}${withDiff && ref && !isRef && refDist && Number(refDist.count) > 0 ? diff(Number(d[k]), Number(refDist[k])) : ''}</td>`;
+                return `<tr class="${isRef ? 'ms-ref' : ''}">${name}${cell('avg', true)}${cell('min')}${cell('max')}${cell('p95', true)}${cell('p99', true)}</tr>`;
+            }).join('');
+            const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+            set('msSubDistribution', msOpChip(several ? '· one row per server, whole run' : '· whole run'));
+            const notes = [];
+            if (several) notes.push(`Differences are against ${ref ? ref.label : 'the first server'}, the reference; lower latency is better.`);
+            msShown().filter(s => several && s.status === 'running').forEach(s => notes.push(`${s.label} covers its first ${Math.round(s.elapsedSec || 0)} s so far.`));
+            if (!msRange().live) notes.push('This table covers the whole run; the Time Machine and zoom do not change it.');
+            set('msDistNote', escHtml(notes.join(' ')));
+        }
+
+        // One strip per server on a shared time axis: columns are equal slices
+        // of the range on screen. A heatmap window covers the time since the
+        // previous one (it is taken when the dashboard polls, so its edges are
+        // not whole seconds); each column shows the worst window that covers it.
+        function renderMultiServerHeatmap() {
+            const rows = document.getElementById('msHeatmapRows');
+            if (!rows) return;
+            if (!rows.dataset.hover) {
+                rows.dataset.hover = '1';
+                rows.addEventListener('mouseenter', () => { msHeatPaused = true; });
+                rows.addEventListener('mouseleave', () => { msHeatPaused = false; hideHeatmapTooltip(); renderMultiServerHeatmap(); });
+            }
+            if (msHeatPaused) return;
+            const shown = msShown();
+            const r = msRange();
+            const lo = r.lo;
+            const hi = r.live ? Math.max(1, msMaxElapsed(), ...shown.map(s => s.heat.length ? Number(s.heat[s.heat.length - 1].elapsedSec || 0) : 0)) : r.hi;
+            const span = Math.max(0.5, hi - lo);
+            const cols = Math.max(1, Math.min(MS_MAX_HEAT_COLS, Math.ceil(span)));
+            const width = span / cols;
+            // A window is about 1 s; a longer gap before it was idle time, not
+            // part of the window. Waits between iterations stay empty too.
+            const windows = s => s.heat.map((b, i) => {
+                const to = Number(b.elapsedSec || 0);
+                return { b, from: Math.max(i > 0 ? Number(s.heat[i - 1].elapsedSec || 0) : 0, to - 1.5), to };
+            }).filter(w => w.to > lo && w.from < hi);
+            const waits = s => {
+                const out = [];
+                s.points.forEach((p, i) => {
+                    if (!p.waiting) return;
+                    const from = i > 0 ? Number(s.points[i - 1].elapsedSec || 0) : 0;
+                    const last = out[out.length - 1];
+                    if (last && last[1] >= from) last[1] = Number(p.elapsedSec || 0);
+                    else out.push([from, Number(p.elapsedSec || 0)]);
+                });
+                return out;
+            };
+            let peak = 0;
+            shown.forEach(s => windows(s).forEach(w => { if (Number(w.b.p99) > peak) peak = Number(w.b.p99); }));
+            const empty = document.getElementById('msHeatmapEmpty');
+            if (empty) empty.hidden = peak > 0;
+            rows.innerHTML = '';
+            shown.forEach(s => {
+                const groups = new Array(cols).fill(null);
+                const idle = waits(s);
+                windows(s).forEach(w => {
+                    const from = Math.max(lo, w.from) - lo, to = Math.min(hi, w.to) - lo;
+                    const first = Math.max(0, Math.floor(from / width));
+                    const last = Math.min(cols - 1, Math.max(first, Math.ceil(to / width) - 1));
+                    for (let i = first; i <= last; i++) {
+                        const mid = (i + 0.5) * width;
+                        if (i !== last && (mid <= from || mid > to)) continue;
+                        if (idle.some(([a, b]) => mid + lo > a && mid + lo < b)) continue;
+                        const g = groups[i];
+                        if (!g || Number(w.b.p99) > Number(g.b.p99)) groups[i] = w;
+                    }
+                });
+                const row = document.createElement('div');
+                row.className = 'ms-hm-row';
+                row.innerHTML = `<div class="ms-hm-label"><span class="ms-dot" style="--ms-color:${s.color}"></span>${escHtml(s.label)}<small>${escHtml(msStatusText(s))}</small></div><div class="ms-hm-bars" role="img" aria-label="${escHtml(s.label)} p99 latency over time"></div>`;
+                const bars = row.querySelector('.ms-hm-bars');
+                groups.forEach(g => {
+                    const col = document.createElement('div');
+                    col.className = 'heatmap-col';
+                    if (!g) {
+                        col.style.height = '0';
+                        bars.appendChild(col);
+                        return;
+                    }
+                    const p99 = Number(g.b.p99 || 0);
+                    const windowSec = Math.max(0.001, g.to - g.from);
+                    col.style.height = (peak > 0 ? Math.max(4, (p99 / peak) * 100) : 4) + '%';
+                    col.style.background = heatmapColor(p99);
+                    col._hm = {
+                        title: `${s.label} · window ending ${g.to.toFixed(1)}s`,
+                        elapsedSec: g.to,
+                        windowSec,
+                        count: Number(g.b.count || 0),
+                        opsPerSec: Number(g.b.count || 0) / windowSec,
+                        p50: Number(g.b.p50 || 0), p95: Number(g.b.p95 || 0), p99, max: Number(g.b.max || 0)
+                    };
+                    col.addEventListener('mousemove', onHeatmapHover);
+                    col.addEventListener('mouseleave', hideHeatmapTooltip);
+                    bars.appendChild(col);
+                });
+                rows.appendChild(row);
+            });
+            const sub = document.getElementById('msSubHeatmap');
+            if (sub) sub.textContent = msServers.length > 1 ? '· one strip per server, all operations' : '· all operations';
+            const head = document.querySelector('#mspanel-heatmap .mat-card-title');
+            if (head) head.textContent = 'Latency heatmap over time';
+        }
+
+        // The Time Machine bar: a scrubber in seconds, the zoom range, and the
+        // way back to live.
+        function updateTimeMachine() {
+            const scrubber = document.getElementById('timeScrubber');
+            const max = Math.round(msMaxElapsed() * 2) / 2;
+            if (scrubber) {
+                scrubber.min = 0;
+                scrubber.step = 0.5;
+                scrubber.max = max;
+                if (msView.zoom) scrubber.value = msView.zoom[1];
+                else scrubber.value = msView.until === null ? max : msView.until;
+            }
+            const label = document.getElementById('zoomRangeLabel');
+            if (label) {
+                if (msView.zoom) label.textContent = `Zoom: ${formatTime(msView.zoom[0])} - ${formatTime(msView.zoom[1])}`;
+                else if (msView.until !== null) label.textContent = `At ${formatTime(msView.until)}`;
+                else label.textContent = 'Drag a graph to zoom';
+            }
+            const reset = document.getElementById('resetZoomBtn');
+            if (reset) reset.style.display = msView.zoom ? 'inline-flex' : 'none';
+            const live = document.getElementById('liveBtn');
+            if (live) live.classList.toggle('active', !msRange().live);
+        }
+        function onTimeScrub(value) {
+            msView.zoom = null;
+            const max = Math.round(msMaxElapsed() * 2) / 2;
+            const v = Number(value);
+            msView.until = Number.isFinite(v) && v < max ? Math.max(0, v) : null;
+            renderMultiServer();
+        }
+        function goToLive() {
+            msView.until = null;
+            msView.zoom = null;
+            renderMultiServer();
+        }
+        function resetChartZoom() {
+            msView.zoom = null;
+            renderMultiServer();
+        }
+
+        function renderMultiServer() {
+            renderMultiServerToolbar();
+            renderMultiServerTiles();
+            renderMultiServerCharts();
+            renderMultiServerDistribution();
+            renderMultiServerHeatmap();
+            updateTimeMachine();
+        }
+
         function renderMultiTarget(mt) {
             const card = document.getElementById('multiTargetCard');
             if (!card) return;
@@ -9067,42 +8795,13 @@
             showQueryAnalysisTab('efficiency');
             // Reset live dashboard to the first tab; this also hides the
             // panels that belong to other tabs (e.g. insights).
+            msReset();
             showDashTab('overview');
-            renderLatencyHeatmap([]);
             document.getElementById('progressBar').style.width = "0%";
             finalInsightsData = null;
             renderFinalInsights({ metadata: { status: 'pending' }, summary: {} });
             if (seconds != null && !Number.isNaN(Number(seconds))) targetSeconds = Number(seconds);
 
-            histLabels = [];
-            histRates = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-            histLats = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-            histTotals = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [] };
-            histLatTimelineAvg = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-            histLatTimelineP95 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-            histLatTimelineP99 = { total: [], find: [], insert: [], update: [], delete: [], aggregate: [], transaction: [] };
-            latencyMetricVisibility = { avg: false, p95: false, p99: true };
-            latencyOpVisibility = { total: false, find: true, insert: true, update: true, delete: true, aggregate: false, transaction: false };
-            zoomState.active = false;
-            zoomState.dragging = false;
-            zoomState.sourceCanvasId = '';
-            updateZoomControls();
-            updateLatencyToggleUI();
-            lastStats = { total: 0, find: 0, insert: 0, update: 0, delete: 0, aggregate: 0 };
-            lastExecutionElapsed = 0;
-            chartPointsApplied = 0;
-            lastLat = {
-                total: { sum: 0, count: 0 },
-                find: { sum: 0, count: 0 },
-                insert: { sum: 0, count: 0 },
-                update: { sum: 0, count: 0 },
-                delete: { sum: 0, count: 0 },
-                aggregate: { sum: 0, count: 0 }
-            };
-
-            globalMarkers = [];
-            lastKnownIteration = 0;
-            lastKnownWaiting = false;
             lastLifecyclePhase = 'idle';
             document.getElementById('iterationBadge').style.display = 'block';
 
@@ -9181,7 +8880,7 @@
         }
 
         function liveStatsURL() {
-            return '/api/stats?chartSince=' + chartPointsApplied;
+            return '/api/stats' + dashboardStatsQuery();
         }
 
         function markerFromSample(sample) {
@@ -9193,67 +8892,6 @@
             else if (text === 'Failed') color = colors.red;
             else if (text === 'Finished') color = colors.forest;
             return { text, color };
-        }
-
-        function metricOrNull(bucket, key) {
-            if (!bucket || bucket[key] === null || bucket[key] === undefined || bucket[key] === '') return null;
-            const n = Number(bucket[key]);
-            return Number.isFinite(n) ? n : null;
-        }
-
-        function pushChartSample(sample) {
-            const rates = sample.rates || {};
-            const totals = sample.totals || {};
-            const avg = sample.avg || {};
-            const p95 = sample.p95 || {};
-            const p99 = sample.p99 || {};
-            const elapsed = Number(sample.elapsedSec || 0);
-            histLabels.push(formatTime(elapsed));
-            ['total', 'find', 'insert', 'update', 'delete', 'aggregate'].forEach(op => {
-                histRates[op].push(Math.max(0, Math.round(Number(rates[op] || 0))));
-                histTotals[op].push(Number(totals[op] || 0));
-                histLats[op].push(metricOrNull(avg, op) ?? 0);
-            });
-            latencyOps.forEach(op => {
-                histLatTimelineAvg[op].push(metricOrNull(avg, op));
-                histLatTimelineP95[op].push(metricOrNull(p95, op));
-                histLatTimelineP99[op].push(metricOrNull(p99, op));
-            });
-            globalMarkers.push(markerFromSample(sample));
-            if (sample.iteration) lastKnownIteration = Number(sample.iteration);
-            lastKnownWaiting = !!sample.waiting;
-            lastExecutionElapsed = elapsed;
-            lastStats = {
-                total: Number(totals.total || 0),
-                find: Number(totals.find || 0),
-                insert: Number(totals.insert || 0),
-                update: Number(totals.update || 0),
-                delete: Number(totals.delete || 0),
-                aggregate: Number(totals.aggregate || 0)
-            };
-        }
-
-        // Server samples are the chart. A reload asks from seq 0 and redraws the
-        // run so far; later polls append only samples after chartPointsApplied.
-        function applyChartHistory(stats) {
-            const samples = stats.chartHistory;
-            if (!Array.isArray(samples) || samples.length === 0) return;
-            let added = 0;
-            for (const sample of samples) {
-                const seq = Number(sample && sample.seq || 0);
-                if (seq <= chartPointsApplied) continue;
-                pushChartSample(sample);
-                chartPointsApplied = seq;
-                added++;
-            }
-            if (added === 0) return;
-            const maxIdx = histRates.find.length - 1;
-            const scrubber = document.getElementById('timeScrubber');
-            if (scrubber) scrubber.max = maxIdx;
-            if (scrubber && (stats.historical || (isLiveMode && stats.isRunning))) {
-                scrubber.value = maxIdx;
-                renderChartsAt(maxIdx);
-            }
         }
 
         function startPolling() {
@@ -9341,214 +8979,9 @@
                             if (targetSeconds > 0) progressEl.style.width = Math.min((executionElapsed / targetSeconds) * 100, 100) + '%';
                         }
 
-                        // Latency heatmap (always update so the Latency Analysis tab is current).
-                        renderLatencyHeatmap(stats.latencyHeatmap);
                         renderMultiTarget(stats.multi_target);
+                        applyMultiServerStats(stats);
                         renderRunOutcomeFile(stats.outcomeFile, stats.recordingFile);
-
-                        // === 1. ALWAYS PROCESS INCOMING STATS TO CAPTURE FINAL DATA POINT ===
-                        if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
-                            const updateLatRow = (id, data) => {
-                                try {
-                                    if (!data) return;
-                                    const isActive = data.max > 0;
-                                    const formatVal = (val) => isActive ? Number(val).toFixed(2) + ' ms' : '<span class="empty-dash">-</span>';
-
-                                    const setHtml = (suffix, val) => {
-                                        const el = document.getElementById(`dist-${id}-${suffix}`);
-                                        if (el) el.innerHTML = formatVal(val);
-                                    };
-
-                                    setHtml('avg', data.avg);
-                                    setHtml('min', data.min);
-                                    setHtml('max', data.max);
-                                    setHtml('p95', data.p95);
-                                    setHtml('p99', data.p99);
-                                } catch (e) {
-                                    console.error("Table update error:", e);
-                                }
-                            };
-
-                            updateLatRow('total', stats.distTotal);
-                            updateLatRow('find', stats.distFind);
-                            updateLatRow('insert', stats.distInsert);
-                            updateLatRow('update', stats.distUpdate);
-                            updateLatRow('delete', stats.distDelete);
-                            updateLatRow('agg', stats.distAgg);
-                            updateLatRow('trans', stats.distTrans);
-                        }
-                        if (Array.isArray(stats.chartHistory)) {
-                            applyChartHistory(stats);
-                        } else if (stats.insertOps !== undefined && lifecyclePhase !== 'initializing') {
-                            const cFind = stats.findOps || 0;
-                            const cInsert = stats.insertOps || 0;
-                            const cUpdate = (stats.updateOps || 0) + (stats.upsertOps || 0);
-                            const cDelete = stats.deleteOps || 0;
-                            const cAggregate = stats.aggOps || 0;
-                            const cTotal = cFind + cInsert + cUpdate + cDelete + cAggregate;
-
-                            const elapsedDelta = executionElapsed > lastExecutionElapsed
-                                ? (executionElapsed - lastExecutionElapsed)
-                                : (currentRefreshRate / 1000);
-                            const safeElapsedDelta = Math.max(0.001, elapsedDelta);
-                            const rateMultiplier = 1 / safeElapsedDelta;
-                            const rFind = Math.max(0, Math.round((cFind - lastStats.find) * rateMultiplier));
-                            const rInsert = Math.max(0, Math.round((cInsert - lastStats.insert) * rateMultiplier));
-                            const rUpdate = Math.max(0, Math.round((cUpdate - lastStats.update) * rateMultiplier));
-                            const rDelete = Math.max(0, Math.round((cDelete - lastStats.delete) * rateMultiplier));
-                            const rAggregate = Math.max(0, Math.round((cAggregate - (lastStats.aggregate || 0)) * rateMultiplier));
-                            const rTotal = rFind + rInsert + rUpdate + rDelete + rAggregate;
-
-                            const calcIntervalAvgFallback = (current, last) => {
-                                if (!current) return 0;
-                                const diffCount = (current.count || 0) - last.count;
-                                const diffSum = (current.sum || 0) - last.sum;
-                                last.count = current.count || 0;
-                                last.sum = current.sum || 0;
-                                return diffCount > 0 ? diffSum / diffCount : 0;
-                            };
-
-                            const intervalLatency = stats.intervalLatency || {};
-                            const getIntervalMetric = (op, metric, fallbackFn) => {
-                                const bucket = intervalLatency[op];
-                                if (bucket && bucket.count > 0 && bucket[metric] !== undefined && bucket[metric] !== null) {
-                                    return Number(bucket[metric]);
-                                }
-                                if (fallbackFn) return fallbackFn();
-                                return null;
-                            };
-
-                            const fallbackUpdateAvg = () => {
-                                const curUpdateSum = (stats.distUpdate?.sum || 0) + (stats.distUpsert?.sum || 0);
-                                const curUpdateCount = (stats.distUpdate?.count || 0) + (stats.distUpsert?.count || 0);
-                                const diffUpdateCount = curUpdateCount - lastLat.update.count;
-                                const diffUpdateSum = curUpdateSum - lastLat.update.sum;
-                                lastLat.update.count = curUpdateCount;
-                                lastLat.update.sum = curUpdateSum;
-                                return diffUpdateCount > 0 ? diffUpdateSum / diffUpdateCount : 0;
-                            };
-
-                            let intTotalLat = getIntervalMetric('total', 'avg', () => calcIntervalAvgFallback(stats.distTotal, lastLat.total));
-                            let intFindLat = getIntervalMetric('find', 'avg', () => calcIntervalAvgFallback(stats.distFind, lastLat.find));
-                            let intInsertLat = getIntervalMetric('insert', 'avg', () => calcIntervalAvgFallback(stats.distInsert, lastLat.insert));
-                            let intUpdateLat = getIntervalMetric('update', 'avg', fallbackUpdateAvg);
-                            let intDeleteLat = getIntervalMetric('delete', 'avg', () => calcIntervalAvgFallback(stats.distDelete, lastLat.delete));
-                            let intAggLat = getIntervalMetric('aggregate', 'avg', () => calcIntervalAvgFallback(stats.distAgg, lastLat.aggregate));
-                            let intTransLat = getIntervalMetric('transaction', 'avg', null);
-
-                            let p99TotalLat = getIntervalMetric('total', 'p99', null);
-                            let p99FindLat = getIntervalMetric('find', 'p99', null);
-                            let p99InsertLat = getIntervalMetric('insert', 'p99', null);
-                            let p99UpdateLat = getIntervalMetric('update', 'p99', null);
-                            let p99DeleteLat = getIntervalMetric('delete', 'p99', null);
-                            let p99AggLat = getIntervalMetric('aggregate', 'p99', null);
-                            let p99TransLat = getIntervalMetric('transaction', 'p99', null);
-
-                            let p95TotalLat = getIntervalMetric('total', 'p95', null);
-                            let p95FindLat = getIntervalMetric('find', 'p95', null);
-                            let p95InsertLat = getIntervalMetric('insert', 'p95', null);
-                            let p95UpdateLat = getIntervalMetric('update', 'p95', null);
-                            let p95DeleteLat = getIntervalMetric('delete', 'p95', null);
-                            let p95AggLat = getIntervalMetric('aggregate', 'p95', null);
-                            let p95TransLat = getIntervalMetric('transaction', 'p95', null);
-
-                            // During configured inter-iteration wait windows, workload is intentionally idle.
-                            // Force explicit zero points so the latency timeline reflects idle state.
-                            if (stats.isWaiting) {
-                                intTotalLat = 0;
-                                intFindLat = 0;
-                                intInsertLat = 0;
-                                intUpdateLat = 0;
-                                intDeleteLat = 0;
-                                intAggLat = 0;
-                                intTransLat = 0;
-
-                                p99TotalLat = 0;
-                                p99FindLat = 0;
-                                p99InsertLat = 0;
-                                p99UpdateLat = 0;
-                                p99DeleteLat = 0;
-                                p99AggLat = 0;
-                                p99TransLat = 0;
-
-                                p95TotalLat = 0;
-                                p95FindLat = 0;
-                                p95InsertLat = 0;
-                                p95UpdateLat = 0;
-                                p95DeleteLat = 0;
-                                p95AggLat = 0;
-                                p95TransLat = 0;
-                            }
-
-                            lastStats = { total: cTotal, find: cFind, insert: cInsert, update: cUpdate, delete: cDelete, aggregate: cAggregate };
-                            lastExecutionElapsed = executionElapsed;
-
-                            let currentMarker = null;
-                            if (stats.currentIteration && stats.currentIteration !== lastKnownIteration) {
-                                currentMarker = { text: `Iter ${stats.currentIteration}`, color: colors.amethyst };
-                                lastKnownIteration = stats.currentIteration;
-                            } else if (stats.isWaiting && !lastKnownWaiting) {
-                                currentMarker = { text: `Wait`, color: colors.sunrise };
-                            }
-                            lastKnownWaiting = stats.isWaiting;
-                            globalMarkers.push(currentMarker);
-
-                            histLabels.push(formatTime(executionElapsed));
-
-                            histRates.total.push(rTotal);
-                            histRates.find.push(rFind);
-                            histRates.insert.push(rInsert);
-                            histRates.update.push(rUpdate);
-                            histRates.delete.push(rDelete);
-                            histRates.aggregate.push(rAggregate);
-
-                            histTotals.total.push(cTotal);
-                            histTotals.find.push(cFind);
-                            histTotals.insert.push(cInsert);
-                            histTotals.update.push(cUpdate);
-                            histTotals.delete.push(cDelete);
-                            histTotals.aggregate.push(cAggregate);
-
-                            histLats.total.push(intTotalLat);
-                            histLats.find.push(intFindLat);
-                            histLats.insert.push(intInsertLat);
-                            histLats.update.push(intUpdateLat);
-                            histLats.delete.push(intDeleteLat);
-                            histLats.aggregate.push(intAggLat);
-
-                            histLatTimelineAvg.total.push(intTotalLat);
-                            histLatTimelineAvg.find.push(intFindLat);
-                            histLatTimelineAvg.insert.push(intInsertLat);
-                            histLatTimelineAvg.update.push(intUpdateLat);
-                            histLatTimelineAvg.delete.push(intDeleteLat);
-                            histLatTimelineAvg.aggregate.push(intAggLat);
-                            histLatTimelineAvg.transaction.push(intTransLat);
-
-                            histLatTimelineP95.total.push(p95TotalLat);
-                            histLatTimelineP95.find.push(p95FindLat);
-                            histLatTimelineP95.insert.push(p95InsertLat);
-                            histLatTimelineP95.update.push(p95UpdateLat);
-                            histLatTimelineP95.delete.push(p95DeleteLat);
-                            histLatTimelineP95.aggregate.push(p95AggLat);
-                            histLatTimelineP95.transaction.push(p95TransLat);
-
-                            histLatTimelineP99.total.push(p99TotalLat);
-                            histLatTimelineP99.find.push(p99FindLat);
-                            histLatTimelineP99.insert.push(p99InsertLat);
-                            histLatTimelineP99.update.push(p99UpdateLat);
-                            histLatTimelineP99.delete.push(p99DeleteLat);
-                            histLatTimelineP99.aggregate.push(p99AggLat);
-                            histLatTimelineP99.transaction.push(p99TransLat);
-
-                            const maxIdx = histRates.find.length - 1;
-                            const scrubber = document.getElementById('timeScrubber');
-                            scrubber.max = maxIdx;
-
-                            if (isLiveMode && stats.isRunning) {
-                                scrubber.value = maxIdx;
-                                renderChartsAt(maxIdx);
-                            }
-                        }
 
                         // === 2. HANDLE STOPPING / FINISHED STATE ===
                         if (!stats.isRunning) {
@@ -9593,75 +9026,6 @@
                                 clearInterval(pollInterval);
                                 return;
                             }
-
-                            // === 3. INJECT THE ZERO-DATA POINT TO SMOOTHLY END THE GRAPHS ===
-                            histLabels.push(formatTime(executionElapsed));
-
-                            histRates.total.push(0);
-                            histRates.find.push(0);
-                            histRates.insert.push(0);
-                            histRates.update.push(0);
-                            histRates.delete.push(0);
-                            histRates.aggregate.push(0);
-
-                            histTotals.total.push(lastStats.total || 0);
-                            histTotals.find.push(lastStats.find || 0);
-                            histTotals.insert.push(lastStats.insert || 0);
-                            histTotals.update.push(lastStats.update || 0);
-                            histTotals.delete.push(lastStats.delete || 0);
-                            histTotals.aggregate.push(lastStats.aggregate || 0);
-
-                            histLats.total.push(0);
-                            histLats.find.push(0);
-                            histLats.insert.push(0);
-                            histLats.update.push(0);
-                            histLats.delete.push(0);
-                            histLats.aggregate.push(0);
-
-                            // Push a terminal 0 (not null) so the percentile timeline
-                            // descends smoothly to baseline at the end of the run, matching
-                            // how the throughput and live-latency charts taper to 0. Using
-                            // null here left the series ending on the last (often spiky)
-                            // window, giving the false impression the run was interrupted.
-                            histLatTimelineAvg.total.push(0);
-                            histLatTimelineAvg.find.push(0);
-                            histLatTimelineAvg.insert.push(0);
-                            histLatTimelineAvg.update.push(0);
-                            histLatTimelineAvg.delete.push(0);
-                            histLatTimelineAvg.aggregate.push(0);
-                            histLatTimelineAvg.transaction.push(0);
-
-                            histLatTimelineP95.total.push(0);
-                            histLatTimelineP95.find.push(0);
-                            histLatTimelineP95.insert.push(0);
-                            histLatTimelineP95.update.push(0);
-                            histLatTimelineP95.delete.push(0);
-                            histLatTimelineP95.aggregate.push(0);
-                            histLatTimelineP95.transaction.push(0);
-
-                            histLatTimelineP99.total.push(0);
-                            histLatTimelineP99.find.push(0);
-                            histLatTimelineP99.insert.push(0);
-                            histLatTimelineP99.update.push(0);
-                            histLatTimelineP99.delete.push(0);
-                            histLatTimelineP99.aggregate.push(0);
-                            histLatTimelineP99.transaction.push(0);
-
-                            if (executionElapsed > lastExecutionElapsed) {
-                                lastExecutionElapsed = executionElapsed;
-                            }
-
-                            globalMarkers.push({ text: isFailed ? "Failed" : "Finished", color: isFailed ? colors.red : colors.forest });
-
-                            const finalMaxIdx = histRates.find.length - 1;
-                            const scrubber = document.getElementById('timeScrubber');
-                            scrubber.max = finalMaxIdx;
-
-                            if (isLiveMode) {
-                                scrubber.value = finalMaxIdx;
-                                renderChartsAt(finalMaxIdx);
-                            }
-                            // ================================================================
 
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
                             const safeElapsed = Math.max(1, executionElapsed);
@@ -9733,9 +9097,6 @@
                             }
                         }
 
-                        if (lastLifecyclePhase === 'initializing' && lifecyclePhase === 'running') {
-                            globalMarkers.push({ text: 'Exec Start', color: colors.aqua });
-                        }
                         lastLifecyclePhase = lifecyclePhase;
         }
 
@@ -10652,7 +10013,6 @@
                 if (finalInsightsData) renderFinalInsights(finalInsightsData);
                 else renderFinalInsights({ metadata: { status: 'empty' }, summary: {}, efficiency_view: { notice: 'Query and index analysis was not stored for this run.' } });
                 if (snap.stats) applyLiveStats(snap.stats);
-                paintHistoricalOps(snap.stats || {});
                 if (snap.stats && snap.stats.executionElapsedSec == null) {
                     const timer = document.getElementById('timerDisplay');
                     if (timer) { timer.textContent = '—'; timer.title = 'Execution time was not stored for this run.'; }
@@ -10671,18 +10031,6 @@
             } catch (err) {
                 if (errEl) errEl.textContent = 'Could not open that run. ' + err.message;
             }
-        }
-
-        function paintHistoricalOps(stats) {
-            const ids = [['stat-total', 'totalOps'], ['stat-finds', 'findOps'], ['stat-inserts', 'insertOps'], ['stat-updates', 'updateOps'], ['stat-deletes', 'deleteOps'], ['ops-aggregate', 'aggOps']];
-            if (!stats || stats.opsPresent !== true) {
-                ids.forEach(([id]) => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-                return;
-            }
-            if (Array.isArray(stats.chartHistory) && stats.chartHistory.length) return;
-            const find = Number(stats.findOps || 0), insert = Number(stats.insertOps || 0), update = Number(stats.updateOps || 0) + Number(stats.upsertOps || 0), del = Number(stats.deleteOps || 0), agg = Number(stats.aggOps || 0);
-            const values = { totalOps: find + insert + update + del + agg, findOps: find, insertOps: insert, updateOps: update, deleteOps: del, aggOps: agg };
-            ids.forEach(([id, key]) => { const el = document.getElementById(id); if (el) el.textContent = Number(values[key]).toLocaleString(); });
         }
 
         function leaveHistoricalView() {

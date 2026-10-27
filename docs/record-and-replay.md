@@ -67,7 +67,17 @@ The file is written on the PLGM server, in the folder PLGM runs from unless you 
 
 ## Read the results
 
-When the replay finishes, the dashboard shows one row per server:
+**While it runs**, Live Metrics and Latency Analysis show every server on the same charts, one color per server:
+
+- **Servers** (top bar): click a server to hide or show it on every card and chart.
+- **Operation** (top bar): pick All operations, Find, Insert, Update, Delete, Aggregate, or Transaction. The cards and every chart on both tabs switch together. Clicking a total card does the same.
+- The x-axis is **seconds since that server started**. In a sequential run, the finished servers stay on the chart and the running one draws next to them.
+- **Live Metrics**: total cards (one row per server, with the average rate), **Live Throughput**, **Live Latency** (average), and **Compare servers** (p99 or p95).
+- **Latency Analysis**: the percentile timeline (Avg, P95, or P99), the latency distribution with one row per server and the difference from the first server (green is faster, red is slower, grey is within 5%), and one heatmap strip per server. The heatmap is all operations combined.
+- The Time Machine and drag-to-zoom work on this time axis too.
+- Completed Runs reopens the same view.
+
+When the replay finishes, the dashboard also shows one row per server:
 
 ![Multi-target results: three servers, two comparisons](../images/multi_target_card.png)
 

@@ -166,7 +166,7 @@ Each bar is about one second, all operation types combined.
 
 In the example, the bars get taller as the worker count ramps up, and every second stays at 25 ms or less.
 
-Hover a bar for that second's operations, throughput, and p50/p95/p99/max. The heatmap stops updating while your cursor is on it.
+Hover a bar for that second's operations, throughput, and p50/p95/p99/max. The heatmap stops updating while your cursor is on it. A wait between iterations stays empty. On several servers there's one strip per server, on one time axis and color scale.
 
 A single slow operation can push one second's p99 above the p99 for the whole run. That's expected: the point is to show when it happened.
 

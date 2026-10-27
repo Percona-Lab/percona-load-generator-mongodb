@@ -95,7 +95,7 @@ You should see `updateOne on fields: customer_email` at the top: scan efficiency
 
 For a quick look at the whole UI, including the analysis view after a run, see the walkthrough video:
 
-https://github.com/user-attachments/assets/daf25637-7d0d-4f3a-9d97-eeaa3b4835e4
+https://github.com/user-attachments/assets/68e07543-2c99-492c-8f1e-e783c0521964
 
 ## Settings reference
 

@@ -14,9 +14,9 @@ It ships as a single binary with an embedded Web UI, uses all available CPUs by 
 
 ![PLGM Web UI live dashboard during a run](./images/dashboard_live.png)
 
-90-second walkthrough: record a workload, replay it on three servers, and open the comparison.
+2½-minute walkthrough: record a workload, replay it on three servers, compare them on the dashboard charts, and open the comparison report.
 
-https://github.com/user-attachments/assets/daf25637-7d0d-4f3a-9d97-eeaa3b4835e4
+https://github.com/user-attachments/assets/68e07543-2c99-492c-8f1e-e783c0521964
 
 ---
 

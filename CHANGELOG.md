@@ -5,6 +5,41 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v6.2.0 - Every server on the same charts, and one dashboard for every run
+
+The live dashboard draws a run on several servers on the same charts, one line per server, so you can follow every server while the run goes instead of waiting for the comparison at the end. Runs on one server use the same view, with the Time Machine, drag-to-zoom, and iteration markers rebuilt on it. The CLI, `config.yaml`, and environment variables are unchanged.
+
+**Highlights**
+
+**New: Every server on the same charts**
+- A run on several servers draws one line per server on Live Metrics and Latency Analysis, aligned on seconds since each server started, so finished servers stay on screen while the next one runs.
+- A bar at the top has **Servers** toggles and one **Operation** picker (All operations, Find, Insert, Update, Delete, Aggregate, Transaction). It drives the total cards and every chart on both tabs; clicking a total card picks its operation too. The picker works with the arrow keys.
+- **Live Metrics**: total cards with one row per server, **Live Throughput**, **Live Latency**, and **Compare servers** (p99 or p95).
+- **Latency Analysis**: the percentile timeline per server, the latency distribution with one row per server and the difference from the first server, and one heatmap strip per server on a shared time axis.
+- The Time Machine and drag-to-zoom work on this time axis too.
+
+**Changed: One dashboard for every run**
+- Runs on one server use the same view: the Operation bar (the Servers toggles are hidden), total cards, Live Throughput, Live Latency, and **Tail latency** on Live Metrics; the percentile timeline, distribution, and heatmap on Latency Analysis. Each chart shows the operation you pick instead of one line per operation type, and the x-axis is seconds since the run started.
+- **Transaction** is in the Operation picker (latency only; throughput is not tracked per transaction).
+- The Time Machine and drag-to-zoom work on the new charts for every run: scrubbing stops the charts and heatmap at that second and shows the totals at that moment; a zoom limits every chart, the heatmap, and the cards to that range. Iteration, wait, and end markers are drawn when one server is shown.
+- Workload Anatomy and the sparklines in the total cards are gone. The heatmap leaves waits between iterations empty.
+
+**API**
+- `/api/stats` adds a `targets` list on a run with replay targets: per-server totals, latency distribution per operation type, chart samples, and heatmap windows. It holds labels, never URIs.
+- `targetSince=index:seq:ms,...` returns only the samples and heatmap windows each server added since the last request, so eight servers stay cheap to poll.
+- Completed Runs stores the `targets` list, so a saved run reopens with every server's charts.
+
+**Fixes**
+- A concurrent multi-target run recorded chart samples only for the first target; every running target is now sampled, each on its own clock.
+- Two polls overlapping (two browser tabs, for example) could record a sample out of order, drawing a line back in time; such a sample is now skipped.
+- The latency heatmap stretched the first window after a wait between iterations over the idle time; waits now stay empty.
+
+**Testing & Docs**
+- New Go tests cover the per-server series, the `targetSince` cursor, sampling every target of a concurrent run, and stored runs. New jsdom tests cover the several-servers and single-server views, the Operation picker and server toggles, the Time Machine, zoom, markers, transactions, heatmap gaps and waits, and stored runs.
+- `docs/web-ui.md`, `docs/record-and-replay.md`, `docs/load-modeling.md`, and `docs/workloads.md` describe the new charts. The dashboard screenshots (`dashboard_live.png`, `dashboard_latency.png`, `dashboard_time_machine_zoom.png`) were retaken from a real run, and a new 2½-minute walkthrough video shows the multi-server workflow and each chart.
+
+---
+
 ## v6.1.0 - Multi-target replay and easier set up
 
 Multi-target replay in the Web UI is easier to set up: pick a recording from a list instead of typing its path, get the settings targets need turned on for you, leave the outcome file blank for a new name per run, and open comparison reports in a browser tab. The CLI, `config.yaml`, and environment variables are unchanged.
