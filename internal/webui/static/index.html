@@ -2153,6 +2153,13 @@
 
         .modal-box h3 { margin-top: 0; color: var(--text-strong); font-weight: 700; font-size: var(--fs-lg); }
 
+        /* Information only: shown over the page without blocking it, closes by itself. */
+        .credentials-notice { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 16px); right: 16px; z-index: 1100; width: min(420px, calc(100vw - 32px)); padding: var(--space-4) calc(var(--space-4) + 24px) var(--space-4) var(--space-4); background: var(--surface); border: 1px solid var(--accent-border); border-top: 4px solid var(--accent); border-radius: var(--radius-lg); box-shadow: var(--elevation-3); font-size: 13.5px; color: var(--text-secondary); }
+        .credentials-notice p { margin: 0; }
+        .credentials-notice .credentials-notice-title { margin-bottom: 4px; font-weight: 700; color: var(--text-strong); }
+        .credentials-notice-x { position: absolute; top: 8px; right: 8px; border: none; background: transparent; font-size: 22px; line-height: 1; color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: var(--radius-sm); }
+        .credentials-notice-x:hover { color: var(--text-strong); }
+
         .modal-actions {
             display: flex;
             gap: 8px;
@@ -3028,7 +3035,8 @@
                         </div>
                     </div>
                     <div class="form-group" id="uriGroup"><label>MongoDB URI <span class="req-mark">Required</span></label><input class="f-xl" type="text" name="uri"
-                            placeholder="mongodb://localhost:27017/" required></div>
+                            placeholder="mongodb://localhost:27017/" required>
+                        <span class="settings-note" id="uriCredentialsNote">The URI can hold the credentials, for example <code>mongodb://user:password@host:27017/</code>. A username and password in the URI are used instead of the Username and Password fields. Encode special characters in the password, for example <code>@</code> as <code>%40</code>.</span></div>
                     <div class="setting-rows multi-server" id="multiServerBlock" hidden>
                             <div class="setting-row setting-row-wide">
                                 <div class="setting-control">
@@ -3038,7 +3046,7 @@
                                     <input type="hidden" name="workload_replay_targets" id="workloadReplayTargets" value="">
                                     <p id="replayTargetsStatus" class="settings-note" role="status" hidden></p>
                                 </div>
-                                <div class="settings-note" id="workloadReplayTargetsNote"><strong>Listed (2&ndash;8 targets):</strong> with <strong>Run on: Several servers</strong>, the replay (or deterministic run) runs once on every listed target, and only on those, each with the URI entered for it; the single MongoDB URI field is hidden and ignored. Each target gets its own client, workers, stats, outcome file (the label goes before the extension, for example <code>outcomes.m8.ndjson</code>), insights, and trend run, and is compared with the first target. Needs a traffic source, Replay a recording or Deterministic traffic, and Record Outcomes, which is turned on while targets are listed; a blank outcome file gets a new generated name per run. Shown for replays, and for generic or custom runs with Deterministic traffic on (Advanced). Not available while recording: record on one instance, then replay the recording on the targets. Username, password, and TLS settings apply to every target; put other per-target options in its URI. <strong>Empty (default):</strong> a single run on the server in the MongoDB URI field. <span class="setting-keys"><code>workload_replay_targets</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS</code> (<code>label=uri;label=uri</code>)</span></div>
+                                <div class="settings-note" id="workloadReplayTargetsNote"><strong>Listed (2&ndash;8 targets):</strong> with <strong>Run on: Several servers</strong>, the replay (or deterministic run) runs once on every listed target, and only on those, each with the URI entered for it; the single MongoDB URI field is hidden and ignored. Each target gets its own client, workers, stats, outcome file (the label goes before the extension, for example <code>outcomes.m8.ndjson</code>), insights, and trend run, and is compared with the first target. Needs a traffic source, Replay a recording or Deterministic traffic, and Record Outcomes, which is turned on while targets are listed; a blank outcome file gets a new generated name per run. Shown for replays, and for generic or custom runs with Deterministic traffic on (Advanced). Not available while recording: record on one instance, then replay the recording on the targets. Put each target's credentials in its URI (<code>mongodb://user:password@host:27017/</code>) when targets use different users; the Username and Password fields apply only to targets whose URI has none. TLS settings apply to every target; put other per-target options in its URI. <strong>Empty (default):</strong> a single run on the server in the MongoDB URI field. <span class="setting-keys"><code>workload_replay_targets</code> / <code>PLGM_WORKLOAD_REPLAY_TARGETS</code> (<code>label=uri;label=uri</code>)</span></div>
                             </div>
                             <div class="setting-row">
                                 <div class="setting-control">
@@ -3052,7 +3060,8 @@
                             </div>
                     </div>
                     <div class="grid-2">
-                        <div class="form-group"><label>Username (Optional)</label><input class="f-md" type="text" name="username"></div>
+                        <div class="form-group"><label>Username (Optional)</label><input class="f-md" type="text" name="username">
+                            <span class="settings-note" id="separateCredentialsNote">Used only for a URI without a username and password. With Several servers, each server whose URI has its own credentials uses those, so servers can use different users. Leave both fields blank when every URI holds its credentials; you are not asked for them.</span></div>
                         <div class="form-group"><label>Password (Optional)</label><input class="f-md" type="password" id="uiPassword"
                                 name="password" placeholder="Stored in session"></div>
                         <div class="form-group" data-tier="advanced"><label>Auth Source</label><input class="f-md" type="text" name="auth_source"
@@ -4042,6 +4051,12 @@
                         onclick="closeModal()">Cancel</button><button type="button" class="btn btn-primary"
                         onclick="submitWithCredentials()">Continue</button></div>
             </div>
+        </div>
+
+        <div class="credentials-notice" id="credentialsNotice" role="status" aria-live="polite" hidden>
+            <p class="credentials-notice-title">Credentials from the URI</p>
+            <p id="credentialsNoticeText"></p>
+            <button type="button" class="credentials-notice-x" aria-label="Close" onclick="closeCredentialsNotice()">×</button>
         </div>
 
         <div class="modal-overlay" id="errorModal">
@@ -5740,16 +5755,96 @@
             const username = document.querySelector('[name="username"]').value.trim();
             const password = document.querySelector('[name="password"]').value;
             // Prompt for whichever credential is missing instead of launching and
-            // failing on an authentication error. Blanks are still allowed (via the
+            // failing on an authentication error. A URI with its own username and
+            // password needs neither field. Blanks are still allowed (via the
             // modal) for deployments that do not require authentication.
-            if (username === "" || password === "") {
-                openCredentialModal(username === "", password === "");
+            const fd = executionFormData(this);
+            const need = separateCredentialsNeeded(fd);
+            const needUser = username === "" && need.user.length > 0;
+            const needPass = password === "" && need.pass.length > 0;
+            if (needUser || needPass) {
+                openCredentialModal(needUser, needPass, need.several ? [...new Set([...(needUser ? need.user : []), ...(needPass ? need.pass : [])])] : []);
                 return;
             }
-            launchWorkload(executionFormData(this));
+            launchWithCredentialsNotice(fd);
         });
 
-        function openCredentialModal(needUser, needPass) {
+        // Credentials in a MongoDB URI take precedence over the Username and
+        // Password fields (as on the server), so every server of a run can
+        // use its own user. Returns the URI's username and whether it also
+        // holds a password.
+        function uriCredentials(uri) {
+            const m = /^mongodb(?:\+srv)?:\/\/([^/?#]*)@/i.exec(String(uri || '').trim());
+            if (!m) return { user: '', hasPass: false };
+            const info = m[1];
+            const colon = info.indexOf(':');
+            let user = colon < 0 ? info : info.slice(0, colon);
+            try { user = decodeURIComponent(user); } catch { }
+            return { user, hasPass: !!user && colon >= 0 };
+        }
+        // The connections a run uses: every listed server, or the MongoDB URI.
+        function connectionTargets(fd) {
+            let targets = [];
+            try { targets = JSON.parse(String(fd.get('workload_replay_targets') || '') || '[]'); } catch { targets = []; }
+            if (Array.isArray(targets) && targets.length > 0) return targets.map(t => ({ name: t.label, uri: t.uri }));
+            return [{ name: 'MongoDB URI', uri: String(fd.get('uri') || '') }];
+        }
+        // Names the connections with no username (user) or no password (pass)
+        // in their URI: those use the Username and Password fields.
+        function separateCredentialsNeeded(fd) {
+            const targets = connectionTargets(fd);
+            const out = { user: [], pass: [], several: targets.length > 1 || targets[0].name !== 'MongoDB URI' };
+            targets.forEach(t => {
+                const c = uriCredentials(t.uri);
+                if (!c.user) out.user.push(t.name);
+                if (!c.hasPass) out.pass.push(t.name);
+            });
+            return out;
+        }
+        // Names the connections whose URI credentials replace a different
+        // Username, or any Password, entered in the fields.
+        function credentialsOverriddenByURI(fd) {
+            const sepUser = String(fd.get('username') || '').trim();
+            const sepPass = String(fd.get('password') || '');
+            if (!sepUser && !sepPass) return [];
+            return connectionTargets(fd).filter(t => {
+                const c = uriCredentials(t.uri);
+                return c.user && c.hasPass && !(sepPass === '' && sepUser === c.user);
+            }).map(t => t.name);
+        }
+
+        // Launches the run and, when the fields are overridden by URI
+        // credentials, says so in a notice that does not stop the run.
+        function launchWithCredentialsNotice(fd) {
+            const names = credentialsOverriddenByURI(fd);
+            launchWorkload(fd);
+            if (names.length > 0) showCredentialsNotice(names, connectionTargets(fd).length);
+        }
+        const CREDENTIALS_NOTICE_MS = 5000;
+        let credentialsNoticeTimer = null;
+        function showCredentialsNotice(names, total) {
+            const box = document.getElementById('credentialsNotice');
+            const text = document.getElementById('credentialsNoticeText');
+            if (!box || !text) return;
+            if (names.length === 1 && names[0] === 'MongoDB URI') {
+                text.textContent = 'The MongoDB URI includes a username and password, so those are used. The Username and Password fields are ignored for this run.';
+            } else if (names.length === total) {
+                text.textContent = `Every server (${names.join(', ')}) has a username and password in its URI, so those are used. The Username and Password fields are ignored for this run.`;
+            } else {
+                text.textContent = `${names.join(', ')} ${names.length === 1 ? 'has' : 'have'} a username and password in ${names.length === 1 ? 'its URI' : 'their URIs'}, so those are used there. The Username and Password fields apply only to the other servers.`;
+            }
+            box.hidden = false;
+            clearTimeout(credentialsNoticeTimer);
+            credentialsNoticeTimer = setTimeout(closeCredentialsNotice, CREDENTIALS_NOTICE_MS);
+        }
+        function closeCredentialsNotice() {
+            clearTimeout(credentialsNoticeTimer);
+            credentialsNoticeTimer = null;
+            const box = document.getElementById('credentialsNotice');
+            if (box) box.hidden = true;
+        }
+
+        function openCredentialModal(needUser, needPass, servers) {
             const userGroup = document.getElementById('modalUsernameGroup');
             const passGroup = document.getElementById('modalPasswordGroup');
             const userInput = document.getElementById('modalUsernameInput');
@@ -5764,7 +5859,10 @@
             const what = (needUser && needPass) ? 'username or password'
                 : needUser ? 'username' : 'password';
             const it = (needUser && needPass) ? 'them' : 'it';
-            msg.textContent = `No ${what} was provided for the MongoDB connection. Enter ${it} below, `
+            const where = servers && servers.length
+                ? `${servers.join(', ')} (no ${what} in ${servers.length === 1 ? 'its URI' : 'their URIs'})`
+                : 'the MongoDB connection';
+            msg.textContent = `No ${what} was provided for ${where}. Enter ${it} below, `
                 + `or leave blank if your deployment does not require authentication.`;
 
             document.getElementById('passwordModal').style.display = 'flex';
@@ -5791,7 +5889,7 @@
                 sessionStorage.setItem('plgm_password', modalPass);
             }
             closeModal();
-            launchWorkload(executionFormData(document.getElementById('configForm')));
+            launchWithCredentialsNotice(executionFormData(document.getElementById('configForm')));
         }
 
         function runAgain() {

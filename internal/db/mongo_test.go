@@ -131,3 +131,49 @@ func TestBuildMongoURI(t *testing.T) {
 		})
 	}
 }
+
+// Credentials in the URI take precedence over the separate username and
+// password, so each target of a multi-target run can use its own.
+func TestBuildMongoURICredentialPrecedence(t *testing.T) {
+	cases := []struct {
+		name, uri, user, pass string
+		wantUser, wantPass    string
+		wantHasPass           bool
+	}{
+		{"uri_credentials_win", "mongodb://alice:a%40pw@h:1/", "plgm", "other", "alice", "a@pw", true},
+		{"separate_credentials_without_uri_user", "mongodb://h:1/", "plgm", "pw", "plgm", "pw", true},
+		{"uri_user_takes_separate_password", "mongodb://alice@h:1/", "", "pw", "alice", "pw", true},
+		{"uri_user_ignores_password_of_another_user", "mongodb://alice@h:1/", "bob", "pw", "alice", "", false},
+		{"srv_uri_credentials_win", "mongodb+srv://alice:apw@cluster.example.net/", "plgm", "pw", "alice", "apw", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.AppConfig{URI: tc.uri, ConnectionParams: config.ConnectionParams{Username: tc.user, Password: tc.pass}}
+			got, err := BuildMongoURI(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u, err := url.Parse(got)
+			if err != nil || u.User == nil {
+				t.Fatalf("built %q: %v", got, err)
+			}
+			pw, has := u.User.Password()
+			if u.User.Username() != tc.wantUser || pw != tc.wantPass || has != tc.wantHasPass {
+				t.Fatalf("user %q password %q (set %v), want %q %q (%v)", u.User.Username(), pw, has, tc.wantUser, tc.wantPass, tc.wantHasPass)
+			}
+		})
+	}
+}
+
+func TestBuildMongoURIKeepsAuthSourceFromURI(t *testing.T) {
+	for uri, want := range map[string]string{"mongodb://u:p@h/?authSource=users": "users", "mongodb://h/": "admin"} {
+		got, err := BuildMongoURI(&config.AppConfig{URI: uri, ConnectionParams: config.ConnectionParams{AuthSource: "admin"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		u, _ := url.Parse(got)
+		if a := u.Query().Get("authSource"); a != want {
+			t.Fatalf("%s: authSource %q, want %q", uri, a, want)
+		}
+	}
+}

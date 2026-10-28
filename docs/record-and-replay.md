@@ -52,7 +52,7 @@ The file is written on the PLGM server, in the folder PLGM runs from unless you 
 
    **Starting-Data Fingerprint** in this section checks each server's data against the recording before the first operation, if the recording stored it.
 
-4. In **Target Connection** at the top, set **Run on** to **Several servers**. The MongoDB URI field is replaced by a server list with two empty rows. Give each server a short label and its URI, and click **Add target** for more (2 to 8). Username and password below apply to every server.
+4. In **Target Connection** at the top, set **Run on** to **Several servers**. The MongoDB URI field is replaced by a server list with two empty rows. Give each server a short label and its URI, and click **Add target** for more (2 to 8). When servers use different users, put each one's credentials in its URI (`mongodb://user:password@host:27017/`); the Username and Password fields apply only to servers whose URI has none, and you are not asked for them when every URI has its own.
 
    ![Run on: Several servers, with three servers listed](../images/settings_multi_target.png)
 
@@ -420,9 +420,11 @@ each with the first, in one run.
 ```
 
 - **Only listed targets.** With `workload_replay_targets` set, operations, setup (drop,
-  indexes, seed), and explain go only to the listed targets; `uri` is not used. Username,
-  password, and TLS settings apply to every target; per-target options (replica set name,
-  auth source) go in each target's URI. Logs and the API name targets by label, never by URI.
+  indexes, seed), and explain go only to the listed targets; `uri` is not used. Credentials
+  in a target's URI (and its `authSource`) are used for that target, so targets can use
+  different users; `username`, the password, and `auth_source` apply to targets whose URI has
+  none. TLS settings apply to every target; other per-target options (replica set name) go in
+  each target's URI. Logs and the API name targets by label, never by URI.
   The Web UI asks for confirmation before a run that replays writes, drops, or seeds targets.
 - **Per target.** Each target has its own client, workers, stats collector, outcome file (the
   label goes before the extension), run metadata (`target` in `/api/insights`), insights, and

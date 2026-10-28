@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -247,18 +246,19 @@ func main() {
 		logger.Info("Performance: Automatically disabled driver compression (compressors=none)")
 	}
 
-	credURI := appCfg.URI
-	if len(appCfg.WorkloadReplayTargets) > 0 {
-		credURI = appCfg.WorkloadReplayTargets[0].URI
+	if names := config.CredentialsOverriddenByURI(appCfg); len(names) > 0 {
+		logger.Info("Credentials: the username and password in the URI of %s are used; the separate username and password are ignored there", strings.Join(names, ", "))
 	}
-	u, _ := url.Parse(credURI)
-	if u != nil && u.User == nil && appCfg.ConnectionParams.Username == "" {
+	// Ask only for what a URI without credentials needs: a URI with a
+	// username and password needs neither prompt.
+	needUser, needPassword := config.SeparateCredentialsNeeded(appCfg)
+	if needUser && appCfg.ConnectionParams.Username == "" {
 		fmt.Print("Enter MongoDB Username: ")
 		var inputUser string
 		fmt.Scanln(&inputUser)
 		appCfg.ConnectionParams.Username = inputUser
 	}
-	if appCfg.ConnectionParams.Username != "" && appCfg.ConnectionParams.Password == "" {
+	if needPassword && appCfg.ConnectionParams.Username != "" && appCfg.ConnectionParams.Password == "" {
 		fmt.Printf("Enter Password for user '%s': ", appCfg.ConnectionParams.Username)
 		bytePassword, _ := term.ReadPassword(int(os.Stdin.Fd()))
 		appCfg.ConnectionParams.Password = string(bytePassword)

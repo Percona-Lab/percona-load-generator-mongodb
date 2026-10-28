@@ -37,7 +37,7 @@ Download the [`config.yaml`](../config.yaml), set your connection settings and a
 PLGM_CONCURRENCY=50 PLGM_DURATION=5m ./bin/plgm
 ```
 
-If `PLGM_PASSWORD` is not set and a username is configured, PLGM prompts for the password.
+Credentials can go in the URI (`mongodb://user:password@host:27017/`) or in `username` and `PLGM_PASSWORD`. A username and password in the URI win over the separate ones, and PLGM logs a line when it ignores them. With `--replay-target`, each target can have its own user in its URI. PLGM prompts for a username or password only when a URI without them needs one: if `PLGM_PASSWORD` is not set and a username is configured, it asks for the password.
 
 Two subcommands support upgrade testing; see [Record and Replay](./record-and-replay.md):
 

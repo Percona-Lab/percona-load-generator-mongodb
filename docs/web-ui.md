@@ -55,7 +55,9 @@ https://github.com/user-attachments/assets/68e07543-2c99-492c-8f1e-e783c0521964
 
 You can switch tasks before launching. Values that still apply (URI, workers, duration) are kept. Settings the new task doesn't use are hidden and not sent. The task cards and both defaults buttons are locked while a run is going.
 
-If you leave the username and password empty, PLGM asks once before launching. Click **Continue** if your server has no authentication. Passwords stay in the browser session and are never saved with a run.
+You can put the credentials in the MongoDB URI (`mongodb://user:password@host:27017/`) or in the Username and Password fields. A username and password in the URI are used instead of the fields; encode special characters in the password (`@` as `%40`). With **Run on: Several servers**, each server can have its own user this way, and the fields apply only to servers whose URI has none. If you fill both, the run starts anyway and a notice says the URI credentials are used. It closes after 5 seconds, or click **×**.
+
+If a URI has no credentials and the fields are empty, PLGM asks once before launching. Click **Continue** if your server has no authentication. Passwords stay in the browser session and are never saved with a run.
 
 ## Settings levels and categories
 

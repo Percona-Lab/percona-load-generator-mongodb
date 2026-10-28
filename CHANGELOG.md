@@ -5,6 +5,30 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v6.3.0 - Credentials in the MongoDB URI, one user per server
+
+Credentials can go in the MongoDB URI (`mongodb://user:password@host:27017/`) as well as in the Username and Password fields, and a username and password in the URI win. Every server of a multi-target run can now use its own user. The Username and Password fields, `username`, and `PLGM_PASSWORD` keep working for URIs without credentials.
+
+**Highlights**
+
+**New: Credentials in the MongoDB URI**
+- A username and password in a URI are used for that connection, in the Web UI and the CLI. With **Run on: Several servers** (or `--replay-target`, `workload_replay_targets`), each server can have different credentials in its URI; the Username and Password fields apply only to servers whose URI has none.
+- An `authSource` in the URI wins over the Auth Source field (`auth_source`), so users that live in different auth databases work too.
+- A URI with a username but no password takes the separate password, unless the separate username names a different user.
+
+**Changed: Prompts only when needed**
+- The Web UI asks for a username or password only when a URI without them needs one. When every URI has its own credentials, Launch starts the run with the fields empty. On several servers, the prompt names the servers whose URI has no credentials.
+- The CLI prompts for a username or password only when a URI (the single URI, or any target) lacks them.
+
+**New: Notice when both are given**
+- If the fields are filled and a URI also holds credentials, the run starts and a notice says the URI credentials are used, naming the servers on a multi-target run. It closes after 5 seconds, or sooner with **×**, and never blocks the run. The CLI logs one line naming the URIs whose credentials were used.
+- The same username in the fields without a password is not a conflict and shows no notice.
+
+**Behavior change**
+- Before, the separate username and password replaced any credentials in the URI. Now the URI credentials (and its `authSource`) win. A setup that relied on the fields overriding a URI with credentials must remove them from the URI.
+
+---
+
 ## v6.2.0 - Every server on the same charts, and one dashboard for every run
 
 The live dashboard draws a run on several servers on the same charts, one line per server, so you can follow every server while the run goes instead of waiting for the comparison at the end. Runs on one server use the same view, with the Time Machine, drag-to-zoom, and iteration markers rebuilt on it. The CLI, `config.yaml`, and environment variables are unchanged.

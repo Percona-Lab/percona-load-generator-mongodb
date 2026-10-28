@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -1043,6 +1044,77 @@ func ValidateAccessPattern(cfg *AppConfig) error {
 
 // ValidateConnectionParams catches incomplete TLS client configuration before
 // we attempt to build the MongoDB URI or open a connection.
+// URICredentials returns the username in a MongoDB URI and whether the URI
+// also holds a password. Credentials in a URI take precedence over the
+// separate username and password settings.
+func URICredentials(uri string) (user string, hasPassword bool) {
+	u, err := url.Parse(strings.TrimSpace(uri))
+	if err != nil || u.User == nil || u.User.Username() == "" {
+		return "", false
+	}
+	_, hasPassword = u.User.Password()
+	return u.User.Username(), hasPassword
+}
+
+// ConnectionURIs returns the URIs a run connects to: every replay target when
+// targets are listed, otherwise the single URI.
+func ConnectionURIs(cfg *AppConfig) []string {
+	if cfg == nil {
+		return nil
+	}
+	if len(cfg.WorkloadReplayTargets) == 0 {
+		return []string{cfg.URI}
+	}
+	uris := make([]string, 0, len(cfg.WorkloadReplayTargets))
+	for _, t := range cfg.WorkloadReplayTargets {
+		uris = append(uris, t.URI)
+	}
+	return uris
+}
+
+// SeparateCredentialsNeeded reports whether some connection URI lacks a
+// username (needUser) or a password (needPassword), so the separate
+// username and password settings are used for it.
+func SeparateCredentialsNeeded(cfg *AppConfig) (needUser, needPassword bool) {
+	for _, uri := range ConnectionURIs(cfg) {
+		user, hasPassword := URICredentials(uri)
+		if user == "" {
+			needUser = true
+		}
+		if !hasPassword {
+			needPassword = true
+		}
+	}
+	return needUser, needPassword
+}
+
+// CredentialsOverriddenByURI names the connections whose URI holds a
+// username and password while a different separate username, or any separate
+// password, is also set: the URI credentials are used for them. A single
+// connection is named "MongoDB URI"; replay targets by their labels.
+func CredentialsOverriddenByURI(cfg *AppConfig) []string {
+	if cfg == nil {
+		return nil
+	}
+	sepUser, sepPassword := cfg.ConnectionParams.Username, cfg.ConnectionParams.Password
+	if sepUser == "" && sepPassword == "" {
+		return nil
+	}
+	var names []string
+	for i, uri := range ConnectionURIs(cfg) {
+		user, hasPassword := URICredentials(uri)
+		if user == "" || !hasPassword || (sepPassword == "" && sepUser == user) {
+			continue
+		}
+		if len(cfg.WorkloadReplayTargets) == 0 {
+			names = append(names, "MongoDB URI")
+		} else {
+			names = append(names, cfg.WorkloadReplayTargets[i].Label)
+		}
+	}
+	return names
+}
+
 func ValidateConnectionParams(cfg *AppConfig) error {
 	if cfg == nil {
 		return nil

@@ -31,9 +31,17 @@ func BuildMongoURI(cfg *config.AppConfig) (string, error) {
 		u.Path = "/"
 	}
 
-	// --- Inject Credentials if provided separately ---
-	// This overrides any credentials present in the base URI string.
-	if cfg.ConnectionParams.Username != "" {
+	// --- Credentials ---
+	// A username in the URI takes precedence over the separate username and
+	// password, so every target of a multi-target run can use its own. A URI
+	// with a username but no password takes the separate password, unless
+	// that belongs to another user.
+	if uriUser, hasPassword := config.URICredentials(cfg.URI); uriUser != "" {
+		sepUser := cfg.ConnectionParams.Username
+		if !hasPassword && cfg.ConnectionParams.Password != "" && (sepUser == "" || sepUser == uriUser) {
+			u.User = url.UserPassword(uriUser, cfg.ConnectionParams.Password)
+		}
+	} else if cfg.ConnectionParams.Username != "" {
 		if cfg.ConnectionParams.Password != "" {
 			u.User = url.UserPassword(cfg.ConnectionParams.Username, cfg.ConnectionParams.Password)
 		} else {
@@ -44,7 +52,8 @@ func BuildMongoURI(cfg *config.AppConfig) (string, error) {
 	q := u.Query()
 
 	// --- connection params ---
-	if cfg.ConnectionParams.AuthSource != "" {
+	// Like the credentials, an authSource in the URI wins over auth_source.
+	if cfg.ConnectionParams.AuthSource != "" && !q.Has("authSource") {
 		q.Set("authSource", cfg.ConnectionParams.AuthSource)
 	}
 
