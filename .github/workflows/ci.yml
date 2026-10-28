@@ -43,6 +43,10 @@ jobs:
     services:
       mongo:
         image: mongo:${{ matrix.mongo }}
+        env:
+          # mongod 8.x exits on Linux 6.19+ runners while TCMalloc uses rseq
+          # (SERVER-121912); letting glibc keep rseq allows it to start.
+          GLIBC_TUNABLES: glibc.pthread.rseq=1
         ports:
           - 30777:27017
         options: >-
