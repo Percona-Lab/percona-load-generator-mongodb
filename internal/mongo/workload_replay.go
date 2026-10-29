@@ -402,6 +402,10 @@ func runWorkloadReplay(ctx context.Context, db *mongo.Database, collections []co
 		return runErr
 	}
 	if collector != nil {
+		// Divide by the time workers ran in every iteration so far.
+		if d, ok := collector.WorkloadDuration(); ok {
+			elapsed = d
+		}
 		collector.PrintFinalSummary(elapsed, cfg.WebUI.Enabled)
 	}
 	return nil

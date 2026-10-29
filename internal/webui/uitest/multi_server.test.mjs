@@ -151,11 +151,11 @@ test('cards, distribution, and heatmap show each server', async () => {
 test('polls ask each server only for new samples, and append them', async () => {
     const { w, doc, errors } = await page();
     w.applyLiveStats(liveStats([target(1, 'rs01', 'complete'), target(2, 'rs02', 'running', { points: points(2, 0, 4000, 4), heat: [{ elapsedSec: 1, timestampUnixMs: 5000, count: 1, p99: 4 }] })]));
-    assert.match(w.liveStatsURL(), /&targetSince=1:4:1001,2:2:5000$/);
+    assert.match(w.liveStatsURL(), /&targetSince=1:4:1001,2:2:5000&refreshMs=500$/, "asks for new samples and tells the server the refresh rate");
     const more = target(2, 'rs02', 'running', { points: points(4, 0, 4000, 4).slice(1), heat: [] });
     w.applyLiveStats(liveStats([{ ...target(1, 'rs01', 'complete'), chartHistory: [], latencyHeatmap: [] }, more]));
     assert.equal(charts(w).throughput.data.datasets[1].data.length, 4, 'seq 2 is not added twice');
-    assert.match(w.liveStatsURL(), /2:4:5000$/);
+    assert.match(w.liveStatsURL(), /targetSince=1:4:1001,2:4:5000&refreshMs=500$/);
     assert.deepEqual(errors, []);
 });
 
@@ -193,7 +193,7 @@ test('a run on one server uses the same view with one line', async () => {
     assert.match(doc.querySelector('#msDistRows tr').textContent, /6\.00 ms/);
     assert.match(doc.getElementById('msSubThroughput').textContent, /not tracked per transaction/);
     assert.equal(doc.querySelector('.ms-tile[aria-pressed="true"]'), null, 'no card for transactions');
-    assert.match(w.liveStatsURL(), /^\/api\/stats\?chartSince=8$/);
+    assert.match(w.liveStatsURL(), /^\/api\/stats\?chartSince=8&refreshMs=500$/);
     assert.deepEqual(errors, []);
 });
 

@@ -110,6 +110,8 @@ type WebServer struct {
 	runHistory    *RunHistory
 	dashboardID   string
 	dashboardMode string
+	// sampler records the dashboard charts on the server.
+	sampler chartSampler
 }
 
 type lifecycleEvent struct {
@@ -283,6 +285,8 @@ func (s *WebServer) Start(port int) error {
 	if err != nil {
 		return fmt.Errorf("failed to load static files: %v", err)
 	}
+
+	go s.runChartSampler(make(chan struct{}))
 
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 	mux.HandleFunc("/api/config", s.handleGetConfig)
@@ -798,6 +802,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	s.InitStartedAt = time.Now()
 	s.ExecStartedAt = time.Time{}
 	s.CompletedAt = time.Time{}
+	s.sampler.finalized = nil
 	s.InitDurationSec = 0
 	s.LifecycleEvents = nil
 	s.setLifecyclePhaseLocked("initializing", "Preparing workload resources")
@@ -1383,6 +1388,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				s.CurrentIteration = i
 				s.IsWaiting = false
 				s.CurrentStats.CurrentIteration = i
+				s.CurrentStats.SetWaiting(false)
 				s.mu.Unlock()
 
 				if err := runRawInjectorFn(ctx, benchConn.Database, cfg, s.CurrentStats); err != nil {
@@ -1400,6 +1406,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 				if i < cfg.Iterations && intervalDuration > 0 {
 					s.mu.Lock()
 					s.IsWaiting = true
+					s.CurrentStats.SetWaiting(true)
 					s.mu.Unlock()
 					select {
 					case <-ctx.Done():
@@ -1681,6 +1688,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			s.CurrentIteration = i
 			s.IsWaiting = false
 			s.CurrentStats.CurrentIteration = i
+			s.CurrentStats.SetWaiting(false)
 			s.mu.Unlock()
 
 			if err := runWorkloadFn(runCtx, benchConn.Database, collectionsCfg.Collections, queriesCfg.Queries, cfg, s.CurrentStats); err != nil {
@@ -1698,6 +1706,7 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 			if i < iterations && intervalDuration > 0 {
 				s.mu.Lock()
 				s.IsWaiting = true
+				s.CurrentStats.SetWaiting(true)
 				s.mu.Unlock()
 				select {
 				case <-ctx.Done():
@@ -1778,6 +1787,14 @@ func (s *WebServer) handleStop(w http.ResponseWriter, r *http.Request) {
 	defer s.mu.Unlock()
 
 	if s.IsRunning && s.ActiveCancel != nil {
+		s.CurrentStats.NoteChartEvent("Stopped by user")
+		if s.multiTarget != nil {
+			for _, t := range s.multiTarget.Targets {
+				if t.Collector != nil && t.Collector != s.CurrentStats && t.State().Status == multitarget.StatusRunning {
+					t.Collector.NoteChartEvent("Stopped by user")
+				}
+			}
+		}
 		s.ActiveCancel()
 		s.IsRunning = false
 		s.setLifecyclePhaseLocked("failed", "Run stopped by user")
@@ -1787,7 +1804,33 @@ func (s *WebServer) handleStop(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
 }
 
+// promoteToRunningLocked moves a run from initializing to running once its
+// first operation is counted.
+func (s *WebServer) promoteToRunningLocked() bool {
+	if !s.IsRunning || s.LifecyclePhase != "initializing" || s.CurrentStats == nil {
+		return false
+	}
+	c := s.CurrentStats
+	total := atomic.LoadUint64(&c.FindOps) + atomic.LoadUint64(&c.InsertOps) + atomic.LoadUint64(&c.UpsertOps) +
+		atomic.LoadUint64(&c.UpdateOps) + atomic.LoadUint64(&c.DeleteOps) + atomic.LoadUint64(&c.AggOps)
+	if total == 0 {
+		return false
+	}
+	s.setLifecyclePhaseLocked("running", "Executing workload")
+	s.LifecycleStep = ""
+	s.LifecycleStepIdx = 0
+	s.LifecycleStepTot = 0
+	s.LifecycleStepDone = 0
+	s.LifecycleStepWork = 0
+	s.addLifecycleEventLocked("phase", "Execution phase started")
+	return true
+}
+
 func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
+	// The dashboard's Refresh (ms) is also how often the server samples.
+	if ms, err := strconv.Atoi(r.URL.Query().Get("refreshMs")); err == nil && ms > 0 {
+		s.setChartSampleInterval(time.Duration(ms) * time.Millisecond)
+	}
 	s.mu.Lock()
 	collector := s.CurrentStats
 	running := s.IsRunning
@@ -1854,14 +1897,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	totalOps := findOps + insertOps + upsertOps + updateOps + deleteOps + aggOps
 	if running && lifecyclePhase == "initializing" && totalOps > 0 {
 		s.mu.Lock()
-		if s.LifecyclePhase == "initializing" {
-			s.setLifecyclePhaseLocked("running", "Executing workload")
-			s.LifecycleStep = ""
-			s.LifecycleStepIdx = 0
-			s.LifecycleStepTot = 0
-			s.LifecycleStepDone = 0
-			s.LifecycleStepWork = 0
-			s.addLifecycleEventLocked("phase", "Execution phase started")
+		if s.promoteToRunningLocked() {
 			lifecyclePhase = s.LifecyclePhase
 			lifecycleMessage = s.LifecycleMessage
 			lifecycleStep = s.LifecycleStep
@@ -1968,25 +2004,9 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// collector is guaranteed non-nil here (the nil case returned above).
-	// Capture a latency-over-time heatmap bucket on a stable ~1s window rather
-	// than the (sub-second) UI polling cadence. Tying the window to the poll
-	// rate produced tiny samples where the per-window p99 collapsed onto the
-	// single slowest op, badly overstating tail latency versus the cumulative
-	// distribution. A 1s window keeps each bucket statistically meaningful.
+	// Chart samples and heatmap windows are taken by the chart sampler, not
+	// here, so they do not depend on a browser polling.
 	concTarget, concActive := collector.ConcurrencySnapshot()
-	// Snapshot the UI interval once, keep the point, and return only samples
-	// newer than chartSince so a reloaded page can redraw the run so far.
-	// With replay targets, every running target is sampled on its own clock.
-	var intervalLatency map[string]map[string]float64
-	if plan != nil {
-		intervalLatency = sampleRunningTargets(plan, collector, targetIterations, isWait, now)
-	} else {
-		collector.CaptureLatencyIntervalEvery(time.Second)
-		intervalLatency = collector.GetUILatencyTimelineAndReset()
-		if lifecyclePhase == "running" || lifecyclePhase == "completed" || lifecyclePhase == "failed" {
-			collector.RecordUIChartSample(execElapsedSec, curIter, isWait, intervalLatency)
-		}
-	}
 	chartHistory := collector.UIChartHistory(chartSinceParam(r))
 
 	statsResp := map[string]interface{}{
@@ -2043,17 +2063,18 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"deleteLatAvg": collector.DeleteHist.GetAverage(),
 		"aggLatAvg":    collector.AggHist.GetAverage(),
 
-		"distFind":        collector.FindHist.GetStats(),
-		"distInsert":      collector.InsertHist.GetStats(),
-		"distUpsert":      collector.UpsertHist.GetStats(),
-		"distUpdate":      collector.UpdateHist.GetStats(),
-		"distDelete":      collector.DeleteHist.GetStats(),
-		"distAgg":         collector.AggHist.GetStats(),
-		"distTrans":       collector.TransHist.GetStats(),
-		"distTotal":       collector.TotalHist.GetStats(),
-		"intervalLatency": intervalLatency,
-		"chartHistory":    chartHistory,
-		"latencyHeatmap":  collector.LatencyHeatmap(),
+		"distFind":         collector.FindHist.GetStats(),
+		"distInsert":       collector.InsertHist.GetStats(),
+		"distUpsert":       collector.UpsertHist.GetStats(),
+		"distUpdate":       collector.UpdateHist.GetStats(),
+		"distDelete":       collector.DeleteHist.GetStats(),
+		"distAgg":          collector.AggHist.GetStats(),
+		"distTrans":        collector.TransHist.GetStats(),
+		"distTotal":        collector.TotalHist.GetStats(),
+		"chartHistory":     chartHistory,
+		"activeSec":        collector.ActiveDuration().Seconds(),
+		"sampleIntervalMs": s.chartSampleInterval().Milliseconds(),
+		"latencyHeatmap":   collector.LatencyHeatmap(),
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt
@@ -2208,7 +2229,10 @@ func (s *WebServer) buildReportData() report.ReportData {
 				data.DurationSeconds = secs
 			}
 		}
-		if data.DurationSeconds > 0 {
+		// Throughput leaves out the waits between iterations.
+		if active := collector.ActiveDuration().Seconds(); active > 0 {
+			data.AvgOpsPerSec = float64(total) / active
+		} else if data.DurationSeconds > 0 {
 			data.AvgOpsPerSec = float64(total) / data.DurationSeconds
 		}
 		data.GeneratedTrafficItems = generatedTrafficItems(collector.GeneratedTraffic())

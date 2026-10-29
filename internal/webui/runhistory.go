@@ -31,20 +31,25 @@ var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$`)
 // RunSummary is the Completed Runs list row. Pointer fields are omitted when
 // the measurement was not stored; a stored zero is a real zero.
 type RunSummary struct {
-	ID             string   `json:"id"`
-	Schema         string   `json:"schema,omitempty"`
-	Label          string   `json:"label,omitempty"`
-	Status         string   `json:"status"`
-	Mode           string   `json:"mode,omitempty"`
-	StartedAt      string   `json:"started_at,omitempty"`
-	CompletedAt    string   `json:"completed_at,omitempty"`
-	DurationSec    *float64 `json:"duration_sec,omitempty"`
-	TotalOps       *uint64  `json:"total_ops,omitempty"`
-	AvgLatencyMs   *float64 `json:"avg_latency_ms,omitempty"`
-	P95LatencyMs   *float64 `json:"p95_latency_ms,omitempty"`
-	Error          string   `json:"error,omitempty"`
-	Pinned         bool     `json:"pinned,omitempty"`
-	Outdated       bool     `json:"outdated,omitempty"`
+	ID          string   `json:"id"`
+	Schema      string   `json:"schema,omitempty"`
+	Label       string   `json:"label,omitempty"`
+	Status      string   `json:"status"`
+	Mode        string   `json:"mode,omitempty"`
+	StartedAt   string   `json:"started_at,omitempty"`
+	CompletedAt string   `json:"completed_at,omitempty"`
+	DurationSec *float64 `json:"duration_sec,omitempty"`
+	// ActiveSec is the time workers ran, without the waits between
+	// iterations; average throughput divides by it.
+	ActiveSec    *float64 `json:"active_sec,omitempty"`
+	TotalOps     *uint64  `json:"total_ops,omitempty"`
+	AvgLatencyMs *float64 `json:"avg_latency_ms,omitempty"`
+	P95LatencyMs *float64 `json:"p95_latency_ms,omitempty"`
+	Error        string   `json:"error,omitempty"`
+	Pinned       bool     `json:"pinned,omitempty"`
+	Outdated     bool     `json:"outdated,omitempty"`
+	// ChartTruncated is set by older versions, which kept only the newest
+	// chart samples.
 	ChartTruncated bool     `json:"chart_truncated,omitempty"`
 	InsightsStatus string   `json:"insights_status,omitempty"`
 	Unavailable    []string `json:"unavailable,omitempty"`
@@ -455,9 +460,10 @@ func (s *WebServer) captureDashboardLocked() *RunDashboard {
 		avg, p95 = &a, &p
 	}
 	charts := collector.UIChartHistory(0)
-	truncated := len(charts) >= stats.UIChartPointCap()
-	if truncated {
-		unavailable = append(unavailable, fmt.Sprintf("Chart history kept the newest %d samples.", stats.UIChartPointCap()))
+	var activeSec *float64
+	if d := collector.ActiveDuration(); d > 0 {
+		sec := d.Seconds()
+		activeSec = &sec
 	}
 	insightsStatus := "unavailable"
 	if s.InsightsCache == nil {
@@ -474,8 +480,8 @@ func (s *WebServer) captureDashboardLocked() *RunDashboard {
 		RunSummary: RunSummary{
 			ID: s.dashboardID, Schema: runDashboardSchema, Label: label, Status: status, Mode: mode,
 			StartedAt: started.UTC().Format(time.RFC3339), CompletedAt: completed.UTC().Format(time.RFC3339),
-			DurationSec: duration, TotalOps: &total, AvgLatencyMs: avg, P95LatencyMs: p95,
-			Error: s.LastError, ChartTruncated: truncated, InsightsStatus: insightsStatus, Unavailable: unavailable,
+			DurationSec: duration, ActiveSec: activeSec, TotalOps: &total, AvgLatencyMs: avg, P95LatencyMs: p95,
+			Error: s.LastError, InsightsStatus: insightsStatus, Unavailable: unavailable,
 		},
 		Config: redactRunConfig(cfg, mode),
 		Stats:  dashboardStats(s, collector, charts, duration, total),
@@ -573,6 +579,7 @@ func dashboardStats(s *WebServer, collector *stats.Collector, charts []stats.UIC
 		"distTrans":        collector.TransHist.GetStats(),
 		"distTotal":        collector.TotalHist.GetStats(),
 		"chartHistory":     charts,
+		"activeSec":        collector.ActiveDuration().Seconds(),
 		"latencyHeatmap":   collector.LatencyHeatmap(),
 		"currentIteration": s.CurrentIteration,
 		"totalIterations":  s.TotalIterations,
@@ -622,12 +629,11 @@ func (s *WebServer) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		days = int(maxAge / (24 * time.Hour))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"dir":              s.runHistory.Dir(),
-		"keep_runs":        keep,
-		"max_age_days":     days,
-		"max_pinned":       stats.TrendMaxPinnedRuns,
-		"chart_sample_cap": stats.UIChartPointCap(),
-		"runs":             s.runHistory.List(time.Now(), policy),
+		"dir":          s.runHistory.Dir(),
+		"keep_runs":    keep,
+		"max_age_days": days,
+		"max_pinned":   stats.TrendMaxPinnedRuns,
+		"runs":         s.runHistory.List(time.Now(), policy),
 	})
 }
 
@@ -745,7 +751,9 @@ func reportFromDashboard(snap *RunDashboard) report.ReportData {
 	}
 	if snap.TotalOps != nil {
 		data.TotalOps = int64(*snap.TotalOps)
-		if snap.DurationSec != nil && *snap.DurationSec > 0 {
+		if snap.ActiveSec != nil && *snap.ActiveSec > 0 {
+			data.AvgOpsPerSec = float64(*snap.TotalOps) / *snap.ActiveSec
+		} else if snap.DurationSec != nil && *snap.DurationSec > 0 {
 			data.AvgOpsPerSec = float64(*snap.TotalOps) / *snap.DurationSec
 		}
 	} else {

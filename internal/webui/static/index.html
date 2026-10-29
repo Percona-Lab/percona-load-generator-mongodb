@@ -702,6 +702,12 @@
         .ms-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
         .ms-label { font-weight: 600; color: var(--text-strong); }
         .ms-hint { flex-basis: 100%; margin: -2px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
+        .ms-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text-secondary); }
+        .ms-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .ms-key { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+        .ms-key-wait { background: rgba(240, 179, 54, 0.35); }
+        .ms-key-idle { background: rgba(148, 163, 184, 0.35); }
+        .ms-key-event { width: 0; height: 12px; border-left: 2px dashed #8b5cf6; border-radius: 0; }
         .ms-segmented { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-md); }
         .ms-segmented.ms-end { margin-left: auto; }
         .ms-segmented [role="radio"] { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--fs-base); font-weight: 500; cursor: pointer; }
@@ -2514,7 +2520,7 @@
                 <div id="runOutcomeFile" class="lifecycle-hint" hidden></div>
                 <div class="header-controls">
                     <div class="refresh-rate-control">
-                        <label for="refreshRate" style="margin:0; cursor:pointer;" title="How often the dashboard asks the server for new samples">Refresh (ms)</label>
+                        <label for="refreshRate" style="margin:0; cursor:pointer;" title="How often PLGM records a chart sample and the dashboard updates. Samples are recorded even when this tab is hidden.">Refresh (ms)</label>
                         <input type="number" id="refreshRate" value="500" step="100" min="100" max="5000"
                             onchange="updateRefreshRate()">
                     </div>
@@ -2578,6 +2584,7 @@
                 <p class="ms-hint" id="msHint" aria-live="polite"></p>
             </div>
             <div class="ms-tiles" id="mspanel-tiles"></div>
+            <p class="ms-legend" id="msLegend"></p>
             <div class="ms-grid" id="mspanel-live">
                 <div class="mat-card ms-card">
                     <div class="ms-card-head"><div class="mat-card-title">Live Throughput (Ops/sec)</div><span class="ms-sub" id="msSubThroughput"></span></div>
@@ -6462,10 +6469,12 @@
             ['aggregate', 'Aggregate', 'Aggregate Ops'],
             ['transaction', 'Transaction', '']
         ];
-        const MS_MAX_POINTS = 600;
+        const MS_MAX_POINTS = 2000;
         const MS_MAX_HEAT_COLS = 240;
         const MS_SINGLE_LABEL = 'This run';
         let msServers = [];
+        let msTotalIterations = 1;
+        let msSampleMs = 500;
         let msCharts = null;
         let msTopSeq = 0;
         let msHeatPaused = false;
@@ -6518,6 +6527,8 @@
         // of a run on several servers, or the run itself as one server.
         function applyMultiServerStats(stats) {
             if (!stats) return;
+            if (Number(stats.totalIterations) > 0) msTotalIterations = Number(stats.totalIterations);
+            if (Number(stats.sampleIntervalMs) > 0) msSampleMs = Number(stats.sampleIntervalMs);
             (Array.isArray(stats.chartHistory) ? stats.chartHistory : []).forEach(p => { msTopSeq = Math.max(msTopSeq, Number(p && p.seq || 0)); });
             const targets = Array.isArray(stats.targets) && stats.targets.length >= 2 ? stats.targets : null;
             if (targets) {
@@ -6531,6 +6542,8 @@
                     }
                     s.status = t.status || '';
                     s.elapsedSec = Number(t.elapsedSec || 0);
+                    s.activeSec = t.activeSec === undefined || t.activeSec === null ? NaN : Number(t.activeSec);
+                    s.phase = t.phase || '';
                     s.ops = t.ops || {};
                     s.dist = t.dist || {};
                     msAppendPoints(s, t.chartHistory);
@@ -6550,6 +6563,8 @@
                 const phase = stats.lifecyclePhase || (stats.isRunning ? 'running' : 'completed');
                 s.status = { running: 'running', completed: 'complete', failed: 'failed', initializing: 'preparing' }[phase] || phase;
                 s.elapsedSec = Number(stats.executionElapsedSec || 0);
+                s.activeSec = stats.activeSec === undefined || stats.activeSec === null ? NaN : Number(stats.activeSec);
+                s.phase = stats.isWaiting ? 'wait' : '';
                 const find = Number(stats.findOps || 0), insert = Number(stats.insertOps || 0), update = Number(stats.updateOps || 0) + Number(stats.upsertOps || 0), del = Number(stats.deleteOps || 0), agg = Number(stats.aggOps || 0);
                 s.ops = { total: find + insert + update + del + agg, find, insert, update, delete: del, aggregate: agg };
                 s.dist = { total: stats.distTotal, find: stats.distFind, insert: stats.distInsert, update: stats.distUpdate, delete: stats.distDelete, aggregate: stats.distAgg, transaction: stats.distTrans };
@@ -6573,9 +6588,16 @@
             return { lo: 0, hi: Infinity, live: true };
         }
 
+        // " · iteration 2/3" on a run of several iterations.
+        function msIterText(s) {
+            if (!(msTotalIterations > 1)) return '';
+            const last = s.points[s.points.length - 1];
+            return ` · iteration ${last && last.iteration ? last.iteration : 1}/${msTotalIterations}`;
+        }
         function msStatusText(s) {
             const st = s.status || 'pending';
-            if (st === 'running') return s.single ? 'running' : `running ${Math.round(s.elapsedSec || 0)}s`;
+            if (st === 'running' && s.phase === 'wait') return `waiting between iterations${msIterText(s)}`;
+            if (st === 'running') return (s.single ? 'running' : `running ${Math.round(s.elapsedSec || 0)}s`) + msIterText(s);
             if (st === 'pending') return 'waiting';
             return st;
         }
@@ -6662,17 +6684,30 @@
             }
             return v;
         }
-        // Count and average rate of one type in the range on screen.
+        // Seconds workers ran up to a sample; waits between iterations are
+        // left out. Runs saved by older versions only have elapsed time.
+        const msActiveOf = p => p.activeSec === undefined || p.activeSec === null ? Number(p.elapsedSec || 0) : Number(p.activeSec);
+        function msActiveAt(s, t) {
+            let v = 0;
+            for (const p of s.points) {
+                if (Number(p.elapsedSec || 0) > t) break;
+                v = msActiveOf(p);
+            }
+            return v;
+        }
+        // Count and average rate of one type in the range on screen. The
+        // rate divides by the time workers ran, so a wait between
+        // iterations does not lower it.
         function msCount(s, key) {
             const r = msRange();
             if (r.live) {
                 const count = Number((s.ops || {})[key] || 0);
-                return { count, rate: s.elapsedSec > 0 ? count / s.elapsedSec : 0 };
+                const secs = Number.isFinite(s.activeSec) && s.activeSec > 0 ? s.activeSec : s.elapsedSec;
+                return { count, rate: secs > 0 ? count / secs : 0 };
             }
-            const hi = Math.min(r.hi, Number(s.elapsedSec || 0) || r.hi);
             const count = Math.max(0, msTotalAt(s, key, r.hi) - (r.lo > 0 ? msTotalAt(s, key, r.lo) : 0));
-            const span = Math.max(0, hi - r.lo);
-            return { count, rate: span > 0 ? count / span : 0 };
+            const secs = Math.max(0, msActiveAt(s, r.hi) - (r.lo > 0 ? msActiveAt(s, r.lo) : 0));
+            return { count, rate: secs > 0 ? count / secs : 0 };
         }
 
         function renderMultiServerTiles() {
@@ -6694,57 +6729,139 @@
             if (focused) el.querySelector(`.ms-tile[data-op="${focused}"]`)?.focus();
         }
 
-        // Keeps at most MS_MAX_POINTS per line so long runs stay quick to draw.
-        function msThin(points) {
+        const msPhaseOf = p => p.phase || (p.waiting ? 'wait' : '');
+        // Every sample is kept. A long range is drawn from at most about
+        // MS_MAX_POINTS per line: each slice keeps its lowest and highest
+        // value, the edges of gaps, and samples with events or a change of
+        // phase, so dips, peaks, and waits still show. Zoom in for every
+        // sample.
+        function msThin(points, val) {
             if (points.length <= MS_MAX_POINTS) return points;
-            const step = Math.ceil(points.length / MS_MAX_POINTS);
-            const out = points.filter((_, i) => i % step === 0);
-            if (out[out.length - 1] !== points[points.length - 1]) out.push(points[points.length - 1]);
-            return out;
+            const size = Math.ceil(points.length / Math.floor(MS_MAX_POINTS / 3));
+            const keep = new Set([0, points.length - 1]);
+            for (let i = 0; i < points.length; i += size) {
+                let lo = -1, hi = -1;
+                for (let j = i; j < Math.min(points.length, i + size); j++) {
+                    const v = val(points[j]);
+                    const prev = j > 0 ? points[j - 1] : null, next = points[j + 1];
+                    if (points[j].marker || (prev && msPhaseOf(prev) !== msPhaseOf(points[j]))) keep.add(j);
+                    if (v === null) {
+                        if ((prev && val(prev) !== null) || (next && val(next) !== null)) keep.add(j);
+                        continue;
+                    }
+                    if (lo < 0 || v < val(points[lo])) lo = j;
+                    if (hi < 0 || v > val(points[hi])) hi = j;
+                }
+                if (lo >= 0) keep.add(lo);
+                if (hi >= 0) keep.add(hi);
+            }
+            return [...keep].sort((a, b) => a - b).map(i => points[i]);
         }
         function msSeries(s, metric) {
             const key = msKey(msView.op);
             const r = msRange();
-            const inRange = s.points.filter(p => { const x = Number(p.elapsedSec || 0); return x >= r.lo && x <= r.hi; });
-            return msThin(inRange).map(p => {
+            const val = p => {
                 const bucket = metric === 'rates' ? p.rates : p[metric];
                 const v = bucket ? bucket[key] : null;
-                return { x: Number(p.elapsedSec || 0), y: v === null || v === undefined ? null : Number(v) };
+                return v === null || v === undefined ? null : Number(v);
+            };
+            const inRange = s.points.filter(p => { const x = Number(p.elapsedSec || 0); return x >= r.lo && x <= r.hi; });
+            const out = [];
+            msThin(inRange, val).forEach(p => {
+                const x = Number(p.elapsedSec || 0);
+                // No samples were taken (the machine slept): break the line
+                // instead of drawing a straight one across.
+                if (out.length && String(p.marker || '').includes('No samples')) out.push({ x: (out[out.length - 1].x + x) / 2, y: null });
+                out.push({ x, y: val(p), p });
             });
+            return out;
         }
-        // Iteration and wait markers, and how the run ended; drawn when one
-        // server is shown.
+        const msDur = sec => sec >= 60 ? formatTime(sec) : `${Math.max(0, Math.round(sec))}s`;
+        // Spans without running workers: a wait between iterations, or the
+        // time an iteration prepares or the run finishes.
+        function msBands(s) {
+            const out = [];
+            s.points.forEach((p, i) => {
+                const phase = msPhaseOf(p);
+                if (!phase) return;
+                const to = Number(p.elapsedSec || 0);
+                const from = i > 0 ? Number(s.points[i - 1].elapsedSec || 0) : to;
+                const last = out[out.length - 1];
+                if (last && last.phase === phase && last.end === i - 1) { last.to = to; last.end = i; }
+                else out.push({ phase, from, to, end: i });
+            });
+            out.forEach(b => {
+                const next = s.points[b.end + 1];
+                if (b.phase === 'wait') b.text = `Wait ${msDur(b.to - b.from)}`;
+                else b.text = next ? 'Preparing' : (s.status === 'running' ? 'Workers not running' : 'Finishing');
+                b.color = b.phase === 'wait' ? colors.sunrise : '#94a3b8';
+            });
+            return out;
+        }
+        // Events of the run as labeled lines: iterations, worker changes,
+        // the end of a deterministic pass, stops, gaps, and how it ended.
+        // "Wait" is the band's label instead.
         function msMarkers(s) {
             const out = [];
             s.points.forEach(p => {
-                const m = markerFromSample(p);
-                if (m) out.push({ x: Number(p.elapsedSec || 0), ...m });
+                String(p.marker || '').split('; ').filter(t => t && t !== 'Wait').forEach(text => {
+                    // The tooltip keeps the full text with the count.
+                    const label = text.startsWith('All ') && text.includes('planned ops sent') ? 'Planned ops sent, repeating' : text;
+                    out.push({ x: Number(p.elapsedSec || 0), ...markerFromSample({ marker: label }) });
+                });
             });
             const last = s.points[s.points.length - 1];
-            if (last && (s.status === 'complete' || s.status === 'failed')) {
+            const stopped = out.some(m => m.text === 'Stopped by user');
+            if (last && !stopped && (s.status === 'complete' || s.status === 'failed')) {
                 out.push({ x: Number(last.elapsedSec || 0), text: s.status === 'failed' ? 'Failed' : 'Finished', color: s.status === 'failed' ? colors.red : colors.forest });
             }
             return out;
         }
-        function markerFromSample(sample) {
-            const text = sample && sample.marker ? String(sample.marker) : '';
-            if (!text) return null;
-            let color = colors.amethyst;
-            if (text === 'Wait') color = colors.sunrise;
-            return { text, color };
-        }
 
-        // Draws markers and the drag-to-zoom selection.
+        // Draws wait bands under the lines, event markers over them, and the
+        // drag-to-zoom selection. Labels that would overlap move down a row.
         const msOverlayPlugin = {
             id: 'msOverlay',
+            beforeDatasetsDraw(chart) {
+                const area = chart.chartArea;
+                const x = chart.scales && chart.scales.x;
+                if (!area || !x) return;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.font = '600 11px ' + getComputedStyle(document.body).fontFamily;
+                (chart.$msBands || []).forEach(b => {
+                    const a = Math.max(area.left, x.getPixelForValue(b.from));
+                    const z = Math.min(area.right, x.getPixelForValue(b.to));
+                    if (!Number.isFinite(a) || !Number.isFinite(z) || z <= area.left || a >= area.right) return;
+                    const w = Math.max(2, z - a);
+                    ctx.globalAlpha = 0.16;
+                    ctx.fillStyle = b.color;
+                    ctx.fillRect(a, area.top, w, area.bottom - area.top);
+                    ctx.globalAlpha = 1;
+                    // A narrow band drops the server names, then the label.
+                    let text = b.text;
+                    let tw = ctx.measureText(text).width;
+                    if (tw + 8 > w && b.short) { text = b.short; tw = ctx.measureText(text).width; }
+                    if (tw + 8 <= w) {
+                        ctx.fillStyle = b.phase === 'wait' ? '#8a5a00' : '#475569';
+                        ctx.fillText(text, a + (w - tw) / 2, area.bottom - 6 - (b.row || 0) * 14);
+                    }
+                });
+                ctx.restore();
+            },
             afterDraw(chart) {
                 const area = chart.chartArea;
                 const x = chart.scales && chart.scales.x;
                 if (!area || !x) return;
                 const ctx = chart.ctx;
-                (chart.$msMarkers || []).forEach(m => {
-                    const px = x.getPixelForValue(m.x);
-                    if (!Number.isFinite(px) || px < area.left || px > area.right) return;
+                const rows = [];
+                ctx.font = 'bold 11px ' + getComputedStyle(document.body).fontFamily;
+                // Lines first, then labels on a light box, so no line crosses
+                // a label.
+                const placed = (chart.$msMarkers || []).map(m => ({ m, px: x.getPixelForValue(m.x) }))
+                    .filter(({ px }) => Number.isFinite(px) && px >= area.left && px <= area.right)
+                    .sort((a, b) => a.px - b.px);
+                placed.forEach(({ m, px }) => {
                     ctx.save();
                     ctx.beginPath();
                     ctx.moveTo(px, area.top);
@@ -6753,11 +6870,19 @@
                     ctx.strokeStyle = m.color;
                     ctx.setLineDash([4, 4]);
                     ctx.stroke();
-                    ctx.fillStyle = m.color;
-                    ctx.font = 'bold 11px ' + getComputedStyle(document.body).fontFamily;
-                    const w = ctx.measureText(m.text).width;
-                    ctx.fillText(m.text, px + 4 + w > area.right ? px - w - 4 : px + 4, area.top + 14);
                     ctx.restore();
+                });
+                placed.forEach(({ m, px }) => {
+                    const w = ctx.measureText(m.text).width;
+                    const left = px + 4 + w > area.right ? px - w - 4 : px + 4;
+                    let row = rows.findIndex(edge => edge < left - 4);
+                    if (row < 0) { row = rows.length; rows.push(0); }
+                    rows[row] = left + w;
+                    const y = area.top + 14 + row * 14;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                    ctx.fillRect(left - 2, y - 11, w + 4, 14);
+                    ctx.fillStyle = m.color;
+                    ctx.fillText(m.text, left, y);
                 });
                 if (msDrag.chart === chart && msDrag.from !== null && msDrag.to !== null) {
                     const a = x.getPixelForValue(Math.min(msDrag.from, msDrag.to));
@@ -6805,6 +6930,20 @@
             canvas.addEventListener('mouseleave', finish);
         }
 
+        // What the run was doing at the sample under the pointer.
+        function msTooltipFooter(items) {
+            const p = items.length && items[0].raw ? items[0].raw.p : null;
+            if (!p) return '';
+            const parts = [];
+            if (p.iteration && msTotalIterations > 1) parts.push(`Iteration ${p.iteration}/${msTotalIterations}`);
+            if (p.workers) parts.push(`${p.workers} workers`);
+            const phase = msPhaseOf(p);
+            if (phase === 'wait') parts.push('Waiting between iterations');
+            else if (phase === 'idle') parts.push('Workers not running');
+            if (p.marker) parts.push(String(p.marker));
+            return parts.join(' · ');
+        }
+
         function msChart(id, yTitle) {
             const el = document.getElementById(id);
             if (!el || typeof Chart === 'undefined') return null;
@@ -6819,7 +6958,7 @@
                     elements: { point: { radius: 0, hoverRadius: 3 }, line: { borderWidth: 2, cubicInterpolationMode: 'monotone' } },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since start · ${msOpName()}` : '' } }
+                        tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since start · ${msOpName()}` : '', footer: msTooltipFooter } }
                     },
                     scales: {
                         x: { type: 'linear', min: 0, title: { display: true, text: 'Seconds since the server started', color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } },
@@ -6860,7 +6999,29 @@
             const xMin = r.lo;
             const xMax = r.live ? Math.max(1, Math.ceil(msMaxElapsed())) : r.hi;
             const shown = msShown();
-            const markers = shown.length === 1 ? msMarkers(shown[0]) : [];
+            const several = shown.length > 1;
+            // The same event on several servers at about the same second is
+            // one label naming them all, e.g. "rs01, rs02: Iter 2".
+            const near = Math.max(0.5, (xMax - xMin) * 0.006);
+            const merge = (items, same) => {
+                const out = [];
+                items.forEach(it => {
+                    const hit = out.find(o => same(o, it));
+                    if (hit) hit.servers.push(it.server);
+                    else out.push({ ...it, servers: [it.server] });
+                });
+                return out.map(o => ({ ...o, short: o.text, text: several ? `${o.servers.join(', ')}: ${o.text}` : o.text }));
+            };
+            const bands = merge(shown.flatMap(s => msBands(s).map(b => ({ ...b, server: s.label }))),
+                (a, b) => a.phase === b.phase && a.text === b.text && Math.abs(a.from - b.from) <= near && Math.abs(a.to - b.to) <= near)
+                .map((b, i, all) => ({ ...b, row: all.slice(0, i).filter(o => o.from < b.to && b.from < o.to).length }));
+            let markers = merge(shown.flatMap(s => msMarkers(s).map(m => ({ ...m, server: s.label }))),
+                (a, b) => a.text === b.text && Math.abs(a.x - b.x) <= near);
+            // A ramp changes workers every few seconds; label worker
+            // changes only when there are few (the tooltip has the count).
+            const inView = m => m.x >= r.lo && m.x <= (r.live ? Infinity : r.hi);
+            const workerMarks = markers.filter(m => inView(m) && m.text.includes('Workers '));
+            if (workerMarks.length > 8) markers = markers.filter(m => !m.text.includes('Workers '));
             const lines = metric => shown.map(s => ({
                 label: s.label + (s.status === 'running' && !s.single ? ' (running)' : ''),
                 data: msSeries(s, metric),
@@ -6874,6 +7035,7 @@
                 chart.options.scales.x.min = xMin;
                 chart.options.scales.x.max = xMax;
                 chart.$msMarkers = markers;
+                chart.$msBands = bands;
                 if (yTitle) chart.options.scales.y.title.text = yTitle;
                 chart.update('none');
             };
@@ -6891,6 +7053,18 @@
             set('msSubLatency', msOpChip(`· average, ${who}`));
             set('msSubCompare', msOpChip(msServers.length > 1 ? '· seconds since each server started' : '· seconds since the run started'));
             set('msSubTimeline', msOpChip(`· ${pct[msView.timeline]} · seconds since ${msServers.length > 1 ? 'each server' : 'the run'} started`));
+            const legend = document.getElementById('msLegend');
+            if (legend) {
+                const hasWait = bands.some(b => b.phase === 'wait'), hasIdle = bands.some(b => b.phase === 'idle');
+                const keys = [];
+                if (hasWait) keys.push('<span class="ms-key ms-key-wait" aria-hidden="true"></span>Wait between iterations: nothing runs, so throughput is 0 and latency has a gap');
+                if (hasIdle) keys.push('<span class="ms-key ms-key-idle" aria-hidden="true"></span>Workers not running (preparing an iteration or finishing)');
+                if (markers.length) keys.push('<span class="ms-key ms-key-event" aria-hidden="true"></span>Event');
+                if (workerMarks.length > 8) keys.push(`Workers changed ${workerMarks.length} times; point at the chart to see the count`);
+                keys.push(`A sample every ${msSampleMs} ms, recorded by PLGM even when this tab is hidden`);
+                keys.push('“/s avg” counts only the time workers ran');
+                legend.innerHTML = keys.map(k => `<span class="ms-legend-item">${k}</span>`).join('');
+            }
             const cmp = document.getElementById('msCompareMetric');
             if (cmp) msSetChecked(cmp, 'metric', msView.compare);
             const tl = document.getElementById('msTimelineMetric');
@@ -6933,8 +7107,9 @@
 
         // One strip per server on a shared time axis: columns are equal slices
         // of the range on screen. A heatmap window covers the time since the
-        // previous one (it is taken when the dashboard polls, so its edges are
-        // not whole seconds); each column shows the worst window that covers it.
+        // previous one (taken by the server about every second, at the sample
+        // rate, so its edges are not whole seconds); each column shows the
+        // worst window that covers it.
         function renderMultiServerHeatmap() {
             const rows = document.getElementById('msHeatmapRows');
             if (!rows) return;
@@ -6960,7 +7135,7 @@
             const waits = s => {
                 const out = [];
                 s.points.forEach((p, i) => {
-                    if (!p.waiting) return;
+                    if (!msPhaseOf(p)) return;
                     const from = i > 0 ? Number(s.points[i - 1].elapsedSec || 0) : 0;
                     const last = out[out.length - 1];
                     if (last && last[1] >= from) last[1] = Number(p.elapsedSec || 0);
@@ -8973,12 +9148,28 @@
         function stopWorkload() { fetch('/api/stop', { method: 'POST' }); }
 
         function stopPolling() {
-            if (pollInterval) clearInterval(pollInterval);
+            if (pollInterval) pollInterval.stop();
             pollInterval = null;
         }
 
+        // The refresh rate is also how often the server records a sample.
         function liveStatsURL() {
-            return '/api/stats' + dashboardStatsQuery();
+            return '/api/stats' + dashboardStatsQuery() + '&refreshMs=' + currentRefreshRate;
+        }
+
+        // Browsers slow page timers in a background tab to once a minute or
+        // less; a timer in a worker keeps the dashboard updating there.
+        function dashboardTicker(ms, fn) {
+            try {
+                const src = 'let t; onmessage = e => { clearInterval(t); t = setInterval(() => postMessage(0), e.data); };';
+                const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+                worker.onmessage = fn;
+                worker.postMessage(ms);
+                return { stop: () => worker.terminate() };
+            } catch (e) {
+                const id = setInterval(fn, ms);
+                return { stop: () => clearInterval(id) };
+            }
         }
 
         function markerFromSample(sample) {
@@ -8986,30 +9177,40 @@
             if (!text) return null;
             let color = colors.amethyst;
             if (text === 'Wait') color = colors.sunrise;
-            else if (text === 'Exec Start') color = colors.aqua;
-            else if (text === 'Failed') color = colors.red;
-            else if (text === 'Finished') color = colors.forest;
+            else if (text === 'Exec Start' || text.startsWith('Workers ')) color = colors.sky;
+            else if (text === 'Failed' || text.startsWith('Stopped') || text.startsWith('No samples')) color = colors.red;
+            else if (text === 'Finished' || text.startsWith('All ') || text.startsWith('Planned ops')) color = colors.forest;
             return { text, color };
+        }
+
+        let pollInFlight = false;
+        function pollTick() {
+            if (pollInFlight) return;
+            pollInFlight = true;
+            fetch(liveStatsURL())
+                .then(r => r.json())
+                .then(applyLiveStats)
+                .catch(err => {
+                    console.error("Polling error:", err);
+                    if (err.message && err.message.includes("Unexpected end of JSON")) {
+                        console.log("Ignored partial JSON load.");
+                    } else {
+                        showError("UI Render Error: " + err.message + ". The backend may have stopped unexpectedly; check the terminal log for the first panic/error.");
+                    }
+                })
+                .finally(() => { pollInFlight = false; });
         }
 
         function startPolling() {
             if (historicalView) return;
             stopPolling();
-            const tick = () => {
-                fetch(liveStatsURL())
-                    .then(r => r.json())
-                    .then(applyLiveStats)
-                    .catch(err => {
-                        console.error("Polling error:", err);
-                        if (err.message && err.message.includes("Unexpected end of JSON")) {
-                            console.log("Ignored partial JSON load.");
-                        } else {
-                            showError("UI Render Error: " + err.message + ". The backend may have stopped unexpectedly; check the terminal log for the first panic/error.");
-                        }
-                    });
-            };
-            pollInterval = setInterval(tick, currentRefreshRate);
+            pollInterval = dashboardTicker(currentRefreshRate, pollTick);
         }
+
+        // Coming back to the tab draws what was recorded meanwhile at once.
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && pollInterval) pollTick();
+        });
 
         function applyLiveStats(stats) {
                         if (!historicalView) setRunModeLock(!!stats.isRunning);
@@ -9036,6 +9237,7 @@
                                 lifecycleHintEl.textContent = `${stepPrefix} (${pct}%): ${lifecycleStep || stats.lifecycleMessage || 'Preparing workload resources'}${eventMsg}`;
                             } else if (lifecyclePhase === 'running') {
                                 let hint = `Initialization completed in ${initializationDuration.toFixed(2)}s. Execution timer excludes preparation time.`;
+                                if (Number(stats.totalIterations) > 1 && parseDuration(stats.intervalDelay || '0s') > 0) hint += ` The timer includes the ${stats.intervalDelay} waits between iterations; average rates do not.`;
                                 if (stats.workloadDeterministic) {
                                     const ops = Number(stats.operationsPerWorker || 0);
                                     const safety = stats.duration
@@ -9121,16 +9323,19 @@
                             }
 
                             if (stats.historical) {
-                                clearInterval(pollInterval);
+                                stopPolling();
                                 return;
                             }
 
                             const totalOps = (stats.findOps || 0) + (stats.insertOps || 0) + (stats.updateOps || 0) + (stats.upsertOps || 0) + (stats.deleteOps || 0) + (stats.aggOps || 0);
-                            const safeElapsed = Math.max(1, executionElapsed);
+                            // Average rates leave out the waits between iterations.
+                            const activeSec = Number(stats.activeSec || 0);
+                            const safeElapsed = Math.max(1, activeSec > 0 ? activeSec : executionElapsed);
 
                             finalReportData = {
                                 generated_at: new Date().toISOString(),
                                 duration_seconds: executionElapsed.toFixed(2),
+                                active_seconds: (activeSec > 0 ? activeSec : executionElapsed).toFixed(2),
                                 initialization_duration_seconds: initializationDuration.toFixed(2),
                                 total_operations: totalOps,
                                 average_throughput_ops_sec: (totalOps / safeElapsed).toFixed(2),
@@ -9166,7 +9371,7 @@
 
                             fetchFinalInsights();
 
-                            clearInterval(pollInterval);
+                            stopPolling();
                             return;
                         } else {
                             if (lifecyclePhase === 'initializing') {

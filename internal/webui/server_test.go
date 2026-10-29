@@ -857,10 +857,23 @@ func TestHandleStats(t *testing.T) {
 		s.InitDurationSec = 1
 		s.AppConfig = &config.AppConfig{Duration: "30s"}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		// A poll alone records nothing: the chart sampler does.
+		req := httptest.NewRequest(http.MethodGet, "/api/stats?refreshMs=1000", nil)
 		rec := httptest.NewRecorder()
 		s.handleStats(rec, req)
 		payload := decodeJSONMap(t, rec.Body.Bytes())
+		if history, _ := payload["chartHistory"].([]interface{}); len(history) != 0 {
+			t.Fatalf("chartHistory before a sample = %#v", history)
+		}
+		if payload["sampleIntervalMs"].(float64) != 1000 {
+			t.Fatalf("sampleIntervalMs = %v, want the dashboard refresh rate", payload["sampleIntervalMs"])
+		}
+
+		s.sampleCharts(time.Now())
+		req = httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+		rec = httptest.NewRecorder()
+		s.handleStats(rec, req)
+		payload = decodeJSONMap(t, rec.Body.Bytes())
 		history, _ := payload["chartHistory"].([]interface{})
 		if len(history) != 1 {
 			t.Fatalf("chartHistory = %#v, want the first sample", payload["chartHistory"])
@@ -869,11 +882,9 @@ func TestHandleStats(t *testing.T) {
 		if first["marker"] != "Iter 1" || first["seq"].(float64) != 1 {
 			t.Fatalf("first sample = %#v", first)
 		}
-		if payload["intervalLatency"] == nil {
-			t.Fatal("expected intervalLatency alongside chart history")
-		}
 
 		c.FindOps += 40
+		s.sampleCharts(time.Now())
 		req = httptest.NewRequest(http.MethodGet, "/api/stats?chartSince=1", nil)
 		rec = httptest.NewRecorder()
 		s.handleStats(rec, req)

@@ -186,6 +186,10 @@ type deterministicRun struct {
 	selector  accesspattern.Selector
 	maxOwn    int
 	traffic   *trafficFingerprint
+	// workers and firstPasses count the workers that sent their whole
+	// budget once; the dashboard marks when all of them have.
+	workers     int
+	firstPasses atomic.Int64
 }
 
 // newDeterministicRun prepares a deterministic RunWorkload call. Inside a
@@ -220,7 +224,7 @@ func newDeterministicRun(ctx context.Context, collections []config.CollectionDef
 		sel, _ = accesspattern.Compile(accesspattern.Config{})
 	}
 	run := &deterministicRun{
-		seed: cfg.RandomSeed, iteration: iteration, budget: cfg.OperationsPerWorker,
+		seed: cfg.RandomSeed, iteration: iteration, budget: cfg.OperationsPerWorker, workers: workers,
 		seededIDs: cfg.DropCollections, selector: sel, maxOwn: cfg.RecordPoolMaxSize, traffic: traffic,
 	}
 	if !cfg.SkipSeed && cfg.DocumentsCount > 0 {
@@ -698,6 +702,9 @@ func deterministicWorker(ctx context.Context, w *detWorker) {
 			}
 		}
 		w.stream.completed = true
+		if passed == 0 && w.run.firstPasses.Add(1) == int64(w.run.workers) && w.wCfg.collector != nil {
+			w.wCfg.collector.NoteChartEvent(fmt.Sprintf("All %d planned ops sent, repeating", uint64(w.run.workers)*budget))
+		}
 		passed++
 	}
 }

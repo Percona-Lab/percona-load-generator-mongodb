@@ -1546,8 +1546,10 @@ func runContinuousWorkload(ctx context.Context, wCfg workloadConfig) error {
 		return err
 	}
 
+	// The counters cover every iteration so far, so the rate divides by the
+	// time workers ran in all of them, not by one iteration's duration.
 	summaryDuration := wCfg.duration
-	if d, ok := wCfg.collector.WorkloadDuration(); ok && wCfg.det != nil {
+	if d, ok := wCfg.collector.WorkloadDuration(); ok {
 		summaryDuration = d
 	}
 	wCfg.collector.PrintFinalSummary(summaryDuration, wCfg.appConfig.WebUI.Enabled)

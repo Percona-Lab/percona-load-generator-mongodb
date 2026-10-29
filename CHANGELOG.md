@@ -5,6 +5,38 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v6.4.0 - Charts that match the server, waits left out of the averages
+
+The dashboard charts now follow the server's own counters, the same numbers PMM graphs, and say what was going on at each moment: waits between iterations, worker changes, stops, and gaps. Average rates count only the time workers ran, so waits no longer lower them. The CLI, `config.yaml`, and environment variables are unchanged.
+
+**Highlights**
+
+**Changed: Samples taken by PLGM, not by the browser**
+- PLGM records a chart sample at the **Refresh (ms)** rate in the header (100 ms to 5 s), whether the tab is in the background or no browser is open. Before, samples were taken only when the browser asked for an update, so a hidden tab left holes in the charts.
+- Every sample of the run is kept. The 3,600-sample limit is gone, so a long run no longer loses its beginning. On a long run each line is drawn from about 2,000 points that keep every peak, dip, and event; zoom in to see every sample.
+- A background tab keeps updating, and coming back to the tab updates it right away.
+
+**New: Waits and events on the charts**
+- Each wait between iterations is a shaded band labeled with its length, for example **Wait 30s**, placed at the time it happened. Throughput is 0 during it, like the server's counters, and latency has a gap instead of 0 ms.
+- A gray band shows when workers weren't running for another reason: an iteration getting ready, or the run finishing.
+- Dashed lines mark events: **Iter N**, a change in the number of workers from a load profile (**Workers 8→16**), the end of the first pass of deterministic traffic (**All 800 planned ops sent, repeating**), **Stopped by user**, how the run ended, and **No samples for 95s** when PLGM couldn't sample (the machine slept).
+- On several servers, each server marks its own waits and events. The same event on several servers is one label (**rs01, rs02: Iter 2**). Its status chip shows "waiting between iterations · iteration 2/3".
+- A legend under the charts explains the bands and lines. Pointing at a chart shows the iteration, the number of workers, and any event at that second.
+
+**Changed: Average rates leave out the waits**
+- The total cards, a zoomed range, the HTML report, Completed Runs, Download Summary (`active_seconds`), and the CLI summary divide by the time workers ran, not the time since the start. The x-axis still includes waits, so it lines up with PMM.
+
+**API**
+- `/api/stats` takes `refreshMs` to set the sampling rate and returns `activeSec` and `sampleIntervalMs`. Chart samples add `activeSec`, `phase` (`wait` or `idle`), and `workers`; `marker` can hold several events joined by `; `.
+- Saved runs store `active_sec`. Runs saved before this version open as before.
+
+**Fixes**
+- With several iterations, the CLI summary divided the operations of every iteration by the length of one iteration, so the rate came out N times too high.
+- The raw injector now records when its workload starts and ends, so its summary rate is right.
+- A run moved from preparing to running only when the browser polled; it now moves on its own.
+
+---
+
 ## v6.3.0 - Credentials in the MongoDB URI, one user per server
 
 Credentials can go in the MongoDB URI (`mongodb://user:password@host:27017/`) as well as in the Username and Password fields, and a username and password in the URI win. Every server of a multi-target run can now use its own user. The Username and Password fields, `username`, and `PLGM_PASSWORD` keep working for URIs without credentials.

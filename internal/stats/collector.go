@@ -305,8 +305,12 @@ type Collector struct {
 	// workloadStartUnix marks the start of the measured workload window (after
 	// initialization/seeding/sharding), in unix nanoseconds. 0 means unset.
 	workloadStartUnix int64
-	// workloadEndUnix marks the end of that window. 0 means unset.
+	// workloadEndUnix marks the end of the last iteration. 0 means unset.
 	workloadEndUnix int64
+	// active tracks the time workers ran: finished iterations plus the
+	// running one. Waits between iterations and per-iteration preparation
+	// are not counted, so average rates leave them out.
+	active activeClock
 
 	// concurrencyTarget/concurrencyActive expose the live load-profile state:
 	// the worker count the schedule currently requests, and the number of
@@ -329,27 +333,97 @@ func (c *Collector) ConcurrencySnapshot() (target, active int) {
 	return int(atomic.LoadInt64(&c.concurrencyTarget)), int(atomic.LoadInt64(&c.concurrencyActive))
 }
 
-// MarkWorkloadStart records the start of the measured workload window. Only the
-// first call takes effect, so the elapsed timer reflects the true execution
-// window and excludes preparation time.
+// activeClock adds up the time each iteration's workers ran, and when a
+// wait between iterations started.
+type activeClock struct {
+	mu           sync.Mutex
+	done         time.Duration
+	since        time.Time
+	waitingSince time.Time
+}
+
+// MarkWorkloadStart is called when an iteration's workers start. The first
+// call sets the workload start, so the elapsed timer excludes preparation;
+// every call starts counting active time.
 func (c *Collector) MarkWorkloadStart() {
-	atomic.CompareAndSwapInt64(&c.workloadStartUnix, 0, time.Now().UnixNano())
+	now := time.Now()
+	atomic.CompareAndSwapInt64(&c.workloadStartUnix, 0, now.UnixNano())
+	c.active.mu.Lock()
+	if c.active.since.IsZero() {
+		c.active.since = now
+	}
+	c.active.waitingSince = time.Time{}
+	c.active.mu.Unlock()
 }
 
-// MarkWorkloadEnd records the end of the measured workload window, after every
-// worker has finished. Only the first call takes effect.
+// MarkWorkloadEnd is called when an iteration's workers have all finished.
+// It stops counting active time and records the end of the last iteration.
 func (c *Collector) MarkWorkloadEnd() {
-	atomic.CompareAndSwapInt64(&c.workloadEndUnix, 0, time.Now().UnixNano())
+	now := time.Now()
+	c.active.mu.Lock()
+	if !c.active.since.IsZero() {
+		c.active.done += now.Sub(c.active.since)
+		c.active.since = time.Time{}
+	}
+	c.active.mu.Unlock()
+	atomic.StoreInt64(&c.workloadEndUnix, now.UnixNano())
 }
 
-// WorkloadDuration returns the measured workload window and whether both its
-// start and end were recorded.
+// ActiveDurationAt returns the time workers ran up to now, without the
+// waits between iterations, and whether an iteration is running.
+func (c *Collector) ActiveDurationAt(now time.Time) (time.Duration, bool) {
+	c.active.mu.Lock()
+	defer c.active.mu.Unlock()
+	d := c.active.done
+	running := !c.active.since.IsZero()
+	if running && now.After(c.active.since) {
+		d += now.Sub(c.active.since)
+	}
+	return d, running
+}
+
+// ActiveDuration returns the time workers ran so far.
+func (c *Collector) ActiveDuration() time.Duration {
+	d, _ := c.ActiveDurationAt(time.Now())
+	return d
+}
+
+// SetWaiting marks the start (true) or end (false) of the wait between two
+// iterations.
+func (c *Collector) SetWaiting(waiting bool) {
+	c.active.mu.Lock()
+	defer c.active.mu.Unlock()
+	if !waiting {
+		c.active.waitingSince = time.Time{}
+	} else if c.active.waitingSince.IsZero() {
+		c.active.waitingSince = time.Now()
+	}
+}
+
+// WaitingSince returns when the current wait between iterations started.
+func (c *Collector) WaitingSince() (time.Time, bool) {
+	c.active.mu.Lock()
+	defer c.active.mu.Unlock()
+	return c.active.waitingSince, !c.active.waitingSince.IsZero()
+}
+
+// WorkloadDuration returns the time workers ran over every iteration so
+// far (waits between iterations excluded) and whether an iteration ended.
 func (c *Collector) WorkloadDuration() (time.Duration, bool) {
-	start, end := atomic.LoadInt64(&c.workloadStartUnix), atomic.LoadInt64(&c.workloadEndUnix)
-	if start == 0 || end <= start {
+	if atomic.LoadInt64(&c.workloadStartUnix) == 0 || atomic.LoadInt64(&c.workloadEndUnix) == 0 {
 		return 0, false
 	}
-	return time.Duration(end - start), true
+	d := c.ActiveDuration()
+	return d, d > 0
+}
+
+// WorkloadEnd returns the end of the last finished iteration.
+func (c *Collector) WorkloadEnd() (time.Time, bool) {
+	v := atomic.LoadInt64(&c.workloadEndUnix)
+	if v == 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(0, v), true
 }
 
 // WorkloadStart returns the recorded workload start time and whether it is set.

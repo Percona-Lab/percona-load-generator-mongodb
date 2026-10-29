@@ -42,7 +42,8 @@ func parseTargetSince(r *http.Request) map[int]targetCursor {
 // every target that is running, with its elapsed time measured from its own
 // workload start, so the servers line up on "seconds since the server
 // started". A concurrent run gets samples for every target, not only the
-// one the dashboard follows. It returns the interval latency it took from
+// one the dashboard follows. Each target's own wait between iterations is
+// marked from its collector. It returns the interval latency it took from
 // current, for the single-server fields of /api/stats.
 func sampleRunningTargets(plan *multitarget.Plan, current *stats.Collector, iterations map[*stats.Collector]int, waiting bool, now time.Time) map[string]map[string]float64 {
 	var currentInterval map[string]map[string]float64
@@ -61,7 +62,7 @@ func sampleRunningTargets(plan *multitarget.Plan, current *stats.Collector, iter
 		if isCurrent {
 			currentInterval = interval
 		}
-		c.RecordUIChartSample(now.Sub(start).Seconds(), iterations[c], waiting && isCurrent, interval)
+		c.AddUIChartSample(stats.UIChartSample{Now: now, Elapsed: now.Sub(start).Seconds(), Iteration: iterations[c], Waiting: waiting && isCurrent, Interval: interval})
 	}
 	return currentInterval
 }
@@ -94,11 +95,31 @@ func multiTargetSeries(plan *multitarget.Plan, since map[int]targetCursor) []map
 				heat = append(heat, b)
 			}
 		}
+		// Elapsed time counts from the server's workload start, like the
+		// charts; active time leaves out the waits between iterations.
+		elapsed := st.ElapsedSec
+		if start, ok := c.WorkloadStart(); ok {
+			end := time.Now()
+			if st.Status != multitarget.StatusRunning {
+				if e, ok := c.WorkloadEnd(); ok {
+					end = e
+				}
+			}
+			elapsed = end.Sub(start).Seconds()
+		}
+		phase := ""
+		if st.Status == multitarget.StatusRunning {
+			if _, waiting := c.WaitingSince(); waiting {
+				phase = stats.UIChartPhaseWait
+			}
+		}
 		out = append(out, map[string]any{
 			"index":      t.Index,
 			"label":      t.Label,
 			"status":     st.Status,
-			"elapsedSec": st.ElapsedSec,
+			"elapsedSec": elapsed,
+			"activeSec":  c.ActiveDuration().Seconds(),
+			"phase":      phase,
 			"ops": map[string]uint64{
 				"total": find + insert + update + del + agg, "find": find, "insert": insert,
 				"update": update, "delete": del, "aggregate": agg,

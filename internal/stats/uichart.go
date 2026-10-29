@@ -3,17 +3,11 @@ package stats
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
-
-// defaultMaxUIChartPoints bounds the samples kept so a reloaded dashboard can
-// redraw the run. At the default 500ms refresh this is about 30 minutes;
-// older samples are dropped.
-const defaultMaxUIChartPoints = 3600
-
-// UIChartPointCap is the number of dashboard samples kept for a run.
-func UIChartPointCap() int { return defaultMaxUIChartPoints }
 
 // UIChartOps is one throughput or cumulative-total sample, in operations.
 type UIChartOps struct {
@@ -37,19 +31,38 @@ type UIChartLatency struct {
 	Transaction *float64 `json:"transaction"`
 }
 
+// Phases of a sample when workers are not running.
+const (
+	// UIChartPhaseWait is the configured wait between two iterations.
+	UIChartPhaseWait = "wait"
+	// UIChartPhaseIdle is time without running workers outside a wait:
+	// preparing the next iteration, or finishing after the last one.
+	UIChartPhaseIdle = "idle"
+)
+
 // UIChartPoint is one live-dashboard sample. Seq increases for the life of the
-// collector so a client can ask for samples after the last one it drew.
+// collector so a client can ask for samples after the last one it drew. Every
+// sample of a run is kept.
 type UIChartPoint struct {
-	Seq        int            `json:"seq"`
-	ElapsedSec float64        `json:"elapsedSec"`
-	Iteration  int            `json:"iteration,omitempty"`
-	Waiting    bool           `json:"waiting,omitempty"`
-	Marker     string         `json:"marker,omitempty"`
-	Rates      UIChartOps     `json:"rates"`
-	Totals     UIChartOps     `json:"totals"`
-	Avg        UIChartLatency `json:"avg"`
-	P95        UIChartLatency `json:"p95"`
-	P99        UIChartLatency `json:"p99"`
+	Seq        int     `json:"seq"`
+	ElapsedSec float64 `json:"elapsedSec"`
+	// ActiveSec is the time workers ran up to this sample; waits between
+	// iterations are not counted. Average rates divide by it.
+	ActiveSec float64 `json:"activeSec"`
+	Iteration int     `json:"iteration,omitempty"`
+	Waiting   bool    `json:"waiting,omitempty"`
+	// Phase is empty while workers run, else UIChartPhaseWait or
+	// UIChartPhaseIdle.
+	Phase string `json:"phase,omitempty"`
+	// Workers is the worker count the load profile asked for.
+	Workers int `json:"workers,omitempty"`
+	// Marker names the events since the previous sample, joined by "; ".
+	Marker string         `json:"marker,omitempty"`
+	Rates  UIChartOps     `json:"rates"`
+	Totals UIChartOps     `json:"totals"`
+	Avg    UIChartLatency `json:"avg"`
+	P95    UIChartLatency `json:"p95"`
+	P99    UIChartLatency `json:"p99"`
 }
 
 type uiLatAccum struct {
@@ -60,8 +73,9 @@ type uiLatAccum struct {
 type uiChartSeries struct {
 	mu            sync.Mutex
 	points        []UIChartPoint
-	max           int
 	nextSeq       int
+	events        []string
+	lastWorkers   int
 	prevElapsed   float64
 	havePrev      bool
 	prevFind      uint64
@@ -74,14 +88,60 @@ type uiChartSeries struct {
 	lastWaiting   bool
 }
 
-// RecordUIChartSample appends one dashboard sample from the current counters
-// and the interval latency snapshot the stats handler just took. Rates match
-// the live page: operations since the previous sample divided by execution
-// time since that sample. Update counts include upserts.
+// UIChartSample is one sample to record: seconds since the workload
+// started, the iteration, whether the run waits between iterations, the
+// latency of the operations since the previous sample, and whether it is the
+// last sample of the run.
+type UIChartSample struct {
+	Now       time.Time
+	Elapsed   float64
+	Iteration int
+	Waiting   bool
+	Final     bool
+	Interval  map[string]map[string]float64
+}
+
+// NoteChartEvent labels the next dashboard sample with an event, such as a
+// stop request.
+func (c *Collector) NoteChartEvent(text string) {
+	if c == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	c.uiChart.mu.Lock()
+	c.uiChart.events = append(c.uiChart.events, text)
+	c.uiChart.mu.Unlock()
+}
+
+// RecordUIChartSample appends one dashboard sample taken now.
 func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting bool, interval map[string]map[string]float64) {
+	c.AddUIChartSample(UIChartSample{Now: time.Now(), Elapsed: elapsed, Iteration: iteration, Waiting: waiting, Interval: interval})
+}
+
+// AddUIChartSample appends one dashboard sample from the current counters
+// and the interval latency snapshot. Rates are operations since the previous
+// sample divided by the seconds since it, like a server's opcounters; a wait
+// between iterations shows as zero. Update counts include upserts.
+func (c *Collector) AddUIChartSample(in UIChartSample) {
 	if c == nil {
 		return
 	}
+	elapsed, iteration, interval := in.Elapsed, in.Iteration, in.Interval
+	now := in.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	active, running := c.ActiveDurationAt(now)
+	_, waitingNow := c.WaitingSince()
+	phase := ""
+	switch {
+	case in.Final:
+	case in.Waiting || waitingNow:
+		phase = UIChartPhaseWait
+	case !running && atomic.LoadInt64(&c.workloadStartUnix) != 0:
+		phase = UIChartPhaseIdle
+	}
+	waiting := phase == UIChartPhaseWait
+	workers := int(atomic.LoadInt64(&c.concurrencyTarget))
 	if elapsed < 0 {
 		elapsed = 0
 	}
@@ -126,13 +186,22 @@ func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting 
 	}
 	rates.Total = rates.Find + rates.Insert + rates.Update + rates.Delete + rates.Aggregate
 
-	marker := ""
+	var events []string
 	if iteration > 0 && iteration != st.lastIteration {
-		marker = fmt.Sprintf("Iter %d", iteration)
+		events = append(events, fmt.Sprintf("Iter %d", iteration))
 		st.lastIteration = iteration
 	} else if waiting && !st.lastWaiting {
-		marker = "Wait"
+		events = append(events, "Wait")
 	}
+	if phase == "" && workers > 0 && st.lastWorkers > 0 && workers != st.lastWorkers {
+		events = append(events, fmt.Sprintf("Workers %d→%d", st.lastWorkers, workers))
+	}
+	if workers > 0 && phase == "" {
+		st.lastWorkers = workers
+	}
+	events = append(events, st.events...)
+	st.events = nil
+	marker := strings.Join(events, "; ")
 	st.lastWaiting = waiting
 	st.prevElapsed = elapsed
 	st.havePrev = true
@@ -142,6 +211,7 @@ func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting 
 	p95 := UIChartLatency{}
 	p99 := UIChartLatency{}
 	sum, count := histSumCount(c.TotalHist)
+	waiting = phase != ""
 	setLatency(&avg, &p95, &p99, st, "total", interval["total"], sum, count, true, waiting)
 	sum, count = histSumCount(c.FindHist)
 	setLatency(&avg, &p95, &p99, st, "find", interval["find"], sum, count, true, waiting)
@@ -161,8 +231,11 @@ func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting 
 	st.points = append(st.points, UIChartPoint{
 		Seq:        st.nextSeq,
 		ElapsedSec: elapsed,
+		ActiveSec:  math.Round(active.Seconds()*1000) / 1000,
 		Iteration:  iteration,
-		Waiting:    waiting,
+		Waiting:    phase == UIChartPhaseWait,
+		Phase:      phase,
+		Workers:    workers,
 		Marker:     marker,
 		Rates:      rates,
 		Totals:     totals,
@@ -170,13 +243,6 @@ func (c *Collector) RecordUIChartSample(elapsed float64, iteration int, waiting 
 		P95:        p95,
 		P99:        p99,
 	})
-	limit := st.max
-	if limit <= 0 {
-		limit = defaultMaxUIChartPoints
-	}
-	if len(st.points) > limit {
-		st.points = st.points[len(st.points)-limit:]
-	}
 }
 
 // UIChartHistory returns samples with Seq greater than since, in order.
@@ -208,7 +274,9 @@ func setLatency(avg, p95, p99 *UIChartLatency, st *uiChartSeries, op string, buc
 	if v, ok := intervalMetric(bucket, "avg"); ok {
 		avgV = f64p(v)
 	} else if useFallback {
-		avgV = f64p(st.avgDelta(op, sum, count))
+		if v, ok := st.avgDelta(op, sum, count); ok {
+			avgV = f64p(v)
+		}
 	}
 	if v, ok := intervalMetric(bucket, "p95"); ok {
 		p95V = f64p(v)
@@ -216,8 +284,9 @@ func setLatency(avg, p95, p99 *UIChartLatency, st *uiChartSeries, op string, buc
 	if v, ok := intervalMetric(bucket, "p99"); ok {
 		p99V = f64p(v)
 	}
+	// Without running workers there is no latency; the chart leaves a gap.
 	if waiting {
-		avgV, p95V, p99V = f64p(0), f64p(0), f64p(0)
+		avgV, p95V, p99V = nil, nil, nil
 	}
 	switch op {
 	case "total":
@@ -245,16 +314,18 @@ func intervalMetric(bucket map[string]float64, name string) (float64, bool) {
 	return v, ok
 }
 
-func (st *uiChartSeries) avgDelta(op string, sum, count float64) float64 {
+// avgDelta is the average latency of the operations since the previous
+// sample; false when there were none.
+func (st *uiChartSeries) avgDelta(op string, sum, count float64) (float64, bool) {
 	if st.prevLat == nil {
 		st.prevLat = map[string]uiLatAccum{}
 	}
 	prev := st.prevLat[op]
 	st.prevLat[op] = uiLatAccum{sum: sum, count: count}
 	if count-prev.count > 0 {
-		return (sum - prev.sum) / (count - prev.count)
+		return (sum - prev.sum) / (count - prev.count), true
 	}
-	return 0
+	return 0, false
 }
 
 func f64p(v float64) *float64 {

@@ -95,10 +95,13 @@ The bar at the top of **Live Metrics** and **Latency Analysis** picks what the c
 
 How to read **Live Metrics**:
 
-- The total cards are the operations of each type so far and their average rate.
+- The total cards are the operations of each type so far and their average rate. The average counts only the time workers ran, so waits between iterations don't lower it.
 - **Live Throughput** is operations per second, and **Live Latency** the average latency, for the operation you picked.
 - **Tail latency** shows p99 or p95 over time (on several servers it's called **Compare servers**).
-- The x-axis is seconds since the run started. Dashed lines mark each iteration, a wait between iterations, and the end of the run.
+- The x-axis is seconds since the run started, waits included, so it lines up with a monitoring tool such as PMM.
+- A wait between iterations is a shaded band labeled with its length, for example **Wait 30s**. Nothing runs during it, so throughput drops to 0 and latency has a gap, the same as a server's own counters. A gray band means workers weren't running for another reason: an iteration getting ready, or the run finishing.
+- Dashed lines mark events: each iteration (**Iter 2**), a change in the number of workers from a load profile (**Workers 8→16**), the end of the first pass of deterministic traffic (**All 800 planned ops sent, repeating**), **Stopped by user**, and how the run ended. If PLGM couldn't take samples for a while (the machine slept), the line breaks and a **No samples for 95s** line says how long. On several servers, each label starts with the server's name.
+- Point at a chart to see the iteration, the number of workers, and any event at that second.
 
 ![Latency Analysis: percentile timeline, latency table, and heatmap](../images/dashboard_latency.png)
 
@@ -139,7 +142,7 @@ A value that wasn't stored shows as "—", never as zero. Runs survive a restart
 - The run clock starts when the workload starts. Preparation isn't counted; the note under the clock says how long it took.
 - With several iterations and a pause between them, the total includes the pauses. Five 30 s runs with 10 s between them is 03:10.
 - With deterministic traffic, see [Deterministic Generated Traffic](./record-and-replay.md#deterministic-generated-traffic) for what **FINISHED** and **INCOMPLETE** mean.
-- Reloading the page during a run takes you back to it. Up to 3,600 chart points (about 30 minutes at the default 500 ms refresh) are restored.
+- PLGM records a chart sample at the **Refresh (ms)** rate in the header, even when the tab is in the background or no browser is open. Every sample of the run is kept. Reloading the page during a run takes you back to it with the whole run drawn. On a long run the charts draw each line from about 2,000 points and keep every peak, dip, and event; zoom in to see every sample.
 
 ## HTTPS and remote access
 

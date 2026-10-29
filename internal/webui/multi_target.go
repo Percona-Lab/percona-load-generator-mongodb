@@ -146,6 +146,7 @@ func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context,
 				s.IsWaiting = false
 			}
 			t.Collector.CurrentIteration = i
+			t.Collector.SetWaiting(false)
 			s.mu.Unlock()
 			if err := runWorkloadFn(runCtx, database, t.Collections, t.Queries, t.Config, t.Collector); err != nil {
 				if err != context.Canceled {
@@ -154,12 +155,19 @@ func (s *WebServer) startMultiTarget(w http.ResponseWriter, ctx context.Context,
 				break
 			}
 			if i < iterations && interval > 0 {
+				s.mu.Lock()
+				t.Collector.SetWaiting(true)
+				if s.CurrentStats == t.Collector {
+					s.IsWaiting = true
+				}
+				s.mu.Unlock()
 				select {
 				case <-ctx.Done():
 				case <-time.After(interval):
 				}
 			}
 		}
+		t.Collector.SetWaiting(false)
 		finish()
 		// Insights (with explain against this target) and the trend run are
 		// built while the client is open; the reference's report becomes the

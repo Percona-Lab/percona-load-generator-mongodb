@@ -120,6 +120,7 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 		docsPerWorker = 1
 	}
 
+	collector.MarkWorkloadStart()
 	for i := 0; i < cfg.Concurrency; i++ {
 		wg.Add(1)
 		go func(workerID int) {
@@ -134,9 +135,15 @@ func RunRawInjector(ctx context.Context, db *mongo.Database, cfg *config.AppConf
 
 	<-workCtx.Done()
 	wg.Wait()
+	collector.MarkWorkloadEnd()
 	close(monitorDone)
 
 	// 4. PASS THE WEBUI FLAG TO THE SUMMARY PRINTER
+	// The counters cover every iteration so far; divide by the time
+	// workers ran in all of them.
+	if d, ok := collector.WorkloadDuration(); ok {
+		duration = d
+	}
 	collector.PrintFinalSummary(duration, cfg.WebUI.Enabled)
 	return nil
 }
