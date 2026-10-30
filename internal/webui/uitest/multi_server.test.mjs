@@ -302,6 +302,6 @@ test('a heatmap window after a pause does not cover the idle time', async () => 
     assert.equal(cols.length, 8);
     assert.deepEqual(cols.map(c => !!c.style.background), [true, true, false, false, false, false, false, true], 'the wait from 2 s to 7 s stays empty');
     assert.equal(doc.getElementById('msCompareTitle').textContent, 'Tail latency');
-    assert.equal(charts(w).throughput.options.scales.x.title.text, 'Seconds since the run started');
+    assert.equal(charts(w).throughput.options.scales.x.title.text, 'Minutes since the run started');
     assert.deepEqual(errors, []);
 });

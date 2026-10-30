@@ -5,6 +5,37 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v7.0.0 - Compare runs, save run settings, and a simpler Basic page
+
+You can now put the charts of several runs or servers on top of each other, and every run's settings are saved so you can repeat it. Several settings moved to Basic, and the charts show minutes. It is a major version because settings changed levels and the dashboard has a new tab. The CLI, `config.yaml`, and environment variables are unchanged.
+
+**Highlights**
+
+**New: Compare Runs tab**
+- A new dashboard tab draws **Throughput**, **Latency**, and **Tail latency** (p99 or p95) for the runs and servers you pick, on the same charts. Each line is one server of one run: a run on one server has one line, a run on several servers has one per server.
+- Color is the server and line style is the run, so the same server on Monday and Wednesday has one color and two styles. Lines start at each run's own start, in minutes. A gap is a wait between iterations.
+- It works while a run is going: the running workload is a heavier line that keeps growing against the finished runs. When it finishes it becomes a normal completed run.
+- The latest two runs are selected at first. Pick up to 8 lines, use **Latest two runs** or **Clear**, or click **Compare** on a row of **Completed Runs**. Under the legend, **Settings that differ** lists what changed between the stored runs.
+- Runs are kept with the existing history settings: **Runs to keep** (`trend_history_runs`, default 5, 1 to 50), **Outdated after (days)** (`trend_max_age_days`, default 30), and the optional **Run label** (`trend_run_label`). Pinned runs are always kept. See [Compare Runs](./docs/compare-runs.md).
+
+**New: Save & Load Run Settings**
+- **Basic settings > Save & Load Run Settings**: **Save Settings** is on by default. When a run starts, its settings are saved to a JSON file with no button to click. You choose only the folder; the file is `plgm_settings_YYYYMMDD-HHMMSS.json`, so nothing is overwritten. A blank folder uses the folder of the recordings.
+- Settings identical to a saved file are not saved again; the run's events say which file matches.
+- Choose a saved file from the list and the form fills at once. Passwords, secrets, tokens, and uploaded files are never saved, and a password in the MongoDB URI is removed.
+
+**Changed: Basic settings**
+- **Iterations** and **Interval Delay**, **Export & Reporting**, **Insights Capture**, and **Post-Run Explain** are now in Basic settings.
+- **Run on** (One server or Several servers) stays in **Target Connection** for generic, custom, and replay runs, where it is easy to find.
+- Choosing **Several servers** in a generic or custom run turns **Deterministic traffic** on, fills **Operations per Worker** with 500 if it was empty, shows the Seed & Deterministic settings in Basic, and explains this in a note under **Run on**. Switching back to **One server** undoes only what was set for you.
+
+**Changed: Charts**
+- Time axes are in **minutes**, with fractions of a minute under one minute. The data is still recorded in seconds.
+- **Live Throughput** leaves a gap during a wait between iterations, or while an iteration is being prepared, instead of a line along 0, like **Live Latency**. The legend above the charts says so, and it now shows only on the tabs with those charts.
+- The **Completed Runs** button turns green when every workload has completed.
+
+
+---
+
 ## v6.4.0 - Charts that match the server, waits left out of the averages
 
 The dashboard charts now follow the server's own counters, the same numbers PMM graphs, and say what was going on at each moment: waits between iterations, worker changes, stops, and gaps. Average rates count only the time workers ran, so waits no longer lower them. The CLI, `config.yaml`, and environment variables are unchanged.

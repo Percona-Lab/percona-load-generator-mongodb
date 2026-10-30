@@ -50,6 +50,8 @@ The **Stored Runs** list in the same category shows every run with its label, se
 
 ## Compare runs in the Web UI
 
+This compares query shapes. To put the throughput and latency charts of several runs or servers on top of each other, use the **Compare Runs** tab: see [Compare Runs](./compare-runs.md).
+
 1. After a run, open **Query & Index Analysis > Trends** on the dashboard.
 2. Use **Compare with** to choose the baseline: the previous compatible run, the newest pinned run, or any stored run.
 3. Use **Show** to filter the rows by verdict (improved, regressed, not comparable, and so on).

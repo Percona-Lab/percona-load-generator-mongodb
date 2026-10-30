@@ -69,13 +69,13 @@ With Advanced or Expert on, a **Categories** list appears on the left. Click a c
 
 | Category | What's in it |
 | :--- | :--- |
-| **Basic settings** | Connection (one server or several), workers, duration, load profile, recording or replay file, definitions, seeding, operation mix |
+| **Basic settings** | Connection (one server or several, in **Target Connection**), workers, duration, iterations and interval delay, load profile, recording or replay file, definitions, seeding, operation mix, export, insights capture, post-run explain, and **Save & Load Run Settings** |
 | **Connection** | TLS files, connection pool, direct connection, driver debug logs (Expert) |
 | **Workload execution** | Think time and access pattern (Advanced); batch sizes, timeouts, sharding, retries (Expert) |
 | **Seed & Deterministic** | Deterministic traffic, random seed, operations per worker, and, for a deterministic generic or custom run, the servers to run on; outcome files (Advanced). Called **Outcomes & import** in a replay: outcome files and traffic import |
 | **Data & queries** | Schema inference from query logs (Advanced) |
-| **Metrics & reporting** | Post-run insights (Advanced); CSV export (Expert) |
-| **Query analysis** | Post-run explain (Advanced); which queries are explained, limits, latency targets (Expert) |
+| **Metrics & reporting** | Export, post-run insights, and CSV export are in Basic settings; the rest is here (Expert) |
+| **Query analysis** | Post-run explain is in Basic settings; which queries are explained, limits, latency targets (Expert) |
 | **Trends & history** | Run history, run label, stored runs (Advanced) |
 
 The guides name a setting as **Category > Section**, for example **Connection > TLS Client Settings** (Expert).
@@ -84,7 +84,7 @@ The guides name a setting as **Category > Section**, for example **Connection > 
 
 ## Dashboard
 
-The dashboard has four tabs: **Live Metrics**, **Latency Analysis**, **Query & Index Analysis**, and **Insights**.
+The dashboard has five tabs: **Live Metrics**, **Latency Analysis**, **Query & Index Analysis**, **Insights**, and **Compare Runs**. **Compare Runs** puts several runs or servers on the same charts; see [Compare Runs](./compare-runs.md).
 
 ![Live Metrics during a ramp from 2 to 24 workers](../images/dashboard_live.png)
 
@@ -98,8 +98,8 @@ How to read **Live Metrics**:
 - The total cards are the operations of each type so far and their average rate. The average counts only the time workers ran, so waits between iterations don't lower it.
 - **Live Throughput** is operations per second, and **Live Latency** the average latency, for the operation you picked.
 - **Tail latency** shows p99 or p95 over time (on several servers it's called **Compare servers**).
-- The x-axis is seconds since the run started, waits included, so it lines up with a monitoring tool such as PMM.
-- A wait between iterations is a shaded band labeled with its length, for example **Wait 30s**. Nothing runs during it, so throughput drops to 0 and latency has a gap, the same as a server's own counters. A gray band means workers weren't running for another reason: an iteration getting ready, or the run finishing.
+- The x-axis is **minutes** since the run started (fractions of a minute under one minute, so 0.5 is 30 seconds), waits included, so it lines up with a monitoring tool such as PMM. The data is still recorded in seconds.
+- A wait between iterations is a shaded band labeled with its length, for example **Wait 30s**. Nothing runs during it, so both **Live Throughput** and **Live Latency** show a gap instead of a line along the bottom. A gray band means workers weren't running for another reason: an iteration getting ready, or the run finishing.
 - Dashed lines mark events: each iteration (**Iter 2**), a change in the number of workers from a load profile (**Workers 8→16**), the end of the first pass of deterministic traffic (**All 800 planned ops sent, repeating**), **Stopped by user**, and how the run ended. If PLGM couldn't take samples for a while (the machine slept), the line breaks and a **No samples for 95s** line says how long. On several servers, each label starts with the server's name.
 - Point at a chart to see the iteration, the number of workers, and any event at that second.
 
@@ -113,7 +113,7 @@ How to read **Latency Analysis**:
 
 The other tabs are covered in [Query and Index Analysis](./query-analysis.md#read-the-results).
 
-**On several servers** (Run on: Several servers), the same charts draw one line per server, each aligned on seconds since that server started; the cards and the latency table have one row per server. See [Record and Replay](./record-and-replay.md#read-the-results).
+**On several servers** (Run on: Several servers), the same charts draw one line per server, each aligned on minutes since that server started; the cards and the latency table have one row per server. See [Record and Replay](./record-and-replay.md#read-the-results).
 
 ## Time Machine and zoom
 
@@ -126,15 +126,32 @@ The other tabs are covered in [Query and Index Analysis](./query-analysis.md#rea
 
 ## Completed runs
 
-Click **Completed Runs** in the header (or the **Open completed runs** card).
+Click **Completed Runs** in the header (or the **Open completed runs** card). The button turns **green** when every workload of the current run has completed.
 
 ![Completed Runs list](../images/completed_runs.png)
 
 - **Open dashboard** shows the saved charts, latency, and settings of that run. The database doesn't need to be reachable.
 - **HTML report** opens the run report in a new browser tab. **Download** saves it.
+- **Compare** opens the run on the **Compare Runs** tab next to the newest other run.
 - **Pin** keeps the run when older runs are removed.
 
 A value that wasn't stored shows as "—", never as zero. Runs survive a restart of PLGM; see [Trends and History](./trends-and-history.md#completed-run-dashboards) for where they're stored and how many are kept.
+
+## Save and load run settings
+
+**Basic settings > Save & Load Run Settings** keeps the settings of each run so you can repeat one later with the same parameters.
+
+![Save & Load Run Settings: the folder, the list of saved settings, and the note after loading one](../images/settings_save_load.png)
+
+- **Save Settings** is on by default. When a run starts, the settings in the form are saved to a JSON file automatically. There is no save button.
+- **Settings Folder** is the folder to save in. You choose only the folder: the file name is `plgm_settings_YYYYMMDD-HHMMSS.json`, with the date and time added, so a file is never overwritten. Leave it blank to use the folder PLGM already uses for recordings. PLGM remembers the folder you typed in the browser.
+- The folder is on the machine running PLGM. For `./plgm --webui` that is your own computer. In Docker or Kubernetes, use a folder that is a mounted volume, or the file is lost with the container.
+- **Same settings are saved once.** If a saved file in the folder already has the same values, no new file is written, and the run's events say which file matches. Changing any setting, such as the duration, saves a new file.
+- **To load settings, choose one from the list.** The list shows the saved files in the folder, newest first. Choosing an entry fills the form at once; there is no Load button. The first entry, **Choose saved settings to load…**, is a prompt. Pick it to load the same entry again. **Refresh list** rereads the folder.
+- Passwords, secrets, tokens, and uploaded files are **never saved**. A password in a MongoDB URI is removed. Type it again after loading.
+- If a file can't be written (for example, the folder isn't writable), the run still starts and its events say why.
+
+Example: run a 5-minute test with 16 workers (a file is saved). Run it again unchanged (no new file). Change the workers to 32 and run (a second file). Later, pick the first file from the list to go back to 16 workers.
 
 ## How the run clock works
 

@@ -8,11 +8,17 @@ Use it to:
 * **Model real traffic.** Ramp, step, spike, or oscillate the worker count, add client think time, and send most traffic to a hot set of documents.
 * **Find out why a query is slow.** After the run, PLGM explains every query shape it executed and reports scan efficiency, in-memory sorts and disk spills, and index recommendations.
 * **Track changes between runs.** Keep a history of runs, pin reference runs, and compare up to eight side by side.
+* **Compare runs and servers on the same charts.** Put the throughput and latency of runs from different days, or of different servers, on top of each other, and watch a running workload draw against the finished ones.
+* **Repeat a run with the same settings.** Every run's settings are saved automatically, and you load any of them by choosing it from a list.
 * **Test upgrades and migrations.** Record a workload once, then replay the exact same operations on up to eight servers in one run and compare results and latency operation by operation. You can also replay traffic captured from your mongod logs.
 
 It ships as a single binary with an embedded Web UI, uses all available CPUs by default (`GOMAXPROCS`), and is fully configurable through `config.yaml`, environment variables, or the browser.
 
 ![PLGM Web UI live dashboard during a run](./images/dashboard_live.png)
+
+The **Compare Runs** tab draws runs and servers on the same charts. The solid line is the workload that is running now; the dashed lines are finished runs. See [Compare Runs](./docs/compare-runs.md).
+
+![Compare Runs: a running workload drawn against a finished run](./images/compare_runs_live.png)
 
 2½-minute walkthrough: record a workload, replay it on three servers, compare them on the dashboard charts, and open the comparison report.
 
@@ -81,6 +87,7 @@ Each guide explains a feature, shows how to set it up in the Web UI step by step
 | [Workloads](./docs/workloads.md) | Default and custom workloads, saved definition library, data types, indexes and shard keys, seeding, operation mix, transactions, and sharding |
 | [Load Modeling](./docs/load-modeling.md) | Load profiles, think time, access-pattern skew, latency heatmap, and schema inference from query logs |
 | [Query and Index Analysis](./docs/query-analysis.md) | Post-run explain, scan efficiency, execution overhead, index recommendations, and latency targets |
+| [Compare Runs](./docs/compare-runs.md) | Throughput and latency of several runs or servers on the same charts, with examples; saving and loading run settings is in the Web UI guide |
 | [Trends and History](./docs/trends-and-history.md) | Run history, labels and pinning, comparing runs, run matrix, sharing, and where history is stored |
 | [Record and Replay](./docs/record-and-replay.md) | Upgrade testing: recording, replaying, deterministic traffic, outcomes, comparing replays, multi-target replay, and importing captured traffic |
 | [Reports and Exports](./docs/reports-and-exports.md) | CSV metrics export, JSON summary, and HTML run report |

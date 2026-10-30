@@ -26,23 +26,23 @@ test('Basic shows only basic settings; Advanced and Expert add a category list',
     const { w, doc, errors } = await page();
     w.selectMode('generic');
     assert.equal(doc.getElementById('settingsNav').hidden, true, 'no category list at Basic');
-    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Data & Query Definitions', 'Operation Mix Allocation']);
+    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Save & Load Run Settings', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
 
     w.toggleTier('advanced');
     const nav = doc.getElementById('settingsNav');
     assert.equal(nav.hidden, false);
     assert.equal(doc.getElementById('settingsBody').classList.contains('has-nav'), true);
-    assert.deepEqual(navGroups(doc), ['basic', 'execution', 'reproducibility', 'insights', 'explain', 'history']);
+    assert.deepEqual(navGroups(doc), ['basic', 'execution', 'reproducibility', 'history']);
     assert.equal(selectedGroup(doc), 'execution', 'opening a level shows the first category it adds');
     assert.deepEqual(shownCards(w, doc), ['Client Pacing & Access Pattern']);
 
     w.toggleTier('expert');
-    assert.deepEqual(navGroups(doc), ['basic', 'connection', 'execution', 'reproducibility', 'insights', 'explain', 'history']);
+    assert.deepEqual(navGroups(doc), ['basic', 'connection', 'execution', 'reproducibility', 'explain', 'history']);
     assert.equal(selectedGroup(doc), 'execution', 'the category stays when another level opens');
     assert.deepEqual(shownCards(w, doc), ['Execution / Runtime Tuning', 'Client Pacing & Access Pattern', 'Sharding Strategy', 'Debug / Experimental']);
 
     doc.getElementById('snav-basic').click();
-    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Data & Query Definitions', 'Operation Mix Allocation']);
+    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Save & Load Run Settings', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
     // Advanced fields inside Basic cards stay with them.
     assert.equal(doc.querySelector('[name="auth_source"]').closest('.settings-card').dataset.group, 'basic');
 
@@ -72,10 +72,10 @@ test('each operation mode lists only the categories it uses', async () => {
         w.toggleTier('expert');
         return navGroups(doc);
     };
-    assert.deepEqual(groupsFor('custom'), ['basic', 'connection', 'execution', 'reproducibility', 'data', 'insights', 'explain', 'history']);
-    assert.deepEqual(groupsFor('record'), ['basic', 'connection', 'execution', 'reproducibility', 'data', 'insights', 'explain', 'history']);
-    assert.deepEqual(groupsFor('replay'), ['basic', 'connection', 'execution', 'reproducibility', 'insights', 'explain', 'history']);
-    assert.deepEqual(groupsFor('raw'), ['basic', 'connection', 'execution', 'insights', 'history']);
+    assert.deepEqual(groupsFor('custom'), ['basic', 'connection', 'execution', 'reproducibility', 'data', 'explain', 'history']);
+    assert.deepEqual(groupsFor('record'), ['basic', 'connection', 'execution', 'reproducibility', 'data', 'explain', 'history']);
+    assert.deepEqual(groupsFor('replay'), ['basic', 'connection', 'execution', 'reproducibility', 'explain', 'history']);
+    assert.deepEqual(groupsFor('raw'), ['basic', 'connection', 'execution', 'history']);
     w.selectSettingsGroup('execution');
     assert.deepEqual(shownCards(w, doc), ['Debug / Experimental'], 'raw mode keeps only the retry controls here');
     // Changing mode returns to Basic settings with no extra levels open.
@@ -149,7 +149,7 @@ test('an error in a closed level opens it, focuses the field, and marks the cate
     const maxPool = doc.querySelector('[name="max_pool_size"]');
     maxPool.value = '5';
     doc.querySelector('[name="min_pool_size"]').value = '10';
-    doc.querySelector('[name="insights_sampling_rate"]').value = '0';
+    doc.querySelector('[name="access_pattern_hotspot_percent"]').value = '0';
     assert.equal(w.validateConfigForm(), false);
 
     assert.equal(doc.body.classList.contains('tier-expert-open'), true);
@@ -161,11 +161,11 @@ test('an error in a closed level opens it, focuses the field, and marks the cate
     assert.equal(msg.closest('.form-group'), maxPool.closest('.form-group'), 'the message sits with the field');
     assert.match(doc.getElementById('configInlineError').textContent, /Max Pool Size.*Other problems are marked/);
 
-    // Insights Capture is Advanced, so that level opens too and its category is marked.
+    // Client Pacing is Advanced, so that level opens too and its category is marked.
     assert.equal(doc.body.classList.contains('tier-advanced-open'), true);
     assert.ok(doc.querySelector('#snav-connection .settings-nav-error'));
-    assert.ok(doc.querySelector('#snav-insights .settings-nav-error'));
-    assert.match(doc.getElementById('snav-insights').textContent, /has errors/);
+    assert.ok(doc.querySelector('#snav-execution .settings-nav-error'));
+    assert.match(doc.getElementById('snav-execution').textContent, /has errors/);
     assert.equal(doc.querySelector('#snav-history .settings-nav-error'), null);
     assert.equal(doc.querySelectorAll('#settingsNav .settings-nav-error').length, 2);
     assert.doesNotMatch(doc.getElementById('settingsNav').textContent, /\d/, 'markers carry no counts');
@@ -175,12 +175,12 @@ test('an error in a closed level opens it, focuses the field, and marks the cate
     maxPool.dispatchEvent(new w.Event('input', { bubbles: true }));
     assert.equal(maxPool.hasAttribute('aria-invalid'), false);
     assert.equal(doc.querySelector('#snav-connection .settings-nav-error'), null);
-    assert.ok(doc.querySelector('#snav-insights .settings-nav-error'));
+    assert.ok(doc.querySelector('#snav-execution .settings-nav-error'));
 
     // The next attempt opens the remaining problem.
     assert.equal(w.validateConfigForm(), false);
-    assert.equal(selectedGroup(doc), 'insights');
-    assert.equal(doc.activeElement, doc.querySelector('[name="insights_sampling_rate"]'));
+    assert.equal(selectedGroup(doc), 'execution');
+    assert.equal(doc.activeElement, doc.querySelector('[name="access_pattern_hotspot_percent"]'));
 });
 
 test('browser constraints on hidden fields are reported instead of blocking silently', async () => {
@@ -190,8 +190,8 @@ test('browser constraints on hidden fields are reported instead of blocking sile
     const iterations = doc.querySelector('[name="iterations"]');
     iterations.value = '0';
     assert.equal(w.validateConfigForm(), false);
-    assert.equal(doc.body.classList.contains('tier-advanced-open'), true, 'Iterations is an Advanced field');
-    assert.equal(selectedGroup(doc), 'basic');
+    assert.equal(doc.body.classList.contains('tier-advanced-open'), false, 'Iterations is a Basic field');
+    assert.equal(doc.getElementById('settingsNav').hidden, true, 'no level had to open');
     assert.equal(doc.activeElement, iterations);
     assert.match(doc.getElementById('configInlineError').textContent, /^Iterations/);
     iterations.value = '1';
@@ -207,12 +207,10 @@ test('browser constraints on hidden fields are reported instead of blocking sile
 test('dependency links open the prerequisite in its category', async () => {
     const { w, doc } = await page({ URI: 'mongodb://fixture', InsightsEnabled: false });
     w.selectMode('generic');
-    w.toggleTier('advanced');
-    w.selectSettingsGroup('explain');
     const needs = doc.getElementById('insightsExplainNeedsInsights');
     assert.equal(needs.hidden, false, 'explain says it needs insights');
     follow(w, needs.querySelector('a'));
-    assert.equal(selectedGroup(doc), 'insights');
+    assert.equal(doc.getElementById('settingsNav').hidden, true, 'it is already in Basic settings');
     assert.equal(doc.activeElement.id, 'insightsEnabled');
     doc.getElementById('insightsEnabled').checked = true;
     doc.getElementById('insightsEnabled').dispatchEvent(new w.Event('change', { bubbles: true }));
@@ -220,7 +218,6 @@ test('dependency links open the prerequisite in its category', async () => {
 
     const link = [...doc.querySelectorAll('#settingsPanels a.goto-link')].find(a => a.textContent === 'Query analysis');
     follow(w, link);
-    assert.equal(selectedGroup(doc), 'explain');
     assert.equal(doc.activeElement.id, 'insightsExplainEnabled');
 
     w.selectSettingsGroup('reproducibility');

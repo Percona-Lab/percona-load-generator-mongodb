@@ -95,45 +95,49 @@ test('turning Deterministic traffic on sets a seed only when none is set, and of
     assert.deepEqual(errors, []);
 });
 
-test('several servers are chosen next to Deterministic traffic, with one state shared with Target Connection', async () => {
+test('several servers are chosen in Target Connection and turn on Deterministic traffic with a default budget', async () => {
     const { w, doc, errors } = await genericOnSeedPage();
-    assert.ok(connCard(doc).contains(doc.getElementById('runOnRow')), 'no choice in place before deterministic traffic');
+    assert.ok(connCard(doc).contains(doc.getElementById('runOnRow')), 'the choice is in Target Connection');
     assert.equal(doc.getElementById('detServersSlot').hidden, true);
-
-    doc.getElementById('randomSeedInput').value = '7';
-    doc.getElementById('operationsPerWorker').value = '100';
-    setDet(doc, true);
-    const slot = doc.getElementById('detServersSlot');
-    assert.equal(slot.hidden, false);
-    assert.ok(seedCard(doc).contains(doc.getElementById('runOnRow')), 'Run on is in this section');
-    assert.equal(doc.querySelectorAll('input[name="run_on"]').length, 2, 'one radio group, not a copy');
+    assert.equal(doc.getElementById('serversDetNote').hidden, true);
+    const det = doc.getElementById('workloadDeterministic');
+    assert.equal(det.checked, false);
+    assert.equal(seedCard(doc).dataset.tier, 'advanced');
 
     doc.getElementById('runOnSeveral').click();
-    assert.ok(seedCard(doc).contains(doc.getElementById('workloadReplayTargetsList')), 'the server list is here too');
+    assert.equal(det.checked, true, 'several servers need the same operations on each');
+    assert.equal(doc.getElementById('operationsPerWorker').value, '500', 'a default budget makes the run ready to launch');
+    assert.ok(Number(doc.getElementById('randomSeedInput').value) > 0, 'a seed is filled in');
+    const note = doc.getElementById('serversDetNote');
+    assert.equal(note.hidden, false);
+    assert.match(note.textContent, /Deterministic traffic was turned on/);
+    assert.match(note.textContent, /Operations per Worker is set to 500/);
+    assert.match(note.textContent, /marked incomplete/);
+    assert.equal(seedCard(doc).dataset.tier, 'basic', 'its settings are in Basic while it applies');
+    assert.equal(seedCard(doc).dataset.group, 'basic');
     assert.equal(doc.getElementById('uriGroup').hidden, true, 'MongoDB URI is not used');
     assert.match(doc.getElementById('runOnSeveralNote').textContent, /each server in the list below with the URI you enter for it; the single MongoDB URI field is hidden and ignored.*drops, seeding, and writes/);
     w.setReplayTargetRows([{ label: 'a1', uri: 'mongodb://a:1' }, { label: 'b2', uri: 'mongodb://b:2' }]);
     assert.equal(doc.getElementById('workloadRecordOutcomes').value, 'true', 'Record Outcomes follows the targets');
+    assert.equal(w.validateWorkloadRecordReplay(), '');
 
-    // Basic settings shows the same controls with the same values.
-    w.selectSettingsGroup('basic');
-    assert.ok(connCard(doc).contains(doc.getElementById('runOnRow')));
-    assert.ok(connCard(doc).contains(doc.getElementById('multiServerBlock')));
-    assert.equal(doc.getElementById('runOnSeveral').checked, true);
-    assert.equal(w.listedReplayTargets().length, 2);
+    // Back to one server: what was turned on for the servers is undone.
     doc.getElementById('runOnOne').click();
-    w.selectSettingsGroup('reproducibility');
-    assert.ok(seedCard(doc).contains(doc.getElementById('runOnRow')));
-    assert.equal(doc.getElementById('runOnOne').checked, true, 'a change in one place shows in the other');
-    assert.equal(doc.getElementById('multiServerBlock').hidden, true);
+    assert.equal(det.checked, false);
+    assert.equal(doc.getElementById('operationsPerWorker').value, '0');
+    assert.equal(doc.getElementById('serversDetNote').hidden, true);
+    assert.equal(seedCard(doc).dataset.tier, 'advanced');
     assert.equal(formData(doc).get('workload_replay_targets'), '');
 
-    // Closing Advanced hides this section; the choice goes back to the connection.
+    // A budget the user typed is kept, and so is Deterministic traffic they changed themselves.
+    doc.getElementById('operationsPerWorker').value = '250';
     doc.getElementById('runOnSeveral').click();
-    w.toggleTier('advanced');
-    assert.ok(connCard(doc).contains(doc.getElementById('runOnRow')));
-    assert.equal(doc.getElementById('runOnRow').hidden, false);
-    assert.equal(JSON.parse(formData(doc).get('workload_replay_targets')).length, 2);
+    assert.equal(doc.getElementById('operationsPerWorker').value, '250');
+    assert.doesNotMatch(doc.getElementById('serversDetNote').textContent, /is set to 500/);
+    setDet(doc, false);
+    assert.match(doc.getElementById('serversDetNote').textContent, /needs .*Deterministic traffic/);
+    doc.getElementById('runOnOne').click();
+    assert.equal(doc.getElementById('operationsPerWorker').value, '250');
     assert.deepEqual(errors, []);
 });
 
@@ -145,8 +149,8 @@ test('a target problem found at launch is shown where the server list is', async
     doc.getElementById('runOnSeveral').click();
     assert.equal(w.validateConfigForm(), false);
     assert.match(doc.getElementById('configInlineError').textContent, /Replay Targets needs 2 to 8 targets/);
-    assert.equal(selectedGroup(doc), 'reproducibility', 'the section stays open');
-    assert.ok(seedCard(doc).contains(doc.activeElement), 'focus is on the server list here');
+    assert.equal(selectedGroup(doc), 'basic', 'Target Connection is open');
+    assert.ok(connCard(doc).contains(doc.activeElement), 'focus is on the server list');
     assert.deepEqual(errors, []);
 });
 
@@ -175,7 +179,7 @@ test('turning Deterministic traffic off keeps the servers and says the run uses 
     assert.deepEqual(errors, []);
 });
 
-test('a saved deterministic multi-server config opens with the servers next to Deterministic traffic', async () => {
+test('a saved deterministic multi-server config opens with the servers in Target Connection', async () => {
     const { w, doc, errors } = await page({
         WorkloadDeterministic: true, RandomSeed: 11, OperationsPerWorker: 50, DropCollections: true, SkipSeed: false, LoadProfile: { Kind: 'fixed' },
         WorkloadRecordOutcomes: true,
@@ -183,11 +187,11 @@ test('a saved deterministic multi-server config opens with the servers next to D
     });
     w.selectMode('generic');
     w.toggleTier('advanced');
-    w.selectSettingsGroup('reproducibility');
+    w.selectSettingsGroup('basic');
     assert.equal(doc.getElementById('workloadDeterministicAuto').style.display, 'none', 'a valid saved config is not changed');
     assert.equal(doc.getElementById('randomSeedInput').value, '11');
     assert.equal(doc.getElementById('operationsPerWorkerRow').hidden, false);
-    assert.ok(seedCard(doc).contains(doc.getElementById('workloadReplayTargetsList')));
+    assert.ok(connCard(doc).contains(doc.getElementById('workloadReplayTargetsList')));
     assert.equal(doc.getElementById('runOnSeveral').checked, true);
     const fd = formData(doc);
     assert.equal(fd.get('workload_deterministic'), 'true');

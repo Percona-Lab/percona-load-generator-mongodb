@@ -304,6 +304,8 @@ func (s *WebServer) Start(port int) error {
 	mux.HandleFunc("/api/import-traffic", s.handleImportTraffic)
 	mux.HandleFunc("/api/import-traffic/", s.handleImportTrafficItem)
 	mux.HandleFunc("/api/recordings", s.handleRecordings)
+	mux.HandleFunc("/api/saved-settings", s.handleSavedSettings)
+	mux.HandleFunc("/api/saved-settings/item", s.handleSavedSettingItem)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/run-history", s.handleRunHistory)
 	mux.HandleFunc("/api/run-history/", s.handleRunHistoryItem)
@@ -1301,6 +1303,8 @@ func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		s.rememberRecording(cfg.WorkloadRecordPath)
 	}
 
+	s.saveRunSettings(r)
+
 	s.mu.Lock()
 	s.dashboardID = newDashboardID(s.RunID)
 	s.mu.Unlock()
@@ -1868,6 +1872,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	initDurationSec := s.InitDurationSec
 	lifecycleEvents := append([]lifecycleEvent(nil), s.LifecycleEvents...)
 	plan := s.multiTarget
+	dashboardID := s.dashboardID
 	// Target iterations are written under s.mu by the run.
 	targetIterations := map[*stats.Collector]int{}
 	if plan != nil {
@@ -2075,6 +2080,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"activeSec":        collector.ActiveDuration().Seconds(),
 		"sampleIntervalMs": s.chartSampleInterval().Milliseconds(),
 		"latencyHeatmap":   collector.LatencyHeatmap(),
+		"dashboardId":      dashboardID,
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt

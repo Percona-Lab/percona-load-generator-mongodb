@@ -207,10 +207,10 @@ test('recording hides the server choice and sends no targets, and Replay brings 
     assert.deepEqual(errors, []);
 });
 
-test('generic and custom runs offer several servers only with deterministic traffic', async () => {
+test('generic and custom runs always offer several servers, which need deterministic traffic', async () => {
     const { w, doc, errors } = await page();
     w.selectMode('generic');
-    assert.equal(shown(doc, 'runOnRow'), false, 'no traffic source, no choice');
+    assert.equal(shown(doc, 'runOnRow'), true, 'the choice is always in Target Connection');
     w.setReplayTargetRows([{ label: 'm9', uri: 'mongodb://a:1' }, { label: 'rs02', uri: 'mongodb://b:2' }]);
     assert.equal(formData(doc).get('workload_replay_targets'), '', 'a generic run does not go to the targets');
     assert.equal(shown(doc, 'uriGroup'), true);

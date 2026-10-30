@@ -51,10 +51,10 @@ test('a wait between iterations is a labeled band and the average rate leaves it
     assert.equal(bands[0].text, 'Wait 5s', 'the band says how long the wait was');
     assert.deepEqual([bands[0].from, bands[0].to], [10, 15]);
     assert.equal(c.latency.$msBands.length, 1, 'every chart shows the band');
-    // The wait is drawn as zero throughput and a latency gap, like a server's opcounters.
+    // Nothing runs during the wait, so both charts leave a gap instead of a line along zero.
     const thr = c.throughput.data.datasets[0].data.find(d => d.x === 12);
     const lat = c.latency.data.datasets[0].data.find(d => d.x === 12);
-    assert.equal(thr.y, 0);
+    assert.equal(thr.y, null);
     assert.equal(lat.y, null);
 
     const markers = Array.from(c.throughput.$msMarkers, m => m.text);
@@ -155,4 +155,11 @@ test('the dashboard keeps polling from a worker timer and tells the server the r
     assert.match(w.liveStatsURL(), /&refreshMs=250$/);
     w.stopPolling();
     assert.equal(made[0].stopped, true);
+});
+
+test('a sample while workers are not running leaves a gap in throughput, not a point at zero', async () => {
+    const { w } = await page();
+    const pts = [1, 2, 3, 4].map(i => ({ seq: i, elapsedSec: i, activeSec: i, rates: { total: i === 3 ? 0 : 500 }, totals: { total: 500 * i }, avg: {}, p95: {}, p99: {}, phase: i === 3 ? 'idle' : undefined }));
+    w.applyLiveStats(single(pts, { totalIterations: 1 }));
+    assert.deepEqual(Array.from(w.eval('msCharts').throughput.data.datasets[0].data, d => d.y), [500, 500, null, 500]);
 });

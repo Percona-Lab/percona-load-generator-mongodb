@@ -703,6 +703,15 @@
         .ms-label { font-weight: 600; color: var(--text-strong); }
         .ms-hint { flex-basis: 100%; margin: -2px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
         .ms-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 var(--space-3); font-size: var(--fs-sm); color: var(--text-secondary); }
+        .cmp-picker { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 4px; }
+        .cmp-run { margin: 0; padding: 6px 12px 8px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-muted); min-width: 220px; }
+        .cmp-run legend { padding: 0 6px; font-weight: 600; color: var(--text-strong); }
+        .cmp-run.cmp-live { border-color: var(--p-forest, #059669); }
+        .cmp-run .history-sub { margin: 0 0 4px; }
+        .cmp-pick { display: flex; align-items: center; gap: 8px; margin: 2px 0; cursor: pointer; }
+        .cmp-line { display: inline-block; width: 28px; height: 0; border-top: 3px solid; }
+        .cmp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+        .cmp-diff { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
         .ms-legend-item { display: inline-flex; align-items: center; gap: 6px; }
         .ms-key { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
         .ms-key-wait { background: rgba(240, 179, 54, 0.35); }
@@ -1436,6 +1445,7 @@
             transition: background-color 0.15s, border-color 0.15s, color 0.15s;
         }
 
+        .btn-header.all-complete { background: var(--p-forest); border-color: var(--p-forest); color: #fff; }
         .btn-header:hover,
         .btn-header[aria-expanded="true"] {
             background: var(--accent-soft);
@@ -2568,6 +2578,7 @@
                 <button type="button" class="dash-tab-btn" data-dashtab="latency" onclick="showDashTab('latency', this)">Latency Analysis</button>
                 <button type="button" class="dash-tab-btn" data-dashtab="queries" onclick="showDashTab('queries', this)">Query &amp; Index Analysis</button>
                 <button type="button" class="dash-tab-btn" data-dashtab="insights" onclick="showDashTab('insights', this)">Insights</button>
+                <button type="button" class="dash-tab-btn" data-dashtab="compare" onclick="showDashTab('compare', this)" title="Put runs and servers on the same charts">Compare Runs</button>
             </div>
 
             <!-- Several servers: one line per server on every chart. Shown instead
@@ -2640,6 +2651,40 @@
                     <span class="hm-key"><i style="background:#991b1b"></i>&ge;1&nbsp;s</span>
                 </div>
                 <div class="heatmap-tooltip" style="display:none;"></div>
+            </div>
+
+            <!-- Compare Runs: finished runs and the running one on the same charts. -->
+            <div class="mat-card ms-card" id="cmpPanel" style="display:none;">
+                <div class="ms-card-head"><div class="mat-card-title">Compare runs</div><span class="ms-sub" id="cmpSub"></span></div>
+                <div class="settings-help">Pick the servers of any runs to draw them on the same charts. Every line starts at the start of its run, so runs with the same settings line up; iterations sit side by side and a gap is a wait between iterations. If a workload is running, its lines keep growing against the finished runs.</div>
+                <div class="cmp-picker" id="cmpPicker" role="group" aria-label="Runs and servers to compare"></div>
+                <div class="cmp-actions">
+                    <button type="button" class="btn btn-flat btn-small" id="cmpLatestTwo">Latest two runs</button>
+                    <button type="button" class="btn btn-flat btn-small" id="cmpClear">Clear</button>
+                </div>
+                <p class="ms-hint" id="cmpHint" aria-live="polite"></p>
+                <p class="ms-legend" id="cmpLegend"></p>
+                <p class="cmp-diff" id="cmpDiff"></p>
+            </div>
+            <div class="ms-grid" id="cmpCharts" style="display:none;">
+                <div class="mat-card ms-card">
+                    <div class="ms-card-head"><div class="mat-card-title">Throughput (Ops/sec)</div><span class="ms-sub">all operations · minutes since each run started</span></div>
+                    <div class="ms-chart"><canvas id="cmpThroughputChart"></canvas></div>
+                </div>
+                <div class="mat-card ms-card">
+                    <div class="ms-card-head"><div class="mat-card-title">Latency (ms)</div><span class="ms-sub">average · all operations</span></div>
+                    <div class="ms-chart"><canvas id="cmpLatencyChart"></canvas></div>
+                </div>
+                <div class="mat-card ms-card">
+                    <div class="ms-card-head">
+                        <div class="mat-card-title">Tail latency (ms)</div>
+                        <div class="ms-segmented ms-end" id="cmpTailMetric" role="radiogroup" aria-label="Tail latency percentile">
+                            <button type="button" role="radio" data-metric="p99" aria-checked="true" tabindex="0">p99</button>
+                            <button type="button" role="radio" data-metric="p95" aria-checked="false" tabindex="-1">p95</button>
+                        </div>
+                    </div>
+                    <div class="ms-chart"><canvas id="cmpTailChart"></canvas></div>
+                </div>
             </div>
 
             <div id="activeActions" class="action-bar">
@@ -3041,6 +3086,7 @@
                             <span class="settings-note" id="runOnSeveralNote">Connects to each server in the list below with the URI you enter for it; the single MongoDB URI field is hidden and ignored. Every server (2 to 8) gets the same operations, including drops, seeding, and writes, one after another or all at once (Targets Mode). Each server is compared with the first.</span>
                         </div>
                     </div>
+                    <div class="settings-note" id="serversDetNote" role="status" hidden style="margin: 0 0 var(--space-3); padding: 8px 12px; border-radius: var(--radius-md); background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--text-strong); font-weight: 600;"></div>
                     <div class="form-group" id="uriGroup"><label>MongoDB URI <span class="req-mark">Required</span></label><input class="f-xl" type="text" name="uri"
                             placeholder="mongodb://localhost:27017/" required>
                         <span class="settings-note" id="uriCredentialsNote">The URI can hold the credentials, for example <code>mongodb://user:password@host:27017/</code>. A username and password in the URI are used instead of the Username and Password fields. Encode special characters in the password, for example <code>@</code> as <code>%40</code>.</span></div>
@@ -3202,7 +3248,7 @@
                         <div class="settings-help">Period is the length of <strong>one full oscillation</strong> (Min &rarr; Max &rarr; Min), <em>not</em> the run length. Keep Period &le; Duration; for whole cycles, make Duration a multiple of Period (e.g. 120s &divide; 30s = 4 waves).</div>
                     </div>
 
-                    <div data-tier="advanced" id="iterationsBlock">
+                    <div id="iterationsBlock">
                     <h4 class="settings-subhead">Iterations</h4>
                     <div class="settings-help">Repeat the whole workload, with an optional pause between runs.</div>
                     <div class="grid-3">
@@ -3215,6 +3261,30 @@
                             <input class="f-sm" type="text" name="interval_delay" value="0s" required>
                         </div>
                     </div>
+                    </div>
+                </section>
+
+                <section class="settings-card" id="savedSettingsCard">
+                    <h4>Save &amp; Load Run Settings</h4>
+                    <div class="settings-help">Every run you start can save the settings it used, so you can repeat it later with the same parameters. Each save is a new file named with the date and time, so an earlier one is never overwritten.</div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="saveSettings" name="save_settings" value="true" checked>
+                        <label for="saveSettings">Save Settings</label>
+                    </div>
+                    <span class="settings-note">When on, the settings are saved automatically as the run starts; there is no save button.</span>
+                    <div class="form-group">
+                        <label for="saveSettingsDir">Settings Folder (server path)</label>
+                        <input class="f-xl" type="text" name="save_settings_dir" id="saveSettingsDir" placeholder="Blank: the folder of the recording path">
+                        <span class="settings-note">A folder on the machine running PLGM (the browser cannot write to your disk). It is created when missing. On your own computer that is the same machine; in Docker or Kubernetes use a mounted folder. Passwords, and uploaded files such as certificates, are never saved; a password in a URI is left out.</span>
+                    </div>
+                    <h4 class="settings-subhead">Load saved settings</h4>
+                    <div class="form-group">
+                        <label for="savedSettingsSelect">Saved settings in this folder (choose one to load it)</label>
+                        <select id="savedSettingsSelect" class="f-xl" aria-describedby="savedSettingsStatus"></select>
+                        <div style="margin-top:6px;">
+                            <button type="button" class="btn btn-secondary btn-small" id="savedSettingsRefresh">Refresh list</button>
+                        </div>
+                        <p id="savedSettingsStatus" class="settings-note" role="status"></p>
                     </div>
                 </section>
 
@@ -4305,10 +4375,11 @@
         // which tab is active, so no data is lost when switching tabs. We only
         // toggle visibility and resize charts when a tab becomes visible.
         const dashTabPanels = {
-            overview: ['mspanel-bar', 'mspanel-tiles', 'mspanel-live', 'mspanel-compare'],
-            latency: ['mspanel-bar', 'mspanel-timeline', 'mspanel-distribution', 'mspanel-heatmap'],
+            overview: ['mspanel-bar', 'mspanel-tiles', 'msLegend', 'mspanel-live', 'mspanel-compare'],
+            latency: ['mspanel-bar', 'msLegend', 'mspanel-timeline', 'mspanel-distribution', 'mspanel-heatmap'],
             queries: ['queryAnalysisPanel'],
-            insights: ['insightsPanel']
+            insights: ['insightsPanel'],
+            compare: ['cmpPanel', 'cmpCharts']
         };
         let activeDashTab = 'overview';
 
@@ -4329,6 +4400,7 @@
             if (btn) btn.classList.add('active');
             // Charts created/updated while hidden need a resize once visible.
             requestAnimationFrame(resizeDashCharts);
+            if (name === 'compare') cmpOpen();
         }
 
         function resizeDashCharts() {
@@ -4879,6 +4951,35 @@
             return { mode, recordOn, replayOn, rawOn, detOn };
         }
 
+        // Several servers in a generic or custom run sends the same
+        // deterministic traffic to each server, so Seed & Deterministic is
+        // shown with Basic settings and a note says what was turned on.
+        let detAutoForServers = false;
+        // Operations per Worker filled in when Several servers turns
+        // Deterministic traffic on and none is set (null: not filled in).
+        const SERVERS_DEFAULT_OPS = 500;
+        let detAutoOps = null;
+        function syncServersDeterministicUi(eff, several) {
+            const generated = eff.mode === 'generic' || eff.mode === 'custom';
+            const needDet = several && generated;
+            const note = document.getElementById('serversDetNote');
+            if (note) {
+                note.hidden = !needDet;
+                if (needDet) {
+                    note.innerHTML = eff.detOn
+                        ? `Several servers runs the same deterministic workload on every server${detAutoForServers ? ', so Deterministic traffic was turned on' : ''}. Set ${detAutoOps !== null && String(document.getElementById('operationsPerWorker')?.value) === detAutoOps ? `Operations per Worker is set to ${SERVERS_DEFAULT_OPS} (each worker sends that many operations), so the run is ready to launch. ` : ''}Change <a href="#" class="goto-link" onclick="revealSetting('operationsPerWorker'); return false;">Operations per Worker</a> and the Random Seed if needed in Seed &amp; Deterministic, now in Basic settings. If Duration ends before every worker finishes, the run is marked incomplete: raise Duration or lower the operations.`
+                        : `Several servers needs <a href="#" class="goto-link" onclick="revealSetting('workloadDeterministic'); return false;">Deterministic traffic</a> so every server gets the same operations. Until it is on, this run uses only the MongoDB URI.`;
+                }
+            }
+            const card = document.getElementById('rrSeedCard');
+            if (!card || !card.dataset.modes) return;
+            const tier = needDet ? 'basic' : 'advanced';
+            if (card.dataset.tier === tier) return;
+            card.dataset.tier = tier;
+            card.dataset.group = tier === 'basic' ? 'basic' : 'reproducibility';
+            applySettingsGroups();
+        }
+
         // Value of Record Outcomes from before Replay Targets turned it on,
         // restored when the targets no longer apply.
         let targetOutcomesOverride = null;
@@ -4905,6 +5006,7 @@
             if (block) block.hidden = !several;
             const uriGroup = document.getElementById('uriGroup');
             if (uriGroup) uriGroup.hidden = serversReplaceUri();
+            syncServersDeterministicUi(eff, several);
             placeServerChoice();
             list.querySelectorAll('input, button').forEach(el => { el.disabled = !!blocked; });
             const add = document.getElementById('workloadReplayTargetAdd');
@@ -5122,7 +5224,7 @@
         function serverChoiceShown(eff) {
             if (!eff.mode) return true;
             if (eff.mode === 'replay') return true;
-            if (eff.mode === 'generic' || eff.mode === 'custom') return eff.detOn;
+            if (eff.mode === 'generic' || eff.mode === 'custom') return true;
             return false;
         }
         // The servers list replaces MongoDB URI when the run can use it.
@@ -5143,9 +5245,7 @@
             const card = document.getElementById('rrSeedCard');
             if (!row || !block || !uri || !slot || !card) return;
             const eff = effectiveReproSettings();
-            const here = eff.detOn && (eff.mode === 'generic' || eff.mode === 'custom')
-                && !!document.getElementById('settingsBody')?.classList.contains('has-nav')
-                && card.dataset.groupHidden !== '1' && settingsCardShown(card);
+            const here = false;
             if (here && row.parentElement !== slot) {
                 slot.append(row, block);
             } else if (!here && row.parentElement === slot) {
@@ -5165,9 +5265,33 @@
             if (hint) hint.hidden = !(det && !(Number(ops) > 0));
         }
         function onRunOnChange() {
-            if (runOnSeveral() && replayTargetRows().length === 0) {
-                addReplayTargetRow('', '');
-                addReplayTargetRow('', '');
+            const eff = effectiveReproSettings();
+            const det = document.getElementById('workloadDeterministic');
+            if (runOnSeveral()) {
+                if (replayTargetRows().length === 0) {
+                    addReplayTargetRow('', '');
+                    addReplayTargetRow('', '');
+                }
+                if ((eff.mode === 'generic' || eff.mode === 'custom') && det && !det.checked) {
+                    det.checked = true;
+                    detAutoForServers = true;
+                    const opsEl = document.getElementById('operationsPerWorker');
+                    if (opsEl && !(Number(opsEl.value) > 0)) {
+                        opsEl.value = String(SERVERS_DEFAULT_OPS);
+                        detAutoOps = opsEl.value;
+                    }
+                    applyDeterministicRequirements();
+                }
+            } else {
+                if (detAutoForServers && det && det.checked) {
+                    det.checked = false;
+                    applyDeterministicRequirements();
+                }
+                const opsEl = document.getElementById('operationsPerWorker');
+                if (detAutoOps !== null && opsEl && opsEl.value === detAutoOps) opsEl.value = '0';
+                detAutoOps = null;
+                detAutoForServers = false;
+                updateDeterministicDisclosure();
             }
             updateReplayDependencies();
         }
@@ -5689,7 +5813,22 @@
             setChartDefaults();
             document.getElementById('timeScrubber').addEventListener('input', e => onTimeScrub(e.target.value));
             document.getElementById('workloadDeterministic').addEventListener('change', applyDeterministicRequirements);
+            document.getElementById('workloadDeterministic').addEventListener('change', () => { detAutoForServers = false; });
+            document.getElementById('operationsPerWorker').addEventListener('input', updateReplayDependencies);
             document.getElementById('operationsPerWorker').addEventListener('input', updateDeterministicDisclosure);
+            (() => {
+                const dir = document.getElementById('saveSettingsDir');
+                try { dir.value = localStorage.getItem('plgm.saveSettingsDir') || ''; } catch (e) { /* storage may be blocked */ }
+                let timer;
+                dir.addEventListener('input', () => {
+                    try { localStorage.setItem('plgm.saveSettingsDir', dir.value); } catch (e) { /* ignore */ }
+                    clearTimeout(timer);
+                    timer = setTimeout(() => refreshSavedSettings(), 400);
+                });
+                document.getElementById('savedSettingsSelect').addEventListener('change', loadSavedSettings);
+                document.getElementById('savedSettingsRefresh').addEventListener('click', () => refreshSavedSettings(document.getElementById('savedSettingsSelect').value));
+                refreshSavedSettings();
+            })();
             updateDeterministicDisclosure();
             // Replay Targets depend on these; recompute on every change.
             ['workloadDeterministic', 'workloadRecordEnabled', 'workloadReplayEnabled', 'workloadRecordOutcomes', 'rawEnable',
@@ -6480,6 +6619,8 @@
         let msHeatPaused = false;
         // until: the Time Machine second (null = live); zoom: [from, to] seconds.
         const msView = { op: 'all', hidden: new Set(), compare: 'p99', timeline: 'p99', until: null, zoom: null };
+        // Compare Runs state, here so the live charts can reach it from the start.
+        const cmp = { runs: [], selected: new Set(), seeded: false, autoLive: '', preselect: '', cache: new Map(), pending: new Set(), liveId: '', host: '', metric: 'p99', charts: null, sig: '', wired: false, loaded: false };
         const msDrag = { chart: null, from: null, to: null };
 
         function setChartDefaults() {
@@ -6499,6 +6640,7 @@
             msView.until = null;
             msView.zoom = null;
             msDrag.chart = null;
+            cmp.liveId = '';
             if (msCharts) Object.values(msCharts).forEach(c => { c.data.datasets = []; c.$msMarkers = []; c.update('none'); });
             renderMultiServer();
         }
@@ -6527,6 +6669,7 @@
         // of a run on several servers, or the run itself as one server.
         function applyMultiServerStats(stats) {
             if (!stats) return;
+            if (stats.dashboardId && !historicalView) cmp.liveId = String(stats.dashboardId);
             if (Number(stats.totalIterations) > 0) msTotalIterations = Number(stats.totalIterations);
             if (Number(stats.sampleIntervalMs) > 0) msSampleMs = Number(stats.sampleIntervalMs);
             (Array.isArray(stats.chartHistory) ? stats.chartHistory : []).forEach(p => { msTopSeq = Math.max(msTopSeq, Number(p && p.seq || 0)); });
@@ -6761,6 +6904,10 @@
             const key = msKey(msView.op);
             const r = msRange();
             const val = p => {
+                // Nothing runs during a wait between iterations, or while one is
+                // prepared: leave a gap in throughput instead of a line along
+                // zero, as latency has.
+                if (metric === 'rates' && msPhaseOf(p)) return null;
                 const bucket = metric === 'rates' ? p.rates : p[metric];
                 const v = bucket ? bucket[key] : null;
                 return v === null || v === undefined ? null : Number(v);
@@ -6775,6 +6922,17 @@
                 out.push({ x, y: val(p), p });
             });
             return out;
+        }
+        // The time axis is in minutes; the data stays in seconds. A run under
+        // a minute shows fractions of a minute (0.25 = 15 s).
+        const msMinuteLabel = sec => String(Math.round(sec / 60 * 100) / 100);
+        function msMinuteTicks(axis) {
+            const span = Math.max(1, axis.max - axis.min);
+            const steps = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200, 86400];
+            const step = steps.find(x => span / x <= 8) || 86400;
+            const ticks = [];
+            for (let v = Math.ceil(axis.min / step) * step; v <= axis.max + 1e-9; v += step) ticks.push({ value: v });
+            axis.ticks = ticks;
         }
         const msDur = sec => sec >= 60 ? formatTime(sec) : `${Math.max(0, Math.round(sec))}s`;
         // Spans without running workers: a wait between iterations, or the
@@ -6961,7 +7119,7 @@
                         tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since start · ${msOpName()}` : '', footer: msTooltipFooter } }
                     },
                     scales: {
-                        x: { type: 'linear', min: 0, title: { display: true, text: 'Seconds since the server started', color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } },
+                        x: { type: 'linear', min: 0, title: { display: true, text: 'Minutes since the server started', color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798', callback: v => msMinuteLabel(Number(v)) }, afterBuildTicks: msMinuteTicks, grid: { color: '#eef2f6' } },
                         y: { beginAtZero: true, title: { display: true, text: yTitle, color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } }
                     }
                 },
@@ -7044,20 +7202,20 @@
             draw(charts.compare, msView.compare, `${msView.compare} latency (ms)`);
             draw(charts.timeline, msView.timeline, `${pct[msView.timeline]} latency (ms)`);
             const who = msServers.length > 1 ? 'all servers' : 'this run';
-            const axis = msServers.length > 1 ? 'Seconds since the server started' : 'Seconds since the run started';
+            const axis = msServers.length > 1 ? 'Minutes since the server started' : 'Minutes since the run started';
             Object.values(charts).forEach(c => { c.options.scales.x.title.text = axis; });
             const title = document.getElementById('msCompareTitle');
             if (title) title.textContent = msServers.length > 1 ? 'Compare servers' : 'Tail latency';
             const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
             set('msSubThroughput', msOpChip(msView.op === 'transaction' ? '· throughput is not tracked per transaction' : `· ${who}`));
             set('msSubLatency', msOpChip(`· average, ${who}`));
-            set('msSubCompare', msOpChip(msServers.length > 1 ? '· seconds since each server started' : '· seconds since the run started'));
-            set('msSubTimeline', msOpChip(`· ${pct[msView.timeline]} · seconds since ${msServers.length > 1 ? 'each server' : 'the run'} started`));
+            set('msSubCompare', msOpChip(msServers.length > 1 ? '· minutes since each server started' : '· minutes since the run started'));
+            set('msSubTimeline', msOpChip(`· ${pct[msView.timeline]} · minutes since ${msServers.length > 1 ? 'each server' : 'the run'} started`));
             const legend = document.getElementById('msLegend');
             if (legend) {
                 const hasWait = bands.some(b => b.phase === 'wait'), hasIdle = bands.some(b => b.phase === 'idle');
                 const keys = [];
-                if (hasWait) keys.push('<span class="ms-key ms-key-wait" aria-hidden="true"></span>Wait between iterations: nothing runs, so throughput is 0 and latency has a gap');
+                if (hasWait) keys.push('<span class="ms-key ms-key-wait" aria-hidden="true"></span>Wait between iterations: nothing runs, so throughput and latency have a gap');
                 if (hasIdle) keys.push('<span class="ms-key ms-key-idle" aria-hidden="true"></span>Workers not running (preparing an iteration or finishing)');
                 if (markers.length) keys.push('<span class="ms-key ms-key-event" aria-hidden="true"></span>Event');
                 if (workerMarks.length > 8) keys.push(`Workers changed ${workerMarks.length} times; point at the chart to see the count`);
@@ -7239,6 +7397,264 @@
             renderMultiServer();
         }
 
+        // --- Compare runs ---
+        // A series is one server of one run: a run on one server has one, a run
+        // on several has one per server. Finished runs come from the stored
+        // runs; the running one comes from the same samples the live charts
+        // use, so its lines keep growing.
+        const CMP_MAX = 8;
+        const CMP_DASH = [[], [9, 5], [3, 4], [10, 4, 2, 4], [1, 5], [6, 3, 1, 3]];
+        const cmpHost = uri => String(uri || '').replace(/^[a-z+]+:\/\//i, '').replace(/[\/?].*$/, '').replace(/^.*@/, '');
+        const cmpKey = (id, server) => `${id}|${server}`;
+
+        function cmpLoadRuns() {
+            return fetch('/api/run-history').then(r => r.json()).then(d => {
+                cmp.runs = Array.isArray(d && d.runs) ? d.runs : [];
+                cmp.loaded = true;
+                cmpRender();
+            }).catch(() => {});
+        }
+
+        function cmpOpen() {
+            cmpWire();
+            cmpRender();
+            cmpLoadRuns();
+            if (!cmp.host) fetch('/api/config').then(r => r.json()).then(c => {
+                cmp.host = cmpHost(c && (c.URI || c.uri));
+                // A running single-server run was ticked as "This run" before
+                // its host was known; it is the same line under its host.
+                if (cmp.host) [...cmp.selected].forEach(k => {
+                    if (!k.endsWith('|' + MS_SINGLE_LABEL)) return;
+                    cmp.selected.delete(k);
+                    cmp.selected.add(k.slice(0, -MS_SINGLE_LABEL.length) + cmp.host);
+                });
+                cmpRender();
+            }).catch(() => {});
+        }
+
+        // Runs that can be drawn: the running (or just finished) one first,
+        // then the stored runs, newest first.
+        function cmpEntries() {
+            const out = [];
+            const live = historicalView ? [] : msServers.filter(s => s.points.length);
+            const liveId = live.length ? (cmp.liveId || 'live') : '';
+            if (liveId) {
+                const running = live.some(s => s.status === 'running' || s.status === 'preparing');
+                out.push({ id: liveId, live: true, running, label: running ? 'Running now' : 'This run', servers: live.map(s => s.single && cmp.host ? cmp.host : s.label) });
+            }
+            cmp.runs.forEach(r => {
+                if (r.id === liveId || r.status === 'damaged' || r.status === 'unsupported') return;
+                out.push({ id: r.id, live: false, label: r.label || r.id, startedAt: r.started_at, durationSec: r.duration_sec, servers: Array.isArray(r.servers) && r.servers.length ? r.servers : ['server'] });
+            });
+            return out;
+        }
+
+        function cmpFetch(id) {
+            if (cmp.cache.has(id) || cmp.pending.has(id)) return;
+            cmp.pending.add(id);
+            fetch('/api/run-history/' + encodeURIComponent(id)).then(r => r.ok ? r.json() : null).catch(() => null).then(snap => {
+                cmp.pending.delete(id);
+                cmp.cache.set(id, snap);
+                cmpRender();
+            });
+        }
+
+        // The samples of one server of one run; null while a stored run loads.
+        function cmpPoints(entry, server) {
+            if (entry.live) {
+                const s = msServers.find(x => (x.single && cmp.host ? cmp.host : x.label) === server) || (msServers.length === 1 ? msServers[0] : null);
+                return s ? s.points : [];
+            }
+            if (!cmp.cache.has(entry.id)) { cmpFetch(entry.id); return null; }
+            const snap = cmp.cache.get(entry.id);
+            const st = snap && snap.stats;
+            if (!st) return [];
+            const targets = Array.isArray(st.targets) && st.targets.length >= 2 ? st.targets : null;
+            if (targets) { const t = targets.find(x => x.label === server); return t && Array.isArray(t.chartHistory) ? t.chartHistory : []; }
+            return Array.isArray(st.chartHistory) ? st.chartHistory : [];
+        }
+
+        // Pre-selects what is most likely wanted: the running workload and the
+        // run before it, or the newest two finished runs.
+        function cmpSeed(entries) {
+            const add = e => e.servers.forEach(sv => cmp.selected.add(cmpKey(e.id, sv)));
+            const live = entries.find(e => e.live);
+            if (live && cmp.autoLive !== live.id) {
+                cmp.autoLive = live.id;
+                add(live);
+            }
+            if (cmp.seeded || !entries.length) return;
+            const pre = cmp.preselect && entries.find(e => e.id === cmp.preselect);
+            if (cmp.preselect && !pre) return;
+            if (pre) add(pre);
+            const others = entries.filter(e => e !== pre && !e.live);
+            others.slice(0, pre || live ? 1 : 2).forEach(add);
+            // Wait for the stored runs before calling it done.
+            if (others.length || cmp.loaded) { cmp.preselect = ''; cmp.seeded = true; }
+        }
+
+        function cmpPicker(entries) {
+            const el = document.getElementById('cmpPicker');
+            if (!el) return;
+            // Rebuilt only when the runs change, so a tick keeps keyboard focus;
+            // the ticks are synced from the selection every time.
+            const sig = entries.map(e => `${e.id}:${e.servers.join(',')}:${e.running ? 1 : 0}`).join(';');
+            if (sig === cmp.sig) {
+                el.querySelectorAll('input[data-key]').forEach(b => { b.checked = cmp.selected.has(b.dataset.key); });
+                return;
+            }
+            cmp.sig = sig;
+            const when = e => e.startedAt ? new Date(e.startedAt).toLocaleString() + (e.durationSec == null ? '' : ' · ' + formatTime(e.durationSec)) : '';
+            el.innerHTML = entries.length ? entries.map(e => `<fieldset class="cmp-run${e.live ? ' cmp-live' : ''}"><legend>${escHtml(e.label)}</legend>`
+                + (e.live ? '<div class="history-sub">Live: keeps growing while it runs</div>' : `<div class="history-sub">${escHtml(when(e))}</div>`)
+                + e.servers.map(sv => `<label class="cmp-pick"><input type="checkbox" data-key="${escHtml(cmpKey(e.id, sv))}"${cmp.selected.has(cmpKey(e.id, sv)) ? ' checked' : ''}> ${escHtml(sv)}</label>`).join('')
+                + '</fieldset>').join('') : '<p class="ms-hint">No runs to compare yet. Finished runs appear here once they are stored.</p>';
+        }
+
+        function cmpValue(metric) {
+            return p => {
+                if (metric === 'rates' && msPhaseOf(p)) return null;
+                const bucket = metric === 'rates' ? p.rates : p[metric];
+                const v = bucket ? bucket.total : null;
+                return v === null || v === undefined ? null : Number(v);
+            };
+        }
+        function cmpLine(points, metric) {
+            const val = cmpValue(metric);
+            const out = [];
+            msThin(points, val).forEach(p => {
+                const x = Number(p.elapsedSec || 0);
+                if (out.length && String(p.marker || '').includes('No samples')) out.push({ x: (out[out.length - 1].x + x) / 2, y: null });
+                out.push({ x, y: val(p), p });
+            });
+            return out;
+        }
+
+        function cmpChart(id, yTitle) {
+            const el = document.getElementById(id);
+            if (!el || typeof Chart === 'undefined') return null;
+            return new Chart(el, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    elements: { point: { radius: 0, hoverRadius: 3 }, line: { borderWidth: 2, cubicInterpolationMode: 'monotone' } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since the run started` : '' } } },
+                    scales: {
+                        x: { type: 'linear', min: 0, title: { display: true, text: 'Minutes since each run started', color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798', callback: v => msMinuteLabel(Number(v)) }, afterBuildTicks: msMinuteTicks, grid: { color: '#eef2f6' } },
+                        y: { beginAtZero: true, title: { display: true, text: yTitle, color: '#7b8798', font: { size: 11 } }, ticks: { color: '#7b8798' }, grid: { color: '#eef2f6' } }
+                    }
+                }
+            });
+        }
+
+        function cmpWire() {
+            if (cmp.wired) return;
+            const picker = document.getElementById('cmpPicker');
+            if (!picker) return;
+            cmp.wired = true;
+            picker.addEventListener('change', e => {
+                const box = e.target.closest('input[data-key]');
+                if (!box) return;
+                if (box.checked && cmp.selected.size >= CMP_MAX) {
+                    box.checked = false;
+                    const hint = document.getElementById('cmpHint');
+                    if (hint) hint.textContent = `Up to ${CMP_MAX} lines at a time keeps the charts readable. Untick one first.`;
+                    return;
+                }
+                if (box.checked) cmp.selected.add(box.dataset.key); else cmp.selected.delete(box.dataset.key);
+                cmp.seeded = true;
+                cmpRender();
+            });
+            document.getElementById('cmpClear').addEventListener('click', () => { cmp.selected.clear(); cmp.seeded = true; cmpRender(); });
+            document.getElementById('cmpLatestTwo').addEventListener('click', () => {
+                cmp.selected.clear();
+                cmpEntries().slice(0, 2).forEach(e => e.servers.forEach(sv => cmp.selected.add(cmpKey(e.id, sv))));
+                cmp.seeded = true;
+                cmpRender();
+            });
+            const g = document.getElementById('cmpTailMetric');
+            const pick = b => { cmp.metric = b.dataset.metric; cmpRender(); };
+            g.querySelectorAll('[role="radio"]').forEach(b => b.addEventListener('click', () => pick(b)));
+            msRadioKeys(g, pick);
+        }
+
+        // Settings that differ between the selected stored runs.
+        const CMP_SETTINGS = [['mode', 'mode'], ['concurrency', 'workers'], ['duration', 'duration'], ['iterations', 'iterations'], ['documents_count', 'documents'], ['default_workload', 'workload'], ['load_profile', 'load profile'],
+            ['find_percent', 'find %'], ['update_percent', 'update %'], ['insert_percent', 'insert %'], ['delete_percent', 'delete %'], ['aggregate_percent', 'aggregate %'], ['deterministic', 'deterministic'], ['replay_mode', 'replay mode']];
+        function cmpDifferences(runIds) {
+            const cfgs = runIds.map(id => { const snap = cmp.cache.get(id); return snap && snap.config ? { id, label: (snap.label || id), cfg: snap.config } : null; }).filter(Boolean);
+            if (cfgs.length < 2) return '';
+            const show = v => v === undefined || v === null || v === '' ? '—' : String(v);
+            const diffs = CMP_SETTINGS.map(([key, name]) => {
+                const vals = cfgs.map(c => show(c.cfg[key]));
+                return new Set(vals).size > 1 ? `${name}: ${vals.join(' vs ')}` : '';
+            }).filter(Boolean);
+            return diffs.length ? 'Settings that differ: ' + diffs.join(' · ') : 'The runs used the same settings, so differences come from the servers or the environment.';
+        }
+
+        function cmpRender() {
+            if (activeDashTab !== 'compare') return;
+            const entries = cmpEntries();
+            cmpSeed(entries);
+            cmpPicker(entries);
+            if (!cmp.charts) {
+                const c = { throughput: cmpChart('cmpThroughputChart', 'ops/s'), latency: cmpChart('cmpLatencyChart', 'ms (average)'), tail: cmpChart('cmpTailChart', 'p99 latency (ms)') };
+                if (Object.values(c).some(x => !x)) return;
+                cmp.charts = c;
+            }
+            const picked = [];
+            entries.forEach(e => e.servers.forEach(sv => { if (cmp.selected.has(cmpKey(e.id, sv))) picked.push({ entry: e, server: sv }); }));
+            const runOrder = [...new Set(picked.map(x => x.entry.id))];
+            const serverOrder = [...new Set(picked.map(x => x.server))];
+            let loading = false;
+            const series = picked.map(x => {
+                const points = cmpPoints(x.entry, x.server);
+                if (points === null) loading = true;
+                const color = MS_COLORS[serverOrder.indexOf(x.server) % MS_COLORS.length];
+                const dash = CMP_DASH[runOrder.indexOf(x.entry.id) % CMP_DASH.length];
+                return { ...x, points: points || [], color, dash, name: `${x.entry.label} · ${x.server}` };
+            });
+            const lines = metric => series.map(s => ({
+                label: s.name, data: cmpLine(s.points, metric), borderColor: s.color, backgroundColor: s.color,
+                borderDash: s.dash, borderWidth: s.entry.live ? 3 : 2, spanGaps: false
+            }));
+            const xMax = Math.max(1, Math.ceil(Math.max(0, ...series.map(s => s.points.length ? Number(s.points[s.points.length - 1].elapsedSec || 0) : 0))));
+            const tail = cmp.metric;
+            [['throughput', 'rates', 'ops/s'], ['latency', 'avg', 'ms (average)'], ['tail', tail, `${tail} latency (ms)`]].forEach(([k, metric, yTitle]) => {
+                const chart = cmp.charts[k];
+                chart.data.datasets = lines(metric);
+                chart.options.scales.x.min = 0;
+                chart.options.scales.x.max = xMax;
+                chart.options.scales.y.title.text = yTitle;
+                chart.update('none');
+            });
+            const tailGroup = document.getElementById('cmpTailMetric');
+            if (tailGroup) msSetChecked(tailGroup, 'metric', tail);
+            const charts = document.getElementById('cmpCharts');
+            const sub = document.getElementById('cmpSub');
+            if (sub) sub.textContent = series.length ? `${series.length} line${series.length === 1 ? '' : 's'}` : '';
+            const hint = document.getElementById('cmpHint');
+            if (hint) hint.textContent = loading ? 'Loading stored runs…' : (series.length ? '' : 'Tick at least one server above to draw it.');
+            const legend = document.getElementById('cmpLegend');
+            if (legend) legend.innerHTML = series.map(s => `<span class="ms-legend-item"><span class="cmp-line" style="border-top-style:${s.dash.length ? 'dashed' : 'solid'};border-color:${s.color}" aria-hidden="true"></span>${escHtml(s.name)}${s.entry.running ? ' (running)' : ''}</span>`).join('');
+            const diff = document.getElementById('cmpDiff');
+            if (diff) diff.textContent = cmpDifferences(runOrder.filter(id => !entries.find(e => e.id === id && e.live)));
+            if (charts) requestAnimationFrame(() => Object.values(cmp.charts).forEach(c => c.resize()));
+        }
+
+        // Completed Runs: open a run's dashboard on the Compare Runs tab.
+        async function compareFromHistory(id) {
+            await openHistoricalRun(id);
+            if (historicalView !== id) return;
+            cmp.selected.clear();
+            cmp.seeded = false;
+            cmp.preselect = id;
+            cmp.sig = '';
+            showDashTab('compare');
+        }
+
         function renderMultiServer() {
             renderMultiServerToolbar();
             renderMultiServerTiles();
@@ -7246,6 +7662,7 @@
             renderMultiServerDistribution();
             renderMultiServerHeatmap();
             updateTimeMachine();
+            cmpRender();
         }
 
         function renderMultiTarget(mt) {
@@ -9142,7 +9559,7 @@
                     }
                 }).catch(err => {
                     showError("Failed to start workload: " + (err && err.message ? err.message : String(err)));
-                }).finally(() => setLaunchBusy(false));
+                }).finally(() => { setLaunchBusy(false); setTimeout(() => refreshSavedSettings(document.getElementById('savedSettingsSelect')?.value), 1500); });
         }
 
         function stopWorkload() { fetch('/api/stop', { method: 'POST' }); }
@@ -9219,6 +9636,9 @@
                             showError("Workload error: " + stats.lastError);
                         }
                         const badge = document.getElementById('statusIndicator');
+                        document.getElementById('completedRunsBtn')?.classList.toggle('all-complete',
+                            !stats.isRunning && (stats.lifecyclePhase || 'completed') === 'completed' && !(stats.generatedTraffic && stats.generatedTraffic.status === 'incomplete')
+                            && !(stats.multi_target && Array.isArray(stats.multi_target.targets) && stats.multi_target.targets.some(t => t.status !== 'complete' && t.status !== 'completed')));
                         const lifecyclePhase = stats.lifecyclePhase || (stats.isRunning ? 'running' : 'completed');
                         const lifecycleStep = stats.lifecycleStep || '';
                         const lifecycleStepIndex = Number(stats.lifecycleStepIndex || 0);
@@ -9543,8 +9963,116 @@
 
         let modeMemory = {};
 
+        // --- Save & Load Run Settings ---
+        // The settings form by field name, sent with the start request when
+        // Save Settings is on. Passwords and files are never included (the
+        // server also drops secrets and the passwords of URIs).
+        function settingsSnapshot() {
+            const form = document.getElementById('configForm');
+            const fields = {};
+            Array.from(form.elements).forEach(el => {
+                const n = el.name;
+                if (!n || n.startsWith('save_settings') || ['file', 'password', 'button', 'submit', 'reset'].includes(el.type)) return;
+                if (el.type === 'checkbox') fields[n] = !!el.checked;
+                else if (el.type === 'radio') { if (el.checked) fields[n] = el.value; }
+                else fields[n] = el.value;
+            });
+            return { fields, replay_targets: runOnSeveral() ? listedReplayTargets() : [] };
+        }
+        const savedModeLabels = { generic: 'Generic', custom: 'Custom', record: 'Record', replay: 'Replay', raw: 'Raw injector' };
+        const savedDirParam = () => encodeURIComponent((document.getElementById('saveSettingsDir')?.value || '').trim());
+        function setSavedSettingsStatus(text) {
+            const el = document.getElementById('savedSettingsStatus');
+            if (el) el.textContent = text;
+        }
+        async function refreshSavedSettings(keep) {
+            const sel = document.getElementById('savedSettingsSelect');
+            if (!sel) return;
+            let data;
+            try {
+                const res = await fetch('/api/saved-settings?dir=' + savedDirParam());
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                data = await res.json();
+            } catch (err) {
+                setSavedSettingsStatus(`Could not read the saved settings (${err && err.message ? err.message : err}).`);
+                return;
+            }
+            const files = Array.isArray(data.files) ? data.files : [];
+            sel.innerHTML = '';
+            // Choosing an entry loads it, so the first entry is a prompt, not a setting.
+            const prompt = document.createElement('option');
+            prompt.value = '';
+            prompt.textContent = files.length ? 'Choose saved settings to load…' : 'No saved settings yet';
+            sel.appendChild(prompt);
+            files.forEach(f => {
+                const o = document.createElement('option');
+                o.value = f.name;
+                const when = (f.saved_at || '').replace('T', ' ').replace(/(:\d\d)?Z$/, '').slice(0, 16);
+                const parts = [when || f.name, savedModeLabels[f.mode] || f.mode, f.duration && f.iterations ? `${f.duration} × ${f.iterations}` : f.duration, f.concurrency ? `${f.concurrency} workers` : '', f.servers ? `${f.servers} servers` : ''];
+                o.textContent = parts.filter(Boolean).join(' · ');
+                sel.appendChild(o);
+            });
+            if (keep && files.some(f => f.name === keep)) sel.value = keep;
+            sel.disabled = files.length === 0;
+            const where = data.directory ? ` in ${data.directory}` : '';
+            setSavedSettingsStatus(data.error ? data.error : files.length ? `${files.length} saved settings${where}, newest first.` : `No saved settings${where} yet. They appear here after a run starts with Save Settings on.`);
+        }
+        async function loadSavedSettings() {
+            const name = document.getElementById('savedSettingsSelect')?.value;
+            if (!name) return;
+            if (runModeLocked) { setSavedSettingsStatus('A workload is running; load settings when it has finished.'); return; }
+            let snap;
+            try {
+                const res = await fetch(`/api/saved-settings/item?dir=${savedDirParam()}&name=${encodeURIComponent(name)}`);
+                snap = await res.json();
+                if (!res.ok) throw new Error(snap.error || `HTTP ${res.status}`);
+            } catch (err) {
+                setSavedSettingsStatus(`Could not load these settings (${err && err.message ? err.message : err}).`);
+                return;
+            }
+            await applySavedSettings(snap);
+            const when = (snap.saved_at || '').replace('T', ' ').replace(/(:\d\d)?Z$/, '').slice(0, 16);
+            setSavedSettingsStatus(`Loaded the settings saved ${when || name}. Passwords are not saved${snap.credentials_removed ? ' (a password in a URI was left out)' : ''}: enter them before launching if the server needs them.`);
+        }
+        async function applySavedSettings(snap) {
+            const form = document.getElementById('configForm');
+            const f = snap && snap.fields ? snap.fields : {};
+            if (typeof f.operation_mode === 'string' && f.operation_mode) selectMode(f.operation_mode);
+            const skip = el => !el.name || el.name.startsWith('save_settings') || el.name === 'workload_replay_targets'
+                || !(el.name in f) || ['file', 'password', 'button', 'submit', 'reset'].includes(el.type);
+            const touched = [];
+            Array.from(form.elements).forEach(el => {
+                if (skip(el)) return;
+                const v = f[el.name];
+                if (el.type === 'checkbox') el.checked = v === true || v === 'true';
+                else if (el.type === 'radio') el.checked = String(v) === el.value;
+                else if (el.tagName === 'SELECT') {
+                    if (!Array.from(el.options).some(o => o.value === String(v))) return;
+                    el.value = String(v);
+                } else el.value = String(v);
+                touched.push(el);
+            });
+            if (Array.isArray(snap.replay_targets)) setReplayTargetRows(snap.replay_targets);
+            touched.forEach(el => {
+                if (el.type === 'radio' && !el.checked) return;
+                if (['text', 'number', 'textarea'].includes(el.type)) el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            for (const kind of ['collection', 'query']) {
+                const select = selectElFor(kind);
+                const id = select && select.value;
+                if (id) { try { await selectDefinition(kind, id); } catch (e) { /* the library entry may be gone */ } }
+            }
+            updateReplayDependencies();
+            updateDeterministicDisclosure();
+            clearFieldErrors();
+            clearConfigInlineError();
+            updateEffectiveSummary();
+        }
+
         function executionFormData(form) {
             const fd = new FormData(form);
+            if (fd.get('save_settings') === 'true') fd.set('settings_snapshot', JSON.stringify(settingsSnapshot()));
             const mode = String(fd.get('operation_mode') || '').trim();
             if (!mode) return fd;
             const source = fd.get('record_workload_source') || 'generic';
@@ -9899,6 +10427,7 @@
                 ['Runtime Transport & Pooling', '*', 'expert', 'connection'],
                 ['Execution / Runtime Tuning', 'generic,custom,record', 'expert', 'execution'],
                 ['Workload Control', 'generic,custom,record,raw', 'basic', 'execution'],
+                ['Save & Load Run Settings', '*', 'basic', 'execution'],
                 ['Client Pacing & Access Pattern', 'generic,custom,record', 'advanced', 'execution'],
                 ['Sharding Strategy', 'generic,custom,record,replay', 'expert', 'execution'],
                 ['Reproducible Workload (Record & Replay)', 'record,replay', 'basic', 'reproducibility'],
@@ -9910,9 +10439,9 @@
                 ['Data & Query Definitions', 'generic,custom,record,replay', 'basic', 'data'],
                 ['Operation Mix Allocation', 'generic,custom,record', 'basic', 'data'],
                 ['Schema Inference from Query Logs', 'custom,record', 'advanced', 'data'],
-                ['Export & Reporting', '*', 'expert', 'insights'],
-                ['Insights Capture (Sampling & Retention)', 'generic,custom,record,replay', 'advanced', 'insights'],
-                ['Post-Run Explain', 'generic,custom,record,replay', 'advanced', 'explain'],
+                ['Export & Reporting', '*', 'basic', 'insights'],
+                ['Insights Capture (Sampling & Retention)', 'generic,custom,record,replay', 'basic', 'insights'],
+                ['Post-Run Explain', 'generic,custom,record,replay', 'basic', 'explain'],
                 ['Which Queries Are Explained', 'generic,custom,record,replay', 'expert', 'explain'],
                 ['Explain Execution Limits', 'generic,custom,record,replay', 'expert', 'explain'],
                 ['Query Latency Targets', 'generic,custom,record,replay', 'expert', 'explain'],
@@ -10268,8 +10797,9 @@
             const reportURL = `/api/run-history/${encodeURIComponent(run.id)}/report`;
             const report = broken ? '' : `<a class="btn btn-flat btn-small" href="${reportURL}" target="_blank" rel="noopener noreferrer">HTML report<span class="sr-only"> (opens in a new tab)</span></a>`
                 + `<a class="btn btn-flat btn-small" href="${reportURL}?download=1" download="plgm-report-${escHtml(run.id)}.html">Download<span class="sr-only"> HTML report</span></a>`;
+            const cmpBtn = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="compareFromHistory('${escHtml(run.id)}')" title="Open this run on the Compare Runs tab">Compare</button>`;
             const pin = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="pinHistoricalRun('${escHtml(run.id)}', ${run.pinned ? 'false' : 'true'})">${run.pinned ? 'Unpin' : 'Pin'}</button>`;
-            return `<tr><td data-label="Run"><strong>${escHtml(run.label || run.id)}</strong><div class="history-sub">${escHtml(run.id)}</div></td><td data-label="When">${escHtml(when)}<div class="history-sub">${escHtml(dur)}</div></td><td data-label="Mode">${escHtml(run.mode || '—')}</td><td data-label="Status"><span class="status-chip ${statusClass}">${escHtml(status)}</span>${run.error ? `<div class="history-sub">${escHtml(run.error)}</div>` : ''}</td><td data-label="Summary">${escHtml(ops)}<div class="history-sub">${escHtml(lat)}</div></td><td data-label="Actions"><div class="history-actions">${open}${report}${pin}</div></td></tr>`;
+            return `<tr><td data-label="Run"><strong>${escHtml(run.label || run.id)}</strong><div class="history-sub">${escHtml(run.id)}</div></td><td data-label="When">${escHtml(when)}<div class="history-sub">${escHtml(dur)}</div></td><td data-label="Mode">${escHtml(run.mode || '—')}</td><td data-label="Status"><span class="status-chip ${statusClass}">${escHtml(status)}</span>${run.error ? `<div class="history-sub">${escHtml(run.error)}</div>` : ''}</td><td data-label="Summary">${escHtml(ops)}<div class="history-sub">${escHtml(lat)}</div></td><td data-label="Actions"><div class="history-actions">${open}${cmpBtn}${report}${pin}</div></td></tr>`;
         }
 
         function pinHistoricalRun(id, pinned) {

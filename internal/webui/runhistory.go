@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
+	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/multitarget"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/report"
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/stats"
 )
@@ -31,9 +32,13 @@ var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$`)
 // RunSummary is the Completed Runs list row. Pointer fields are omitted when
 // the measurement was not stored; a stored zero is a real zero.
 type RunSummary struct {
-	ID          string   `json:"id"`
-	Schema      string   `json:"schema,omitempty"`
-	Label       string   `json:"label,omitempty"`
+	ID     string `json:"id"`
+	Schema string `json:"schema,omitempty"`
+	Label  string `json:"label,omitempty"`
+	// Servers names what the run was measured on: the targets of a run on
+	// several servers, otherwise the host of the connection. Compare Runs
+	// labels its lines with them.
+	Servers     []string `json:"servers,omitempty"`
 	Status      string   `json:"status"`
 	Mode        string   `json:"mode,omitempty"`
 	StartedAt   string   `json:"started_at,omitempty"`
@@ -476,9 +481,10 @@ func (s *WebServer) captureDashboardLocked() *RunDashboard {
 	}
 	status := s.LifecyclePhase
 	label := dashboardLabel(cfg, mode, started)
+	servers := runServers(cfg, s.multiTarget)
 	snap := &RunDashboard{
 		RunSummary: RunSummary{
-			ID: s.dashboardID, Schema: runDashboardSchema, Label: label, Status: status, Mode: mode,
+			ID: s.dashboardID, Schema: runDashboardSchema, Label: label, Servers: servers, Status: status, Mode: mode,
 			StartedAt: started.UTC().Format(time.RFC3339), CompletedAt: completed.UTC().Format(time.RFC3339),
 			DurationSec: duration, ActiveSec: activeSec, TotalOps: &total, AvgLatencyMs: avg, P95LatencyMs: p95,
 			Error: s.LastError, InsightsStatus: insightsStatus, Unavailable: unavailable,
@@ -492,6 +498,41 @@ func (s *WebServer) captureDashboardLocked() *RunDashboard {
 		}
 	}
 	return snap
+}
+
+// runServers names the servers a run measured: every target of a run on
+// several servers, otherwise the host of the connection (no credentials).
+func runServers(cfg *config.AppConfig, plan *multitarget.Plan) []string {
+	if plan != nil && len(plan.Targets) >= 2 {
+		out := make([]string, 0, len(plan.Targets))
+		for _, t := range plan.Targets {
+			out = append(out, t.Label)
+		}
+		return out
+	}
+	if cfg == nil {
+		return nil
+	}
+	if host := mongoURIHost(cfg.URI); host != "" {
+		return []string{host}
+	}
+	return nil
+}
+
+// mongoURIHost is the host list of a MongoDB URI, without scheme, user,
+// password, path or options.
+func mongoURIHost(uri string) string {
+	rest := strings.TrimSpace(redactMongoURI(uri))
+	if i := strings.Index(rest, "://"); i >= 0 {
+		rest = rest[i+3:]
+	}
+	if at := strings.LastIndex(rest, "@"); at >= 0 {
+		rest = rest[at+1:]
+	}
+	if i := strings.IndexAny(rest, "/?"); i >= 0 {
+		rest = rest[:i]
+	}
+	return rest
 }
 
 func dashboardLabel(cfg *config.AppConfig, mode string, started time.Time) string {

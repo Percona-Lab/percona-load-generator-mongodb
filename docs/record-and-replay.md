@@ -71,7 +71,7 @@ The file is written on the PLGM server, in the folder PLGM runs from unless you 
 
 - **Servers** (top bar): click a server to hide or show it on every card and chart.
 - **Operation** (top bar): pick All operations, Find, Insert, Update, Delete, Aggregate, or Transaction. The cards and every chart on both tabs switch together. Clicking a total card does the same.
-- The x-axis is **seconds since that server started**. In a sequential run, the finished servers stay on the chart and the running one draws next to them.
+- The x-axis is **minutes since that server started**. In a sequential run, the finished servers stay on the chart and the running one draws next to them.
 - **Live Metrics**: total cards (one row per server, with the average rate while workers ran), **Live Throughput**, **Live Latency** (average), and **Compare servers** (p99 or p95).
 - **Latency Analysis**: the percentile timeline (Avg, P95, or P99), the latency distribution with one row per server and the difference from the first server (green is faster, red is slower, grey is within 5%), and one heatmap strip per server. The heatmap is all operations combined.
 - The Time Machine and drag-to-zoom work on this time axis too.
@@ -281,7 +281,7 @@ continue until the clock reaches 30 seconds. The run is one run, not a new launc
 
 1. **Basic settings > Workload Control**: set **Duration** (for example `30s`) and a fixed **Concurrency**.
 2. Turn on **Advanced** and open **Seed & Deterministic**. Turn on **Deterministic traffic** and set **Operations per Worker**. If **Random Seed** is 0, a seed is filled in; keep it, or type your own, and use the same one on every run you compare. Turning Deterministic traffic on also turns **Drop Collections First** on, turns **Seed documents** on, and sets **Load Profile** to **Fixed**; the note under the checkbox lists what it changed. Turning it off restores those values, except any you changed in the meantime.
-3. To run on several servers at once (generic or custom runs), set **Run on** to **Several servers** in the same section and list the servers. It is the same choice as in Target Connection. **Record Outcomes** turns on by itself.
+3. To run on several servers at once (generic or custom runs), set **Run on** to **Several servers** in **Target Connection** at the top of Basic settings. **Deterministic traffic** turns on for you, **Operations per Worker** is filled with a default of 500 if it was empty (change it if the run needs a different size; it must finish within Duration), the Seed & Deterministic settings appear in Basic settings, and a note under **Run on** says so. **Record Outcomes** turns on by itself. Switching back to **One server** undoes only what was set for you.
 
    ![Seed & Deterministic: Deterministic traffic on, seed 42, and two servers listed](../images/settings_seed_deterministic.png)
 
@@ -406,7 +406,7 @@ JSON. Trend rows of two replays of the same recording show **same values** (sour
 Replay one recording (or run one deterministic workload) on several instances and compare
 each with the first, in one run.
 
-**In the Web UI:** see [Quick start: compare three servers](#quick-start-compare-three-servers). The choice is **Target Connection > Run on: Several servers** in Basic settings. For generated traffic instead of a recording, turn on **Deterministic traffic** in a generic or custom run: **Run on** then appears right under it in **Seed & Deterministic**, and in Target Connection. Both are the same setting. Recording always runs on one server, so **Run on** isn't shown there.
+**In the Web UI:** see [Quick start: compare three servers](#quick-start-compare-three-servers). The choice is **Target Connection > Run on: Several servers** in Basic settings. For generated traffic instead of a recording, turn on **Deterministic traffic** in a generic or custom run: choose **Run on: Several servers** in Target Connection. Deterministic traffic turns on and Operations per Worker gets a default of 500, so the run is ready to launch. Recording always runs on one server, so **Run on** isn't shown there.
 
 **From the command line:**
 
