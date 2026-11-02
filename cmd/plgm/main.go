@@ -121,7 +121,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_REPLAY_OPS", "all (default) or reads_only (skip and count writes)")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DATA_FINGERPRINT", "off (default), counts, or dbhash: starting-data check")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DETERMINISTIC", "Same seed = same generated operations, no recording (true/false)")
-		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_OPERATIONS_PER_WORKER", "Fixed op budget per worker (required when deterministic)")
+		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_OPERATIONS_PER_WORKER", "Ops per worker in one pass (required when deterministic); the run continues with further ops until duration ends")
 		fmt.Fprintf(os.Stderr, "  %-35s %s\n", "PLGM_WORKLOAD_DETERMINISTIC_OUTCOMES_PATH", "Deterministic outcome file (needs outcomes on)")
 
 		fmt.Fprintf(os.Stderr, "\n [Raw Injector Mode] (High Performance Hardware Test)\n")

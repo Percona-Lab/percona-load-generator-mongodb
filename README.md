@@ -87,6 +87,7 @@ Each guide explains a feature, shows how to set it up in the Web UI step by step
 | [Workloads](./docs/workloads.md) | Default and custom workloads, saved definition library, data types, indexes and shard keys, seeding, operation mix, transactions, and sharding |
 | [Load Modeling](./docs/load-modeling.md) | Load profiles, think time, access-pattern skew, latency heatmap, and schema inference from query logs |
 | [Query and Index Analysis](./docs/query-analysis.md) | Post-run explain, scan efficiency, execution overhead, index recommendations, and latency targets |
+| [Concurrency Sweep](./docs/concurrency-sweep.md) | Run the same workload at 4, 8, 16, 32 workers, one run each, and see where more workers stop helping |
 | [Compare Runs](./docs/compare-runs.md) | Throughput and latency of several runs or servers on the same charts, with examples; saving and loading run settings is in the Web UI guide |
 | [Trends and History](./docs/trends-and-history.md) | Run history, labels and pinning, comparing runs, run matrix, sharing, and where history is stored |
 | [Record and Replay](./docs/record-and-replay.md) | Upgrade testing: recording, replaying, deterministic traffic, outcomes, comparing replays, multi-target replay, and importing captured traffic |

@@ -30,6 +30,7 @@ active worker counts are exposed in `/api/stats` (`concurrencyTarget`,
    - **Step**: **Steps**, a JSON array such as `[{"workers": 5, "duration": "30s"}, {"workers": 20, "duration": "60s"}]`.
    - **Spike**: **Base Workers**, **Peak Workers**, **Spike At (e.g. 20s)**, **Spike For (e.g. 5s)**.
    - **Sine**: **Min Workers**, **Max Workers**, **Period (e.g. 30s)**.
+   - **Sweep**: **Worker counts to test**, such as `4, 8, 16, 32`. This runs the workload once for each count, as separate runs, and **Duration** is the length of each run. See [Concurrency Sweep](./concurrency-sweep.md).
 4. Click **Launch Workload**. Watch **Live Throughput** climb as workers are added. The run report lists the profile and its peak worker count, and `/api/stats` has the live numbers (`concurrencyTarget`, `concurrencyActive`).
 
 A 40-second run that ramps from 2 to 24 workers over the first 30 seconds, then holds at 24:

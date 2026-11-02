@@ -26,7 +26,7 @@ test('Basic shows only basic settings; Advanced and Expert add a category list',
     const { w, doc, errors } = await page();
     w.selectMode('generic');
     assert.equal(doc.getElementById('settingsNav').hidden, true, 'no category list at Basic');
-    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Save & Load Run Settings', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
+    assert.deepEqual(shownCards(w, doc), ['Save & Load Run Settings', 'Target Connection', 'Workload Control', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
 
     w.toggleTier('advanced');
     const nav = doc.getElementById('settingsNav');
@@ -42,7 +42,7 @@ test('Basic shows only basic settings; Advanced and Expert add a category list',
     assert.deepEqual(shownCards(w, doc), ['Execution / Runtime Tuning', 'Client Pacing & Access Pattern', 'Sharding Strategy', 'Debug / Experimental']);
 
     doc.getElementById('snav-basic').click();
-    assert.deepEqual(shownCards(w, doc), ['Target Connection', 'Workload Control', 'Save & Load Run Settings', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
+    assert.deepEqual(shownCards(w, doc), ['Save & Load Run Settings', 'Target Connection', 'Workload Control', 'Data & Query Definitions', 'Operation Mix Allocation', 'Export & Reporting', 'Insights Capture (Sampling & Retention)', 'Post-Run Explain']);
     // Advanced fields inside Basic cards stay with them.
     assert.equal(doc.querySelector('[name="auth_source"]').closest('.settings-card').dataset.group, 'basic');
 

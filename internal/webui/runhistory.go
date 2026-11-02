@@ -58,6 +58,8 @@ type RunSummary struct {
 	ChartTruncated bool     `json:"chart_truncated,omitempty"`
 	InsightsStatus string   `json:"insights_status,omitempty"`
 	Unavailable    []string `json:"unavailable,omitempty"`
+	// Sweep is set on every run of a concurrency sweep.
+	Sweep *SweepTag `json:"sweep,omitempty"`
 }
 
 // RunDashboard is one completed run, enough to reopen its dashboard without
@@ -487,7 +489,7 @@ func (s *WebServer) captureDashboardLocked() *RunDashboard {
 			ID: s.dashboardID, Schema: runDashboardSchema, Label: label, Servers: servers, Status: status, Mode: mode,
 			StartedAt: started.UTC().Format(time.RFC3339), CompletedAt: completed.UTC().Format(time.RFC3339),
 			DurationSec: duration, ActiveSec: activeSec, TotalOps: &total, AvgLatencyMs: avg, P95LatencyMs: p95,
-			Error: s.LastError, InsightsStatus: insightsStatus, Unavailable: unavailable,
+			Error: s.LastError, InsightsStatus: insightsStatus, Unavailable: unavailable, Sweep: s.sweep.tag(),
 		},
 		Config: redactRunConfig(cfg, mode),
 		Stats:  dashboardStats(s, collector, charts, duration, total),

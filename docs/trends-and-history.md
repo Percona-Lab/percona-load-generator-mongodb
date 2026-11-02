@@ -50,6 +50,8 @@ The **Stored Runs** list in the same category shows every run with its label, se
 
 ## Compare runs in the Web UI
 
+A [concurrency sweep](./concurrency-sweep.md) stores one run for each worker count, so raise **Runs to keep** to at least the number of counts.
+
 This compares query shapes. To put the throughput and latency charts of several runs or servers on top of each other, use the **Compare Runs** tab: see [Compare Runs](./compare-runs.md).
 
 1. After a run, open **Query & Index Analysis > Trends** on the dashboard.

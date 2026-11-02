@@ -104,6 +104,10 @@ You run your workload on three servers in one run, then repeat it after an upgra
 
 Six lines are within the 8-line limit. For more than that, tick a few servers at a time.
 
+### The runs of a concurrency sweep
+
+A [concurrency sweep](./concurrency-sweep.md) stores one run per worker count. Above the charts, **Compare Runs** lists each stored sweep with a results table (workers, throughput, how it compares with the first count, average latency, and p95). Click **Show on charts**, or **Compare sweep** on any of its runs in **Completed Runs**, to draw every run of the sweep on the charts. A sweep has at most 8 runs, so all of them fit in the 8-line limit.
+
 ### Compare one run from the list
 
 ![Completed Runs, with a Compare button on every run](../images/completed_runs.png)

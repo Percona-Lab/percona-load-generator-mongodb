@@ -711,6 +711,12 @@
         .cmp-pick { display: flex; align-items: center; gap: 8px; margin: 2px 0; cursor: pointer; }
         .cmp-line { display: inline-block; width: 28px; height: 0; border-top: 3px solid; }
         .cmp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+        .sweep-card { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow-x: auto; }
+        .sweep-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
+        .sweep-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+        .sweep-table th, .sweep-table td { text-align: right; padding: 4px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        .sweep-table th:first-child, .sweep-table td:first-child, .sweep-table th:last-child, .sweep-table td:last-child { text-align: left; }
+        .sweep-table th { color: var(--text-secondary); font-weight: 600; cursor: help; }
         .cmp-diff { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--text-secondary); }
         .ms-legend-item { display: inline-flex; align-items: center; gap: 6px; }
         .ms-key { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
@@ -2527,6 +2533,10 @@
 
             <div id="dashboardControls" class="header-bottom" style="display: none;">
                 <div id="lifecycleHint" class="lifecycle-hint"></div>
+                <div id="sweepBanner" class="history-banner" role="status" hidden>
+                    <span id="sweepBannerText"></span>
+                    <button type="button" class="btn btn-flat btn-small" id="sweepCompareBtn" onclick="compareSweep(this.dataset.sweep)" hidden title="Open Compare Runs with every run of this sweep selected, and the results table">Compare this sweep</button>
+                </div>
                 <div id="runOutcomeFile" class="lifecycle-hint" hidden></div>
                 <div class="header-controls">
                     <div class="refresh-rate-control">
@@ -2662,6 +2672,7 @@
                     <button type="button" class="btn btn-flat btn-small" id="cmpLatestTwo">Latest two runs</button>
                     <button type="button" class="btn btn-flat btn-small" id="cmpClear">Clear</button>
                 </div>
+                <div id="cmpSweeps"></div>
                 <p class="ms-hint" id="cmpHint" aria-live="polite"></p>
                 <p class="ms-legend" id="cmpLegend"></p>
                 <p class="cmp-diff" id="cmpDiff"></p>
@@ -3070,6 +3081,30 @@
                         </nav>
                         <div class="settings-panels" id="settingsPanels">
             <div id="tab-conn" class="tab-content active">
+                <section class="settings-card" id="savedSettingsCard">
+                    <h4>Save &amp; Load Run Settings</h4>
+                    <div class="settings-help">Every run you start can save the settings it used, so you can repeat it later with the same parameters. Each save is a new file named with the date and time, so an earlier one is never overwritten.</div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="saveSettings" name="save_settings" value="true" checked>
+                        <label for="saveSettings">Save Settings</label>
+                    </div>
+                    <span class="settings-note">When on, the settings are saved automatically as the run starts; there is no save button.</span>
+                    <div class="form-group">
+                        <label for="saveSettingsDir">Settings Folder (server path)</label>
+                        <input class="f-xl" type="text" name="save_settings_dir" id="saveSettingsDir" placeholder="Blank: the folder of the recording path">
+                        <span class="settings-note">A folder on the machine running PLGM (the browser cannot write to your disk). It is created when missing. On your own computer that is the same machine; in Docker or Kubernetes use a mounted folder. Passwords, and uploaded files such as certificates, are never saved; a password in a URI is left out.</span>
+                    </div>
+                    <h4 class="settings-subhead">Load saved settings</h4>
+                    <div class="form-group">
+                        <label for="savedSettingsSelect">Saved settings in this folder (choose one to load it)</label>
+                        <select id="savedSettingsSelect" class="f-xl" aria-describedby="savedSettingsStatus"></select>
+                        <div style="margin-top:6px;">
+                            <button type="button" class="btn btn-secondary btn-small" id="savedSettingsRefresh">Refresh list</button>
+                        </div>
+                        <p id="savedSettingsStatus" class="settings-note" role="status"></p>
+                    </div>
+                </section>
+
                 <section class="settings-card">
                     <h4>Target Connection</h4>
                     <div class="settings-help">Set the MongoDB target and authentication details used for execution.</div>
@@ -3200,6 +3235,7 @@
                                 <option value="step">Step — hold staged worker counts</option>
                                 <option value="spike">Spike — short burst above a baseline</option>
                                 <option value="sine">Sine — oscillate periodically</option>
+                                <option value="sweep">Sweep — one run per worker count</option>
                             </select>
                             <div class="settings-help" id="loadProfileHint"></div>
                         </div>
@@ -3217,33 +3253,44 @@
 
                     <div class="lp-group" data-lp="ramp" style="display:none;">
                         <div class="grid-3">
-                            <div class="form-group"><label>Start Workers</label><input class="f-xs" type="number" name="load_profile_start_workers" value="1" min="0"></div>
-                            <div class="form-group"><label>End Workers</label><input class="f-xs" type="number" name="load_profile_end_workers" value="50" min="0"></div>
-                            <div class="form-group"><label>Ramp Over (e.g. 30s)</label><input class="f-sm" type="text" name="load_profile_ramp_over" value="30s"></div>
+                            <div class="form-group"><label title="Workers at the beginning of the ramp. The count then moves in a straight line to End Workers.">Start Workers</label><input class="f-xs" type="number" name="load_profile_start_workers" value="1" min="0"></div>
+                            <div class="form-group"><label title="Workers at the end of the ramp. They stay at this number for the rest of the run after Ramp Over has passed. End can be lower than Start to ramp down.">End Workers</label><input class="f-xs" type="number" name="load_profile_end_workers" value="50" min="0"></div>
+                            <div class="form-group"><label title="How long the move from Start to End takes. Must be shorter than Duration, or the run ends before reaching End Workers.">Ramp Over (e.g. 30s)</label><input class="f-sm" type="text" name="load_profile_ramp_over" value="30s"></div>
                         </div>
                     </div>
 
                     <div class="lp-group" data-lp="step" style="display:none;">
                         <div class="form-group">
-                            <label>Steps (JSON array of {"workers","duration"})</label>
+                            <label title="Each stage holds its worker count for its duration, in order; the last stage holds until the run ends. Use this for a concurrency sweep: one stage per worker count.">Steps (JSON array of {"workers","duration"})</label>
                             <textarea name="load_profile_steps" rows="3" placeholder='[{"workers":5,"duration":"30s"},{"workers":20,"duration":"60s"}]'></textarea>
+                            <div class="settings-help">Concurrency sweep example: <code>[{"workers":4,"duration":"2m"},{"workers":8,"duration":"2m"},{"workers":16,"duration":"2m"},{"workers":32,"duration":"2m"}]</code> compares the same workload at 4, 8, 16 and 32 workers in one run. Set Duration to at least the total of the stages (8m here); the last stage holds until Duration ends.</div>
                         </div>
+                    </div>
+
+                    <div class="lp-group" data-lp="sweep" style="display:none;">
+                        <div class="form-group">
+                            <label for="sweepWorkers" title="The worker counts to test, in the order they run. Each one is a separate run of the same workload with a fixed number of workers, stored in Completed Runs as '<label> - N workers'. 2 to 8 counts.">Worker counts to test (comma separated)</label>
+                            <input class="f-md" type="text" name="load_profile_sweep_workers" id="sweepWorkers" value="4, 8, 16, 32" placeholder="4, 8, 16, 32" aria-describedby="sweepSummary" oninput="updateSweepSummary()">
+                            <div class="settings-help" id="sweepSummary" role="status"></div>
+                        </div>
+                        <div class="settings-help"><strong>How a sweep works:</strong> the workload runs once for each worker count, one after the other. <strong>Duration</strong> is the length of <em>each</em> run, not of the whole sweep. Every run prepares its data like a normal run, so keep <strong>Drop Collections First</strong> on (and Seed documents on) and each count starts from the same data. <strong>Interval Delay</strong> is the pause between runs. When it finishes, open <strong>Compare Runs</strong> to see the counts on the same charts, with a results table. Stop ends the whole sweep.</div>
+                        <div class="settings-help"><strong>Limits:</strong> a sweep cannot be combined with <strong>Record</strong>, <strong>Replay</strong>, <strong>Raw Injector</strong>, or <strong>Deterministic traffic</strong> (each worker count would send different operations); use the Fixed profile for those. The run settings are saved <strong>once</strong>, when the first run starts, as one file that brings the whole sweep back when loaded; the later runs only change the worker count, so they are not saved again. Each run is stored in Completed Runs, so keep <strong>Runs to keep</strong> at or above the number of counts.</div>
                     </div>
 
                     <div class="lp-group" data-lp="spike" style="display:none;">
                         <div class="grid-3">
-                            <div class="form-group"><label>Base Workers</label><input class="f-xs" type="number" name="load_profile_base_workers" value="5" min="0"></div>
-                            <div class="form-group"><label>Peak Workers</label><input class="f-xs" type="number" name="load_profile_peak_workers" value="50" min="0"></div>
-                            <div class="form-group"><label>Spike At (e.g. 20s)</label><input class="f-sm" type="text" name="load_profile_spike_at" value="20s"></div>
-                            <div class="form-group"><label>Spike For (e.g. 5s)</label><input class="f-sm" type="text" name="load_profile_spike_for" value="5s"></div>
+                            <div class="form-group"><label title="Normal worker count, used before and after the spike.">Base Workers</label><input class="f-xs" type="number" name="load_profile_base_workers" value="5" min="0"></div>
+                            <div class="form-group"><label title="Worker count during the spike window.">Peak Workers</label><input class="f-xs" type="number" name="load_profile_peak_workers" value="50" min="0"></div>
+                            <div class="form-group"><label title="Time after the run starts when the burst begins. Must be inside Duration.">Spike At (e.g. 20s)</label><input class="f-sm" type="text" name="load_profile_spike_at" value="20s"></div>
+                            <div class="form-group"><label title="How long the burst at Peak Workers lasts before returning to Base Workers.">Spike For (e.g. 5s)</label><input class="f-sm" type="text" name="load_profile_spike_for" value="5s"></div>
                         </div>
                     </div>
 
                     <div class="lp-group" data-lp="sine" style="display:none;">
                         <div class="grid-3">
-                            <div class="form-group"><label>Min Workers</label><input class="f-xs" type="number" name="load_profile_min_workers" value="5" min="0"></div>
-                            <div class="form-group"><label>Max Workers</label><input class="f-xs" type="number" name="load_profile_max_workers" value="50" min="0"></div>
-                            <div class="form-group"><label>Period (e.g. 30s)</label><input class="f-sm" type="text" name="load_profile_period" value="30s"></div>
+                            <div class="form-group"><label title="Lowest worker count of the wave. The count rises and falls smoothly between Min and Max, not at random.">Min Workers</label><input class="f-xs" type="number" name="load_profile_min_workers" value="5" min="0"></div>
+                            <div class="form-group"><label title="Highest worker count of the wave.">Max Workers</label><input class="f-xs" type="number" name="load_profile_max_workers" value="50" min="0"></div>
+                            <div class="form-group"><label title="Length of one full wave (Min to Max to Min). Not the run length: Duration ÷ Period = number of waves.">Period (e.g. 30s)</label><input class="f-sm" type="text" name="load_profile_period" value="30s"></div>
                         </div>
                         <div class="settings-help">Period is the length of <strong>one full oscillation</strong> (Min &rarr; Max &rarr; Min), <em>not</em> the run length. Keep Period &le; Duration; for whole cycles, make Duration a multiple of Period (e.g. 120s &divide; 30s = 4 waves).</div>
                     </div>
@@ -3261,30 +3308,6 @@
                             <input class="f-sm" type="text" name="interval_delay" value="0s" required>
                         </div>
                     </div>
-                    </div>
-                </section>
-
-                <section class="settings-card" id="savedSettingsCard">
-                    <h4>Save &amp; Load Run Settings</h4>
-                    <div class="settings-help">Every run you start can save the settings it used, so you can repeat it later with the same parameters. Each save is a new file named with the date and time, so an earlier one is never overwritten.</div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="saveSettings" name="save_settings" value="true" checked>
-                        <label for="saveSettings">Save Settings</label>
-                    </div>
-                    <span class="settings-note">When on, the settings are saved automatically as the run starts; there is no save button.</span>
-                    <div class="form-group">
-                        <label for="saveSettingsDir">Settings Folder (server path)</label>
-                        <input class="f-xl" type="text" name="save_settings_dir" id="saveSettingsDir" placeholder="Blank: the folder of the recording path">
-                        <span class="settings-note">A folder on the machine running PLGM (the browser cannot write to your disk). It is created when missing. On your own computer that is the same machine; in Docker or Kubernetes use a mounted folder. Passwords, and uploaded files such as certificates, are never saved; a password in a URI is left out.</span>
-                    </div>
-                    <h4 class="settings-subhead">Load saved settings</h4>
-                    <div class="form-group">
-                        <label for="savedSettingsSelect">Saved settings in this folder (choose one to load it)</label>
-                        <select id="savedSettingsSelect" class="f-xl" aria-describedby="savedSettingsStatus"></select>
-                        <div style="margin-top:6px;">
-                            <button type="button" class="btn btn-secondary btn-small" id="savedSettingsRefresh">Refresh list</button>
-                        </div>
-                        <p id="savedSettingsStatus" class="settings-note" role="status"></p>
                     </div>
                 </section>
 
@@ -3409,11 +3432,11 @@
                         </div>
                         <div class="setting-row" id="operationsPerWorkerRow" hidden>
                             <div class="setting-control">
-                                <label for="operationsPerWorker">Operations per Worker</label>
+                                <label for="operationsPerWorker" title="Size of one pass, per worker. Pass total = workers × this value (for example 4 workers × 10 = 40 operations). Duration, not this value, ends the run: when a pass is done the workers keep going with the next operations of the same deterministic sequence until Duration ends. Only the first pass is fingerprinted.">Operations per Worker</label>
                                 <input class="f-sm" type="number" name="operations_per_worker" id="operationsPerWorker" value="0" min="0" step="1" aria-describedby="operationsPerWorkerHint">
                                 <p id="operationsPerWorkerHint" class="det-hint" hidden>Required: how many operations each worker sends in one pass.</p>
                             </div>
-                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> one pass of a deterministic workload. When a worker finishes this many operations before Duration ends, it continues the same workload. Required when Deterministic traffic is on, and shown only then. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
+                            <div class="settings-note" id="operationsPerWorkerNote"><strong>Set:</strong> the size of one pass of a deterministic workload, per worker. A pass sends workers × this value operations (4 workers × 10 = 40). This value does not end the run: Duration does. When a pass finishes early, each worker keeps sending the next operations of the same deterministic sequence (new operation numbers, not a repeat of the first pass) until Duration ends, so a 30-minute run is many passes. Required when Deterministic traffic is on, and shown only then. <strong>0 (default):</strong> no operation budget; workers run until Duration ends. <span class="setting-keys"><code>operations_per_worker</code> / <code>PLGM_OPERATIONS_PER_WORKER</code></span></div>
                         </div>
                         <div class="setting-row setting-row-wide det-servers" id="detServersSlot" hidden></div>
                     </div>
@@ -5374,7 +5397,7 @@
                 if (replayOn) return 'Deterministic traffic and Replay Workload cannot both be on.';
                 if (rawOn) return 'Deterministic traffic does not work with the raw injector (Expert / Debug tab).';
                 const kind = document.getElementById('loadProfileKind')?.value || 'fixed';
-                if (kind !== 'fixed') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed.';
+                if (kind !== 'fixed') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed (a Sweep cannot be used with it).';
                 if (document.getElementById('skipSeed')?.checked) {
                     return 'Deterministic traffic needs Seed documents on, so existing records are the seeded documents.';
                 }
@@ -5603,6 +5626,7 @@
             if (explainBad) {
                 add('Explain settings are invalid. Check top-N, max time, workers, retries, and backoff values.', q(explainBad[0]));
             }
+            add(validateSweep(), q('load_profile_sweep_workers'));
             add(validateTrendSettings());
             const shardingMode = (q('sharding_mode')?.value || 'auto').trim();
             const skipNoConfig = !!document.getElementById('shardSkipNoConfig')?.checked;
@@ -5772,6 +5796,8 @@
             historicalView = '';
             const historyBanner = document.getElementById('historyBanner');
             if (historyBanner) historyBanner.hidden = true;
+            const sweepBanner = document.getElementById('sweepBanner');
+            if (sweepBanner) sweepBanner.hidden = true;
             const gap = document.getElementById('historyGapNotice');
             if (gap) gap.hidden = true;
             const again = document.getElementById('runAgainBtn');
@@ -7444,7 +7470,7 @@
             }
             cmp.runs.forEach(r => {
                 if (r.id === liveId || r.status === 'damaged' || r.status === 'unsupported') return;
-                out.push({ id: r.id, live: false, label: r.label || r.id, startedAt: r.started_at, durationSec: r.duration_sec, servers: Array.isArray(r.servers) && r.servers.length ? r.servers : ['server'] });
+                out.push({ id: r.id, live: false, sweep: r.sweep || null, label: r.label || r.id, startedAt: r.started_at, durationSec: r.duration_sec, servers: Array.isArray(r.servers) && r.servers.length ? r.servers : ['server'] });
             });
             return out;
         }
@@ -7482,6 +7508,12 @@
             if (live && cmp.autoLive !== live.id) {
                 cmp.autoLive = live.id;
                 add(live);
+            }
+            if (cmp.preselectSweep && cmp.loaded) {
+                entries.filter(e => e.sweep && e.sweep.id === cmp.preselectSweep).slice(0, CMP_MAX).forEach(add);
+                cmp.preselectSweep = '';
+                cmp.seeded = true;
+                return;
             }
             if (cmp.seeded || !entries.length) return;
             const pre = cmp.preselect && entries.find(e => e.id === cmp.preselect);
@@ -7594,8 +7626,65 @@
             return diffs.length ? 'Settings that differ: ' + diffs.join(' · ') : 'The runs used the same settings, so differences come from the servers or the environment.';
         }
 
+        // Sweep results: one row per worker count of each stored sweep, so the
+        // point where throughput stops growing and latency climbs is visible.
+        function cmpSweepTable(runs) {
+            const rows = runs.filter(r => r.sweep).sort((a, b) => a.sweep.workers - b.sweep.workers);
+            const rate = r => {
+                const sec = Number(r.active_sec || r.duration_sec || 0);
+                return r.total_ops != null && sec > 0 ? Number(r.total_ops) / sec : null;
+            };
+            const base = rows.length ? rate(rows[0]) : null;
+            const num = (v, d) => v == null || !Number.isFinite(v) ? '—' : Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
+            const body = rows.map(r => {
+                const t = rate(r);
+                const x = t != null && base ? `×${(t / base).toFixed(2)}` : '—';
+                const state = r.status === 'completed' && !r.error ? 'completed' : (r.error ? 'failed' : (r.status || 'unknown'));
+                return `<tr><td>${Number(r.sweep.workers)}</td><td>${num(t, 0)}</td><td>${x}</td><td>${num(r.avg_latency_ms, 2)}</td><td>${num(r.p95_latency_ms, 2)}</td><td>${escHtml(state)}</td></tr>`;
+            }).join('');
+            return `<table class="sweep-table"><thead><tr>`
+                + `<th title="Fixed number of workers for this run">Workers</th>`
+                + `<th title="Operations per second over the time the workers ran">Throughput (ops/s)</th>`
+                + `<th title="Throughput compared with the first (lowest) count. 2 workers doubling gives about ×2; a flat number means more workers no longer help.">vs first</th>`
+                + `<th title="Average latency of all operations">Avg latency (ms)</th>`
+                + `<th title="95 out of 100 operations were faster than this">p95 (ms)</th>`
+                + `<th>Status</th></tr></thead><tbody>${body}</tbody></table>`;
+        }
+
+        function cmpSweepsHtml() {
+            const groups = new Map();
+            cmp.runs.forEach(r => { if (r.sweep && r.sweep.id) { if (!groups.has(r.sweep.id)) groups.set(r.sweep.id, []); groups.get(r.sweep.id).push(r); } });
+            if (!groups.size) return '';
+            return [...groups.entries()].slice(0, 3).map(([id, runs]) => {
+                const first = runs[0].sweep;
+                return `<div class="sweep-card"><div class="sweep-head"><strong>Sweep: ${escHtml(first.label || id)}</strong> <span class="history-sub">${runs.length} of ${Number(first.levels)} runs stored</span>`
+                    + ` <button type="button" class="btn btn-flat btn-small" data-sweep="${escHtml(id)}" title="Draw every run of this sweep on the charts below">Show on charts</button></div>${cmpSweepTable(runs)}`
+                    + `<p class="history-sub">Throughput that stops growing while latency keeps rising shows where more workers no longer help.</p></div>`;
+            }).join('');
+        }
+
+        function compareSweep(id) {
+            if (!id) return;
+            cmp.selected.clear();
+            cmp.seeded = false;
+            cmp.preselect = '';
+            cmp.preselectSweep = id;
+            cmp.sig = '';
+            showDashTab('compare');
+            cmpLoadRuns();
+        }
+
         function cmpRender() {
             if (activeDashTab !== 'compare') return;
+            const sweepsEl = document.getElementById('cmpSweeps');
+            if (sweepsEl) {
+                const html = cmpSweepsHtml();
+                if (sweepsEl.dataset.sig !== html) {
+                    sweepsEl.dataset.sig = html;
+                    sweepsEl.innerHTML = html;
+                    sweepsEl.querySelectorAll('button[data-sweep]').forEach(b => b.addEventListener('click', () => compareSweep(b.dataset.sweep)));
+                }
+            }
             const entries = cmpEntries();
             cmpSeed(entries);
             cmpPicker(entries);
@@ -7645,12 +7734,13 @@
         }
 
         // Completed Runs: open a run's dashboard on the Compare Runs tab.
-        async function compareFromHistory(id) {
+        async function compareFromHistory(id, sweepId) {
             await openHistoricalRun(id);
             if (historicalView !== id) return;
             cmp.selected.clear();
             cmp.seeded = false;
-            cmp.preselect = id;
+            cmp.preselect = sweepId ? '' : id;
+            cmp.preselectSweep = sweepId || '';
             cmp.sig = '';
             showDashTab('compare');
         }
@@ -9508,7 +9598,7 @@
             fetch('/api/stats?chartSince=0')
                 .then(r => r.ok ? r.json() : null)
                 .then(stats => {
-                    if (!stats || !stats.isRunning) return;
+                    if (!stats || !(stats.isRunning || (stats.sweep && stats.sweep.active))) return;
                     openLiveDashboard(targetSecondsFromStats(stats));
                     applyLiveStats(stats);
                 })
@@ -9629,8 +9719,43 @@
             if (!document.hidden && pollInterval) pollTick();
         });
 
+        // The Sweep profile runs one run per worker count. The dashboard
+        // follows each: it reopens for every new run and waits between them.
+        // Returns true when this update was only the wait or the switch.
+        let sweepDashId = '';
+        function handleSweepStats(stats) {
+            const sw = stats && stats.sweep;
+            const banner = document.getElementById('sweepBanner');
+            if (banner) {
+                banner.hidden = !sw;
+                if (sw) {
+                    const left = sw.state === 'waiting' && sw.pause_sec > 0 ? ` (after a ${sw.pause_sec}s pause)` : '';
+                    document.getElementById('sweepBannerText').textContent = `Sweep of ${sw.levels} runs (${(sw.workers || []).join(', ')} workers): ${sw.message || sw.state}${left}`;
+                    const btn = document.getElementById('sweepCompareBtn');
+                    btn.dataset.sweep = sw.id;
+                    btn.hidden = sw.active && sw.level < 2;
+                }
+            }
+            if (!sw || !sw.active) { sweepDashId = ''; return false; }
+            if (stats.isRunning) {
+                if (!sweepDashId) { sweepDashId = stats.dashboardId || ''; return false; }
+                if (stats.dashboardId && stats.dashboardId !== sweepDashId) {
+                    sweepDashId = stats.dashboardId;
+                    openLiveDashboard(targetSecondsFromStats(stats));
+                    return true;
+                }
+                return false;
+            }
+            // Between two runs: keep polling and keep Stop available.
+            setStatusBadge('SWEEP', 'init');
+            document.getElementById('activeActions').style.display = 'block';
+            document.getElementById('finishActions').style.display = 'none';
+            return true;
+        }
+
         function applyLiveStats(stats) {
-                        if (!historicalView) setRunModeLock(!!stats.isRunning);
+                        if (!historicalView && handleSweepStats(stats)) return;
+                        if (!historicalView) setRunModeLock(!!stats.isRunning || !!(stats.sweep && stats.sweep.active));
                         if (stats.lastError && stats.lastError !== lastRuntimeErrorShown) {
                             lastRuntimeErrorShown = stats.lastError;
                             showError("Workload error: " + stats.lastError);
@@ -9862,6 +9987,7 @@
             ramp: 'Worker count moves linearly from Start to End over "Ramp Over"; it holds at End for the rest of the run.',
             step: 'Worker count holds each stage\'s value for its duration, in order. The last stage holds until the run ends.',
             spike: 'Runs at Base workers, then jumps to Peak for the spike window, then returns to Base.',
+            sweep: 'Runs the same workload once per worker count (for example 4, 8, 16, 32), one run after another, each with a fixed worker count. Duration is the length of each run. Compare the counts afterwards in Compare Runs. Not for Record, Replay, Raw Injector, or Deterministic traffic.',
             sine: 'Worker count oscillates smoothly between Min and Max, completing one full wave every Period. Period is one cycle length; Duration is the total run. Duration ÷ Period = number of waves (e.g. 120s ÷ 30s = 4).'
         };
 
@@ -9884,7 +10010,57 @@
             if (label) label.textContent = isFixed ? 'Concurrency (Active Workers)' : 'Fallback Concurrency';
             if (managedHint) managedHint.style.display = isFixed ? 'none' : 'block';
             if (input) input.classList.toggle('input-managed', !isFixed);
+            if (kind === 'sweep') updateSweepSummary();
         }
+
+        // Worker counts of the Sweep profile, or an error message.
+        function parseSweepWorkers(raw) {
+            const parts = String(raw || '').split(/[\s,;]+/).filter(Boolean);
+            if (parts.length < 2) return { error: 'A sweep needs at least 2 worker counts, for example 4, 8, 16, 32.' };
+            if (parts.length > 8) return { error: 'A sweep has at most 8 worker counts; Compare Runs draws up to 8 lines.' };
+            const out = [];
+            for (const p of parts) {
+                if (!/^\d+$/.test(p) || Number(p) < 1 || Number(p) > 10000) return { error: `"${p}" is not a worker count; use whole numbers from 1 to 10000.` };
+                if (out.includes(Number(p))) return { error: `Worker count ${p} is listed twice.` };
+                out.push(Number(p));
+            }
+            return { workers: out };
+        }
+
+        const sweepHuman = sec => {
+            sec = Math.round(sec);
+            if (sec < 60) return `${sec} s`;
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), r = sec % 60;
+            return [h ? `${h} h` : '', m ? `${m} min` : '', r ? `${r} s` : ''].filter(Boolean).join(' ');
+        };
+
+        function validateSweep() {
+            if ((document.getElementById('loadProfileKind') || {}).value !== 'sweep') return '';
+            const mode = (document.getElementById('operationMode')?.value || '').trim();
+            if (mode === 'record' || mode === 'replay' || mode === 'raw') return 'The Sweep load profile runs a generic or custom workload; set Load Profile to Fixed for Record, Replay, or Raw Injector.';
+            return parseSweepWorkers(document.getElementById('sweepWorkers')?.value).error || '';
+        }
+
+        // What the sweep will do, before it starts: runs, total time, and how
+        // many stored runs it needs.
+        function updateSweepSummary() {
+            const el = document.getElementById('sweepSummary');
+            if (!el) return;
+            const r = parseSweepWorkers(document.getElementById('sweepWorkers')?.value);
+            if (r.error) { el.textContent = r.error; return; }
+            const val = name => (document.querySelector(`[name="${name}"]`)?.value || '').trim();
+            const per = targetSecondsFromParts(val('duration'), val('iterations'), val('interval_delay'));
+            const gap = parseDuration(val('interval_delay') || '0s');
+            const total = per * r.workers.length + gap * (r.workers.length - 1);
+            const keep = Number(val('trend_history_runs')) || 5;
+            let text = `${r.workers.length} runs (${r.workers.join(', ')} workers), about ${sweepHuman(total)} of load in total, without data preparation.`;
+            if (r.workers.length > keep) text += ` Runs to keep is ${keep} (Advanced > Trends & history): the oldest runs of this sweep would be removed. Raise it to at least ${r.workers.length} first.`;
+            el.textContent = text;
+        }
+
+        document.addEventListener('input', e => {
+            if (e.target && ['duration', 'iterations', 'interval_delay', 'trend_history_runs'].includes(e.target.name)) updateSweepSummary();
+        });
 
         function onAccessPatternKindChange() {
             const kind = (document.getElementById('accessPatternKind') || {}).value || 'uniform';
@@ -10422,12 +10598,12 @@
 
         function classifySettings() {
             const rules = [
+                ['Save & Load Run Settings', '*', 'basic', 'execution'],
                 ['Target Connection', '*', 'basic', 'connection'],
                 ['TLS Client Settings', '*', 'expert', 'connection'],
                 ['Runtime Transport & Pooling', '*', 'expert', 'connection'],
                 ['Execution / Runtime Tuning', 'generic,custom,record', 'expert', 'execution'],
                 ['Workload Control', 'generic,custom,record,raw', 'basic', 'execution'],
-                ['Save & Load Run Settings', '*', 'basic', 'execution'],
                 ['Client Pacing & Access Pattern', 'generic,custom,record', 'advanced', 'execution'],
                 ['Sharding Strategy', 'generic,custom,record,replay', 'expert', 'execution'],
                 ['Reproducible Workload (Record & Replay)', 'record,replay', 'basic', 'reproducibility'],
@@ -10797,9 +10973,9 @@
             const reportURL = `/api/run-history/${encodeURIComponent(run.id)}/report`;
             const report = broken ? '' : `<a class="btn btn-flat btn-small" href="${reportURL}" target="_blank" rel="noopener noreferrer">HTML report<span class="sr-only"> (opens in a new tab)</span></a>`
                 + `<a class="btn btn-flat btn-small" href="${reportURL}?download=1" download="plgm-report-${escHtml(run.id)}.html">Download<span class="sr-only"> HTML report</span></a>`;
-            const cmpBtn = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="compareFromHistory('${escHtml(run.id)}')" title="Open this run on the Compare Runs tab">Compare</button>`;
+            const cmpBtn = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="compareFromHistory('${escHtml(run.id)}'${run.sweep ? `, '${escHtml(run.sweep.id)}'` : ''})" title="${run.sweep ? 'Open Compare Runs with every run of this sweep selected, and the sweep results table' : 'Open this run on the Compare Runs tab'}">${run.sweep ? 'Compare sweep' : 'Compare'}</button>`;
             const pin = broken ? '' : `<button type="button" class="btn btn-flat btn-small" onclick="pinHistoricalRun('${escHtml(run.id)}', ${run.pinned ? 'false' : 'true'})">${run.pinned ? 'Unpin' : 'Pin'}</button>`;
-            return `<tr><td data-label="Run"><strong>${escHtml(run.label || run.id)}</strong><div class="history-sub">${escHtml(run.id)}</div></td><td data-label="When">${escHtml(when)}<div class="history-sub">${escHtml(dur)}</div></td><td data-label="Mode">${escHtml(run.mode || '—')}</td><td data-label="Status"><span class="status-chip ${statusClass}">${escHtml(status)}</span>${run.error ? `<div class="history-sub">${escHtml(run.error)}</div>` : ''}</td><td data-label="Summary">${escHtml(ops)}<div class="history-sub">${escHtml(lat)}</div></td><td data-label="Actions"><div class="history-actions">${open}${cmpBtn}${report}${pin}</div></td></tr>`;
+            return `<tr><td data-label="Run"><strong>${escHtml(run.label || run.id)}</strong><div class="history-sub">${escHtml(run.id)}</div>${run.sweep ? `<div class="history-sub">Sweep run ${Number(run.sweep.level)} of ${Number(run.sweep.levels)} · ${Number(run.sweep.workers)} workers</div>` : ''}</td><td data-label="When">${escHtml(when)}<div class="history-sub">${escHtml(dur)}</div></td><td data-label="Mode">${escHtml(run.mode || '—')}</td><td data-label="Status"><span class="status-chip ${statusClass}">${escHtml(status)}</span>${run.error ? `<div class="history-sub">${escHtml(run.error)}</div>` : ''}</td><td data-label="Summary">${escHtml(ops)}<div class="history-sub">${escHtml(lat)}</div></td><td data-label="Actions"><div class="history-actions">${open}${cmpBtn}${report}${pin}</div></td></tr>`;
         }
 
         function pinHistoricalRun(id, pinned) {

@@ -69,7 +69,7 @@ With Advanced or Expert on, a **Categories** list appears on the left. Click a c
 
 | Category | What's in it |
 | :--- | :--- |
-| **Basic settings** | Connection (one server or several, in **Target Connection**), workers, duration, iterations and interval delay, load profile, recording or replay file, definitions, seeding, operation mix, export, insights capture, post-run explain, and **Save & Load Run Settings** |
+| **Basic settings** | Connection (one server or several, in **Target Connection**), workers, duration, iterations and interval delay, load profile (including a [concurrency sweep](./concurrency-sweep.md), one run per worker count), recording or replay file, definitions, seeding, operation mix, export, insights capture, post-run explain, and **Save & Load Run Settings** |
 | **Connection** | TLS files, connection pool, direct connection, driver debug logs (Expert) |
 | **Workload execution** | Think time and access pattern (Advanced); batch sizes, timeouts, sharding, retries (Expert) |
 | **Seed & Deterministic** | Deterministic traffic, random seed, operations per worker, and, for a deterministic generic or custom run, the servers to run on; outcome files (Advanced). Called **Outcomes & import** in a replay: outcome files and traffic import |

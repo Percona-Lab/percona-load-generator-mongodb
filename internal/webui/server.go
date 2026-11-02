@@ -110,6 +110,8 @@ type WebServer struct {
 	runHistory    *RunHistory
 	dashboardID   string
 	dashboardMode string
+	// sweep is the current or last concurrency sweep (see sweep.go).
+	sweep *sweepRun
 	// sampler records the dashboard charts on the server.
 	sampler chartSampler
 }
@@ -783,7 +785,8 @@ func explainQueriesFormatError(raw []byte, wrappedErr error, arrErr error) strin
 	return base
 }
 
-func (s *WebServer) handleStart(w http.ResponseWriter, r *http.Request) {
+// handleStartRun starts one run (see handleStart for sweeps).
+func (s *WebServer) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeStartError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -1790,6 +1793,10 @@ func (s *WebServer) handleStop(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Stopping also ends a sweep, including between two levels.
+	if s.sweep.active() {
+		s.sweep.Cancelled = true
+	}
 	if s.IsRunning && s.ActiveCancel != nil {
 		s.CurrentStats.NoteChartEvent("Stopped by user")
 		if s.multiTarget != nil {
@@ -1873,6 +1880,7 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	lifecycleEvents := append([]lifecycleEvent(nil), s.LifecycleEvents...)
 	plan := s.multiTarget
 	dashboardID := s.dashboardID
+	sweepView := s.sweepViewLocked()
 	// Target iterations are written under s.mu by the run.
 	targetIterations := map[*stats.Collector]int{}
 	if plan != nil {
@@ -2081,6 +2089,9 @@ func (s *WebServer) handleStats(w http.ResponseWriter, r *http.Request) {
 		"sampleIntervalMs": s.chartSampleInterval().Milliseconds(),
 		"latencyHeatmap":   collector.LatencyHeatmap(),
 		"dashboardId":      dashboardID,
+	}
+	if sweepView != nil {
+		statsResp["sweep"] = sweepView
 	}
 	if mt := multiTargetStatus(plan); mt != nil {
 		statsResp["multi_target"] = mt

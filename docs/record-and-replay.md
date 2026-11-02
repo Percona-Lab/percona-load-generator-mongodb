@@ -302,7 +302,7 @@ Only hashes are stored, never query values. In Trends, two complete runs with th
 **Settings:**
 
 - **Deterministic traffic** (`workload_deterministic`). On: generate the workload as described above. Off (default): generate operations as usual until Duration ends, with no fixed pass and no fingerprint.
-- **Operations per Worker** (`operations_per_worker`). The size of one pass. Required when deterministic traffic is on, and it must be greater than 0. 0 (default): no pass; workers simply run until Duration ends.
+- **Operations per Worker** (`operations_per_worker`). The size of one pass, per worker: a pass is workers × this value operations (4 workers × 10 = 40). It does not end the run; `duration` does. After the first pass each worker keeps sending the next operations of the same deterministic sequence (new operation numbers, not a repeat of the first pass) until `duration` ends. Required when deterministic traffic is on, and it must be greater than 0. 0 (default): no pass; workers simply run until Duration ends.
 
 Turning **Deterministic traffic** on in the Web UI sets `drop_collections`, clears `skip_seed`, and selects a fixed load profile.
 

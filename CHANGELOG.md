@@ -5,6 +5,31 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v7.1.0 - Concurrency sweep, and clearer settings
+
+You can now run the same workload at several worker counts, for example 4, 8, 16, and 32, with one click, and see where more workers stop helping. The Web UI also explains more of its settings. The CLI, `config.yaml`, and environment variables are unchanged.
+
+**Highlights**
+
+**New: Concurrency sweep**
+- A new **Load Profile**, **Sweep**, in **Workload Control** (Basic settings). List 2 to 8 **Worker counts to test**, such as `4, 8, 16, 32`, and PLGM runs the workload once for each count, one after the other. **Duration** is the length of each run, and **Interval Delay** is the pause between runs.
+- Each count is an ordinary run: it prepares its data like any run (keep **Drop Collections First** and **Seed documents** on, so every count starts from the same data), and is stored in **Completed Runs** as `<Run label> - <N> workers`. Without a **Run label**, the sweep is named `Sweep <date and time>`.
+- The dashboard shows a banner with the current run of the sweep, waits between runs, and opens the next run by itself. **Stop** ends the whole sweep, including between two runs. If a run fails, the sweep stops there, and the runs before it stay stored.
+- **Compare Runs** shows a results table for each stored sweep: workers, throughput, throughput compared with the first count, average latency, and p95. **Show on charts**, **Compare this sweep** on the dashboard, and **Compare sweep** in **Completed Runs** draw every run of the sweep on the charts.
+- Under the field, PLGM shows how many runs the sweep makes and about how long it takes, and warns when **Runs to keep** (default 5) is lower than the number of runs.
+- The run settings are saved once, when the first run starts, and loading that file brings the whole sweep back.
+- Limits: Web UI only. It cannot be combined with Record, Replay, Raw Injector, or Deterministic traffic, and a sweep on several servers is not covered by the results table. The Web UI says so next to the setting. See [Concurrency Sweep](./docs/concurrency-sweep.md).
+
+**Changed: Basic settings**
+- **Save & Load Run Settings** is now the first card of Basic settings, before **Target Connection**, so you can choose a saved setting without scrolling.
+
+**Changed: Tooltips and explanations**
+- **Operations per Worker** now explains that it is the size of one pass per worker (workers × this value operations), that **Duration** ends the run, and that after the first pass each worker keeps sending the next operations of the same deterministic sequence (new operation numbers, not a repeat of the first pass). The command line help (`PLGM_OPERATIONS_PER_WORKER`), the configuration reference, and the Record and Replay guide say the same.
+- The **Ramp**, **Spike**, and **Sine** fields have tooltips, and the **Step** profile has a tooltip and an example for a concurrency sweep within one run.
+
+
+---
+
 ## v7.0.0 - Compare runs, save run settings, and a simpler Basic page
 
 You can now put the charts of several runs or servers on top of each other, and every run's settings are saved so you can repeat it. Several settings moved to Basic, and the charts show minutes. It is a major version because settings changed levels and the dashboard has a new tab. The CLI, `config.yaml`, and environment variables are unchanged.
