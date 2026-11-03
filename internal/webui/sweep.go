@@ -290,6 +290,13 @@ func (s *WebServer) startSweep(w http.ResponseWriter, r *http.Request) bool {
 		writeStartError(w, http.StatusBadRequest, "a concurrency sweep runs a generic or custom workload; it cannot be combined with Record, Replay, or Raw Injector")
 		return true
 	}
+	// Deterministic traffic is allowed: every level is a fixed-count run with
+	// its own fingerprint. One outcome file path would be reused by every level.
+	if strings.EqualFold(strings.TrimSpace(r.FormValue("workload_deterministic")), "true") &&
+		strings.TrimSpace(r.FormValue("workload_deterministic_outcomes_path")) != "" {
+		writeStartError(w, http.StatusBadRequest, "a sweep with Deterministic traffic needs a blank Deterministic Outcome File, so every worker count writes its own file")
+		return true
+	}
 	workers, err := parseSweepWorkers(r.FormValue("load_profile_sweep_workers"))
 	if err != nil {
 		writeStartError(w, http.StatusBadRequest, err.Error())

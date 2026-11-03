@@ -216,3 +216,30 @@ func TestSweepRejectsWhatItCannotRun(t *testing.T) {
 		t.Fatal("a rejected sweep must leave no run or sweep behind")
 	}
 }
+
+func TestSweepAllowsDeterministicTrafficButNotAFixedOutcomeFile(t *testing.T) {
+	var mu sync.Mutex
+	var seen []int
+	var labels []string
+	sweepSeams(t, &mu, &seen, &labels, nil)
+	s := NewServer(&config.AppConfig{Duration: "1s", Iterations: 1, CollectionsPath: "ignored", QueriesPath: "ignored"})
+	s.runHistory = OpenRunHistory(t.TempDir())
+	waitForRunsOnCleanup(t, s)
+
+	rec := startSweep(t, s, map[string]string{
+		"default_workload": "on", "load_profile_kind": "sweep", "load_profile_sweep_workers": "4, 8",
+		"workload_deterministic": "true", "workload_deterministic_outcomes_path": "/tmp/one.ndjson",
+	})
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Deterministic Outcome File") {
+		t.Fatalf("fixed outcome path: status %d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = startSweep(t, s, map[string]string{
+		"default_workload": "on", "load_profile_kind": "sweep", "load_profile_sweep_workers": "4, 8",
+		"workload_deterministic": "true", "random_seed": "7", "operations_per_worker": "10",
+		"drop_collections": "true",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d body=%s", rec.Code, rec.Body.String())
+	}
+	waitUntil(t, 5*time.Second, func() bool { return sweepState(s) == sweepDone }, "the sweep did not finish")
+}

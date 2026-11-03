@@ -36,7 +36,7 @@ test('Sweep is a load profile with its own fields, hint, and tooltips', async ()
     assert.match(doc.querySelector('label[for="sweepWorkers"]').title, /separate run/);
     assert.match(doc.querySelector('[data-lp="sweep"]').textContent.replace(/\s+/g, ' '), /Duration is the length of each run/);
     const help = doc.querySelector('[data-lp="sweep"]').textContent.replace(/\s+/g, ' ');
-    assert.match(help, /cannot be combined with Record, Replay, Raw Injector, or Deterministic traffic/);
+    assert.match(help, /cannot be combined with Record, Replay, or Raw Injector.*With Deterministic traffic, each worker count is its own deterministic run/);
     assert.match(help, /saved once, when the first run starts/);
     assert.match(doc.getElementById('loadProfileHint').textContent, /Deterministic traffic/);
     assert.equal(doc.getElementById('sweepWorkers').name, 'load_profile_sweep_workers');
@@ -160,4 +160,23 @@ test('saved settings keep a sweep and bring it back', async () => {
     assert.equal(kind.value, 'sweep');
     assert.equal(doc.getElementById('sweepWorkers').value, '2, 6, 12');
     assert.equal(doc.querySelector('[data-lp="sweep"]').style.display, 'block', 'the sweep fields are shown again');
+});
+
+test('Deterministic traffic keeps the Sweep profile and the level note names what it set', async () => {
+    const { w, doc, errors } = await loadPage(fixture('trends'), {
+        '/api/config': async () => ({ body: { URI: 'mongodb://fixture', InsightsEnabled: true } }),
+    });
+    await new Promise(r => setTimeout(r, 10));
+    const kind = doc.getElementById('loadProfileKind');
+    kind.value = 'sweep'; w.onLoadProfileKindChange();
+    const det = doc.getElementById('workloadDeterministic');
+    det.checked = true; det.dispatchEvent(new w.Event('change', { bubbles: true }));
+    assert.equal(kind.value, 'sweep');
+    assert.ok(!/Sweep cannot/.test(w.validateConfigForm.toString()));
+    const note = doc.getElementById('tierNote');
+    assert.equal(note.hidden, false);
+    assert.match(note.textContent, /Deterministic traffic is on/);
+    doc.getElementById('tierAdvancedBtn').click();
+    assert.match(note.textContent, /Advanced settings are shown/);
+    assert.deepEqual(errors, []);
 });

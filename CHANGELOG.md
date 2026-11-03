@@ -5,6 +5,19 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v7.1.1 - Sweep with deterministic traffic, and a settings level note
+
+**Changed: Concurrency sweep**
+- The **Sweep** load profile now works with **Deterministic traffic**. Each worker count is its own deterministic run with its own traffic fingerprint, so you can run 4, 8, 16, 32 workers on each server version and compare the same count across them. Every worker sends the same operations at any count (8 workers send what 4 workers sent, plus 4 more workers' operations).
+- A sweep with Deterministic traffic needs a blank **Deterministic Outcome File**, so every count writes its own file; PLGM refuses the start otherwise.
+- Turning on Deterministic traffic no longer switches **Load Profile** from Sweep back to Fixed.
+
+**New: Settings level note**
+- A note under the **Settings level** picker says when Advanced or Expert settings are shown, that they already hold defaults, and that hidden levels still apply to the run.
+- While Deterministic traffic is on, the settings it set for itself (Drop Collections First, Seed documents, Load Profile, Random Seed) are greyed with a tooltip, and the note lists them. They can still be changed.
+
+---
+
 ## v7.1.0 - Concurrency sweep, and clearer settings
 
 You can now run the same workload at several worker counts, for example 4, 8, 16, and 32, with one click, and see where more workers stop helping. The Web UI also explains more of its settings. The CLI, `config.yaml`, and environment variables are unchanged.

@@ -121,7 +121,7 @@ Use **Sweep** to measure each concurrency level on its own. Use [Step](./load-mo
 
 - A sweep has 2 to 8 worker counts. Compare Runs draws up to 8 lines.
 - A sweep runs a **generic** or **custom** workload. It cannot be combined with **Record**, **Replay**, or **Raw Injector**. Choose **Fixed** for those.
-- **Deterministic traffic** needs a fixed worker count, so it cannot be turned on with a sweep. Each worker count would send different operations anyway (the operations depend on the worker).
+- **Deterministic traffic** works with a sweep: each worker count is its own deterministic run with its own traffic fingerprint. Every worker sends the same operations at any count, so 8 workers send what 4 workers sent plus 4 more workers' operations. Compare the same count across servers. Leave **Deterministic Outcome File** blank, so each count writes its own file.
 - Each run is stored in **Completed Runs**, so a sweep needs as many stored runs as it has counts. **Runs to keep** defaults to 5 (1 to 50) in **Advanced > Trends & history**, and older unpinned runs are removed first. The summary under **Worker counts to test** warns when **Runs to keep** is lower than the number of runs. Raise it, or **Pin** the runs you need. See [Trends and History](./trends-and-history.md#history-labels-and-pinning).
 - The total time is the sum of the runs, the pauses, and the data preparation of each run. The summary under the field does not include data preparation.
 - A sweep on several servers (**Run on: Several servers**) is not covered by the results table.

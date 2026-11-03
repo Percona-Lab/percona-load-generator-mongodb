@@ -711,6 +711,10 @@
         .cmp-pick { display: flex; align-items: center; gap: 8px; margin: 2px 0; cursor: pointer; }
         .cmp-line { display: inline-block; width: 28px; height: 0; border-top: 3px solid; }
         .cmp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+        .tier-note { margin: 8px 0; padding: 8px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent, #4a7); border-radius: var(--radius-md); font-size: var(--fs-sm); color: var(--text-secondary); }
+        .tier-note ul { margin: 4px 0 0 18px; padding: 0; }
+        .setting-preset { opacity: .6; }
+        .setting-preset:hover, .setting-preset:focus-within { opacity: 1; }
         .sweep-card { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow-x: auto; }
         .sweep-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
         .sweep-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
@@ -3072,6 +3076,7 @@
                             </div>
                             <span id="tierStatus" class="tier-status" aria-live="polite">Showing basic settings</span>
                         </div>
+                        <div id="tierNote" class="tier-note" role="status" aria-live="polite" hidden></div>
                     </div>
 
                     <div class="settings-body" id="settingsBody">
@@ -3274,7 +3279,7 @@
                             <div class="settings-help" id="sweepSummary" role="status"></div>
                         </div>
                         <div class="settings-help"><strong>How a sweep works:</strong> the workload runs once for each worker count, one after the other. <strong>Duration</strong> is the length of <em>each</em> run, not of the whole sweep. Every run prepares its data like a normal run, so keep <strong>Drop Collections First</strong> on (and Seed documents on) and each count starts from the same data. <strong>Interval Delay</strong> is the pause between runs. When it finishes, open <strong>Compare Runs</strong> to see the counts on the same charts, with a results table. Stop ends the whole sweep.</div>
-                        <div class="settings-help"><strong>Limits:</strong> a sweep cannot be combined with <strong>Record</strong>, <strong>Replay</strong>, <strong>Raw Injector</strong>, or <strong>Deterministic traffic</strong> (each worker count would send different operations); use the Fixed profile for those. The run settings are saved <strong>once</strong>, when the first run starts, as one file that brings the whole sweep back when loaded; the later runs only change the worker count, so they are not saved again. Each run is stored in Completed Runs, so keep <strong>Runs to keep</strong> at or above the number of counts.</div>
+                        <div class="settings-help"><strong>Limits:</strong> a sweep cannot be combined with <strong>Record</strong>, <strong>Replay</strong>, or <strong>Raw Injector</strong>; use the Fixed profile for those. With <strong>Deterministic traffic</strong>, each worker count is its own deterministic run (every worker sends the same operations at any count, so 8 workers send what 4 workers sent, plus 4 more workers' operations), with its own traffic fingerprint: compare the same count across servers. Leave <strong>Deterministic Outcome File</strong> blank so each count gets a new file. The run settings are saved <strong>once</strong>, when the first run starts, as one file that brings the whole sweep back when loaded; the later runs only change the worker count, so they are not saved again. Each run is stored in Completed Runs, so keep <strong>Runs to keep</strong> at or above the number of counts.</div>
                     </div>
 
                     <div class="lp-group" data-lp="spike" style="display:none;">
@@ -5286,6 +5291,7 @@
             if (row) row.hidden = !det && /^\d*$/.test(ops);
             const hint = document.getElementById('operationsPerWorkerHint');
             if (hint) hint.hidden = !(det && !(Number(ops) > 0));
+            if (typeof updateTierNote === 'function') updateTierNote();
         }
         function onRunOnChange() {
             const eff = effectiveReproSettings();
@@ -5397,7 +5403,7 @@
                 if (replayOn) return 'Deterministic traffic and Replay Workload cannot both be on.';
                 if (rawOn) return 'Deterministic traffic does not work with the raw injector (Expert / Debug tab).';
                 const kind = document.getElementById('loadProfileKind')?.value || 'fixed';
-                if (kind !== 'fixed') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed (a Sweep cannot be used with it).';
+                if (kind !== 'fixed' && kind !== 'sweep') return 'Deterministic traffic needs a fixed worker count: set Load Profile to Fixed or Sweep (one fixed count per run).';
                 if (document.getElementById('skipSeed')?.checked) {
                     return 'Deterministic traffic needs Seed documents on, so existing records are the seeded documents.';
                 }
@@ -5518,7 +5524,9 @@
                     deterministicOverrides[f.key] = { prev: deterministicFieldValue(f.id), applied: deterministicFieldValue(f.id) };
                 });
             }
-            const required = { drop: true, skip: false, loadProfile: 'fixed' };
+            const required = { drop: true, skip: false };
+            // Fixed and Sweep both run each level with a fixed worker count.
+            if (!['fixed', 'sweep'].includes(deterministicFieldValue('loadProfileKind'))) required.loadProfile = 'fixed';
             const seed = (document.getElementById('randomSeedInput')?.value || '').trim();
             if (!seed || Number(seed) === 0) required.seed = String(newDeterministicSeed());
             Object.entries(required).forEach(([key, v]) => {
@@ -10580,6 +10588,36 @@
             applySettingsGroups();
         }
 
+        // Explains, under the level picker, what the chosen level adds and which
+        // settings were filled in by a choice (Deterministic traffic), so
+        // pre-set boxes are not a surprise. Those boxes are greyed, not locked.
+        function updateTierNote() {
+            const note = document.getElementById('tierNote');
+            if (!note) return;
+            const adv = document.body.classList.contains('tier-advanced-open');
+            const exp = document.body.classList.contains('tier-expert-open');
+            const parts = [];
+            if (adv || exp) {
+                const lv = adv && exp ? 'Advanced and Expert settings are' : adv ? 'Advanced settings are' : 'Expert settings are';
+                parts.push(`<strong>${lv} shown.</strong> They already hold defaults (or values you loaded), so a run works without touching them; change one only when you need to. Hidden levels keep their values and still apply to the run.`);
+            }
+            const det = document.getElementById('workloadDeterministic');
+            const items = [];
+            document.querySelectorAll('.setting-preset').forEach(el => el.classList.remove('setting-preset'));
+            if (det && det.checked) {
+                [['dropColl', 'Drop Collections First'], ['seedData', 'Seed documents'], ['loadProfileKind', 'Load Profile (Fixed or Sweep)'], ['randomSeedInput', 'Random Seed']].forEach(([id, label]) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    items.push(label);
+                    const row = el.closest('.form-group, .checkbox-group') || el.parentElement;
+                    if (row) { row.classList.add('setting-preset'); row.title = 'Set by Deterministic traffic; it needs this value. Greyed to show it was chosen for you.'; }
+                });
+                parts.push(`<strong>Deterministic traffic is on</strong>, so these were set for it and are greyed: ${items.join(', ')}. You can still change them, but a run that breaks the requirements is refused. A sweep works with it: each worker count is its own deterministic run.`);
+            }
+            note.innerHTML = parts.join('<br>');
+            note.hidden = parts.length === 0;
+        }
+
         function syncTierButtons() {
             const adv = document.body.classList.contains('tier-advanced-open');
             const exp = document.body.classList.contains('tier-expert-open');
@@ -10587,6 +10625,7 @@
             const expBtn = document.getElementById('tierExpertBtn');
             if (advBtn) { advBtn.setAttribute('aria-expanded', adv ? 'true' : 'false'); advBtn.title = adv ? 'Hide advanced settings' : 'Show advanced settings'; }
             if (expBtn) { expBtn.setAttribute('aria-expanded', exp ? 'true' : 'false'); expBtn.title = exp ? 'Hide expert settings' : 'Show expert settings'; }
+            updateTierNote();
             const status = document.getElementById('tierStatus');
             if (status) {
                 if (adv && exp) status.textContent = 'Showing basic, advanced, and expert settings';
