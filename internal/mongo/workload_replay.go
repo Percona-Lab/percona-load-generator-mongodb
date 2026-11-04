@@ -169,7 +169,7 @@ func runWorkloadReplay(ctx context.Context, db *mongo.Database, collections []co
 		collector.SetWorkloadReplay(&rep)
 	}
 
-	wCfg := workloadConfig{database: db, appConfig: cfg, concurrency: workers, collections: collections, collector: collector, debug: cfg.DebugMode}
+	wCfg := workloadConfig{database: db, fastFindOptions: fastFindRunCmdOptions(readPreferenceOf(cfg)), appConfig: cfg, concurrency: workers, collections: collections, collector: collector, debug: cfg.DebugMode}
 	if cfg.WorkloadRecordOutcomes {
 		ow, err := openOutcomeFile(ctx, db, cfg.WorkloadReplayOutcomesPath, cfg, workloadrec.OutcomeHeader{
 			Source: workloadrec.OutcomeSourceReplay, Workers: workers, RecordingFile: rep.FileName, RecordingHeaderHash: info.HeaderHash, OpsFilter: rep.OpsFilter,

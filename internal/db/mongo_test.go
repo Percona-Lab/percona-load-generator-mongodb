@@ -1,11 +1,28 @@
 package db
 
 import (
+	"context"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/config"
 )
+
+func TestConnectRejectsInvalidURIOptions(t *testing.T) {
+	for _, query := range []string{"readPreference=invalid", "readPreference=secondary&maxStalenessSeconds=invalid"} {
+		t.Run(query, func(t *testing.T) {
+			conn, err := Connect(context.Background(), &config.AppConfig{URI: "mongodb://localhost:27017/?" + query}, "test")
+			if conn != nil {
+				conn.Disconnect(context.Background())
+				t.Fatal("invalid URI options must not produce a connection")
+			}
+			if err == nil || !strings.Contains(err.Error(), "mongo connect error:") {
+				t.Fatalf("expected URI validation error before ping, got %v", err)
+			}
+		})
+	}
+}
 
 func TestBuildMongoURI(t *testing.T) {
 	tests := []struct {

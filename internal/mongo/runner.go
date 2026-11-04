@@ -24,6 +24,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // Define BSON Types locally
@@ -43,6 +44,7 @@ type queryTask struct {
 
 type workloadConfig struct {
 	database           *mongo.Database
+	fastFindOptions    []options.Lister[options.RunCmdOptions]
 	appConfig          *config.AppConfig
 	concurrency        int
 	duration           time.Duration
@@ -1283,12 +1285,13 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 	}
 
 	wCfg := workloadConfig{
-		database:    db,
-		appConfig:   cfg,
-		concurrency: schedule.MaxWorkers(),
-		duration:    duration,
-		collections: collections,
-		queryMap:    qMap,
+		database:        db,
+		fastFindOptions: fastFindRunCmdOptions(readPreferenceOf(cfg)),
+		appConfig:       cfg,
+		concurrency:     schedule.MaxWorkers(),
+		duration:        duration,
+		collections:     collections,
+		queryMap:        qMap,
 		percentages: map[string]int{
 			"find":        cfg.FindPercent,
 			"update":      cfg.UpdatePercent,
