@@ -477,6 +477,7 @@ func fastFindRecord(col config.CollectionDefinition, patchKey string, ids []int6
 
 // readPreferenceOf returns the read preference of the connection built from
 // cfg, or nil when it has none (the driver then reads from the primary).
+// db.Connect validates this URI before the workload starts.
 func readPreferenceOf(cfg *config.AppConfig) *readpref.ReadPref {
 	if cfg == nil {
 		return nil
@@ -488,13 +489,14 @@ func readPreferenceOf(cfg *config.AppConfig) *readpref.ReadPref {
 	return options.Client().ApplyURI(uri).ReadPreference
 }
 
-// fastFindRunCmdOptions passes the connection read preference to RunCommand,
-// which otherwise ignores it and always reads from the primary.
-func fastFindRunCmdOptions(wCfg workloadConfig) []options.Lister[options.RunCmdOptions] {
-	if wCfg.readPref == nil {
+// fastFindRunCmdOptions builds options once during workload initialization.
+// Workers share these immutable options to pass the connection read preference
+// to RunCommand, which otherwise ignores it and reads from the primary.
+func fastFindRunCmdOptions(rp *readpref.ReadPref) []options.Lister[options.RunCmdOptions] {
+	if rp == nil {
 		return nil
 	}
-	return []options.Lister[options.RunCmdOptions]{options.RunCmd().SetReadPreference(wCfg.readPref)}
+	return []options.Lister[options.RunCmdOptions]{options.RunCmd().SetReadPreference(rp)}
 }
 
 // executeFastFind sends the optimized $in find on patchKey. A non-nil out
@@ -509,7 +511,7 @@ func executeFastFind(ctx context.Context, wCfg workloadConfig, workerID int, col
 		} `bson:"cursor"`
 	}
 	fastCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	err := wCfg.database.RunCommand(fastCtx, cmd, fastFindRunCmdOptions(wCfg)...).Decode(&fastFindRes)
+	err := wCfg.database.RunCommand(fastCtx, cmd, wCfg.fastFindOptions...).Decode(&fastFindRes)
 	cancel()
 	if err == nil {
 		wCfg.collector.RecordFindResult(int64(len(fastFindRes.Cursor.FirstBatch)))

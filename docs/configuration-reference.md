@@ -23,7 +23,7 @@ The table lists every environment variable and the matching `config.yaml` settin
 | `uri` | `PLGM_URI` | Target MongoDB connection URI | `mongodb://user:pass@host:27017` |
 | `direct_connection` | `PLGM_DIRECT_CONNECTION` | Force direct connection (bypass topology discovery) | `true` |
 | `replicaset_name` | `PLGM_REPLICASET_NAME` | Replica Set name (required for sharded clusters/RS) | `rs0` |
-| `read_preference` | `PLGM_READ_PREFERENCE` | By default, an application directs its read operations to the primary member in a replica set. You can specify a read preference to send read operations to secondaries. | `nearest` |
+| `read_preference` | `PLGM_READ_PREFERENCE` | By default, an application directs its read operations to the primary member in a replica set. You can specify a read preference to send read operations to secondaries, including optimized fast finds in generated, deterministic, and replayed workloads. This setting overrides `readPreference` in the URI. | `nearest` |
 | `username` | `PLGM_USERNAME` |  Database User. Used only for a URI without a username; credentials in the URI win | `admin` |
 | ***can not be set via config*** | `PLGM_PASSWORD` | Database Password (if not set and a URI needs it, plgm will prompt). Ignored for a URI with its own password | `password123` |
 | **Web UI** | | | |

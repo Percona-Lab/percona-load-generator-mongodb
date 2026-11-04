@@ -50,12 +50,12 @@ func TestReadPreferenceOf(t *testing.T) {
 }
 
 func TestFastFindRunCmdOptionsCarryReadPreference(t *testing.T) {
-	if got := fastFindRunCmdOptions(workloadConfig{}); got != nil {
+	if got := fastFindRunCmdOptions(nil); got != nil {
 		t.Fatalf("without a read preference the fast find must send no options, got %d", len(got))
 	}
 
-	wCfg := workloadConfig{readPref: readpref.Secondary()}
-	opts := fastFindRunCmdOptions(wCfg)
+	wCfg := workloadConfig{fastFindOptions: fastFindRunCmdOptions(readpref.Secondary())}
+	opts := wCfg.fastFindOptions
 	if len(opts) != 1 {
 		t.Fatalf("got %d options, want 1", len(opts))
 	}
