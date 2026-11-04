@@ -24,6 +24,7 @@ import (
 	"github.com/Percona-Lab/percona-load-generator-mongodb/internal/workloads"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
 // Define BSON Types locally
@@ -43,6 +44,7 @@ type queryTask struct {
 
 type workloadConfig struct {
 	database           *mongo.Database
+	readPref           *readpref.ReadPref
 	appConfig          *config.AppConfig
 	concurrency        int
 	duration           time.Duration
@@ -1284,6 +1286,7 @@ func RunWorkload(ctx context.Context, db *mongo.Database, collections []config.C
 
 	wCfg := workloadConfig{
 		database:    db,
+		readPref:    readPreferenceOf(cfg),
 		appConfig:   cfg,
 		concurrency: schedule.MaxWorkers(),
 		duration:    duration,
