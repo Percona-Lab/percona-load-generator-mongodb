@@ -23,6 +23,11 @@ Compare Runs is easier to read when several runs are on the charts, and a concur
 - A short note says where it happens, for example "More workers stop helping after 8. Going from 8 to 16 workers gives only 3% more throughput (2,152 to 2,218 ops/s), while p95 latency rises 3.0×", or "Still scaling" when every count kept growing.
 - Counts without a stored throughput are left out; with fewer than two counts the charts and note are not shown.
 
+**Fixed: Read preference for the optimized find**
+- The optimized `$in` find (`fast find on <patch key>`) now follows `read_preference` (or `readPreference` in the MongoDB URI). It ignored it before, because the driver's `RunCommand` always reads from the primary, so with `read_preference: secondary` every fast find still went to the primary. Generated, deterministic, and replayed fast finds are all covered, and with no read preference set nothing changes.
+- In a check on a local 3-node replica set, 200 fast finds with `secondary` landed 102 and 98 on the two secondaries and none on the primary. Deterministic outcome files from secondary reads can differ from primary reads because of replication lag.
+- Thanks to Ivan Groenewold ([@igroene](https://github.com/igroene)) for finding, fixing, and testing this ([#4](https://github.com/Percona-Lab/percona-load-generator-mongodb/pull/4)).
+
 **Limits**
 - The charts are a view of the stored runs: they do not change how a sweep runs or what is stored.
 - If throughput is flat across counts, as when the server or the client is saturated, the charts show that flat line. They report what happened.
