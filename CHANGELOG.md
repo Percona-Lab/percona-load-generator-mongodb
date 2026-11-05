@@ -5,6 +5,30 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v7.2.0 - Clearer comparison charts for sweeps and multi-run comparisons
+
+Compare Runs is easier to read when several runs are on the charts, and a concurrency sweep now shows how throughput grows with the number of workers.
+
+**Highlights**
+
+**Changed: Compare Runs lines are easier to tell apart**
+- With more than one run selected, every line has its own color, so two runs never look alike. Before, the same server in two runs shared a color and only the dash differed. With one run, color is still the server, and the dash still follows the run.
+- Each line has a label at its right end (`4w`, `8w`, ... for a sweep run, the run label otherwise; with several servers the host follows).
+- Hover a label or a legend entry to dim every other line and compare one run against the rest. Keyboard focus on a legend entry does the same.
+- While a sweep is running, its live run is named like the other runs of it (`Sweep 2026-11-05 14:57 - 32 workers`, label `32w`) instead of "This run" or "Running now".
+
+**New: Sweep results charts**
+- Under the results table, each stored sweep now shows **Throughput by worker count**: one bar per count with its ops/s and the gain over the previous count (`+93%`). The first bar shows only its value.
+- **Throughput and p95 latency** draws both on one worker axis, in two panels (no dual axis), and shades the counts where adding workers stopped helping, meaning a count that added less than 10% over the one before.
+- A short note says where it happens, for example "More workers stop helping after 8. Going from 8 to 16 workers gives only 3% more throughput (2,152 to 2,218 ops/s), while p95 latency rises 3.0×", or "Still scaling" when every count kept growing.
+- Counts without a stored throughput are left out; with fewer than two counts the charts and note are not shown.
+
+**Limits**
+- The charts are a view of the stored runs: they do not change how a sweep runs or what is stored.
+- If throughput is flat across counts, as when the server or the client is saturated, the charts show that flat line. They report what happened.
+
+---
+
 ## v7.1.1 - Sweep with deterministic traffic, and a settings level note
 
 **Changed: Concurrency sweep**

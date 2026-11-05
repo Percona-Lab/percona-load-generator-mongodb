@@ -57,7 +57,9 @@ The picker lists the running workload first, then the stored runs, newest first.
 
 ## Read the charts
 
-- **Color is the server.** The same server has the same color in every run, so the same server on Monday and Wednesday are the same color.
+- **Every line has its own color** when you compare more than one run, so two lines never look alike, even for the same server on Monday and Wednesday. With one run, color is the server.
+- **Each line is labeled at its right end** (for a sweep, `4w`, `8w`, ...). Hover a label or a legend entry to dim every other line.
+- **A running sweep run is named like the others**, for example `Sweep 2026-11-05 14:57 - 32 workers` (label `32w`), not "This run".
 - **Line style is the run.** The newest run is solid. Older runs are dashed, then dotted, so two runs of the same server are easy to tell apart. The legend under the picker shows each line with its style.
 - **The x-axis is minutes since each run started**, with fractions of a minute for short runs (0.5 is 30 seconds). Every line starts at 0, whatever time of day it ran, so runs of the same length line up.
 - **Iterations sit side by side**, as on the other tabs. A **gap** in a line is a wait between iterations: nothing ran, so there is no value, not a line along zero.
@@ -81,7 +83,7 @@ You ran a test on Monday and want to know if Wednesday's looks the same.
 1. On Monday, run your workload as usual. It is stored when it finishes.
 2. On Wednesday, run it again with the same settings.
 3. Open **Compare Runs** while Wednesday's run is going. Wednesday is **Running now** (thick line) and Monday's run is selected next to it, so you watch the new run follow or drift from the old one.
-4. When it finishes, look at the **Tail latency** chart. The dashed Monday line and the solid Wednesday line are the same color if they ran on the same server.
+4. When it finishes, look at the **Tail latency** chart. The Monday line is dashed and the Wednesday line is solid, each in its own color.
 
 If the lines differ, check **Settings that differ** first. If it says the settings were the same, the change is in the server or the load around it.
 

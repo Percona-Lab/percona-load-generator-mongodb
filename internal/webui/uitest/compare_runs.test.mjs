@@ -69,7 +69,7 @@ test('the Compare Runs tab shows the latest two stored runs, one line per server
     assert.deepEqual(errors, []);
 });
 
-test('the same server in two runs has one color and two line styles; picking and the limit', async () => {
+test('the same server in two runs gets two colors and two line styles; picking and the limit', async () => {
     const { w, doc } = await page(RUNS, SNAPS);
     w.showDashTab('compare');
     await settle();
@@ -78,7 +78,7 @@ test('the same server in two runs has one color and two line styles; picking and
     await settle();
     const d = Array.from(cmpState(w).charts.throughput.data.datasets);
     const mon = d.find(x => x.label === 'Mon run · db1:27017'), old = d.find(x => x.label === 'Old run · db1:27017');
-    assert.equal(mon.borderColor, old.borderColor, 'the same server is the same color across days');
+    assert.notEqual(mon.borderColor, old.borderColor, 'two runs never share a color, even on the same server');
     assert.notDeepEqual(Array.from(mon.borderDash), Array.from(old.borderDash));
     pick('b|rs02', false);
     assert.equal(lines(w).includes('Wed run · rs02'), false);

@@ -72,6 +72,8 @@ Open **Compare Runs** (the **Compare this sweep** button in the banner, **Compar
 | **Workers** | The fixed worker count of the run. |
 | **Throughput (ops/s)** | Operations per second over the time the workers ran. |
 | **vs first** | Throughput compared with the first row (the lowest count). `×1.93` means 93% more operations per second than the first row. |
+
+Under the table, **Compare Runs** draws two charts. **Throughput by worker count** is one bar per count with the gain over the previous count (the first bar shows only its value). **Throughput and p95 latency** puts both on a shared worker axis, and shades the counts where adding workers stopped helping (a count that adds less than 10% over the one before). A note under the charts says where that happens, or that the sweep is still scaling.
 | **Avg latency (ms)** | Average latency of all operations. |
 | **p95 (ms)** | 95 out of 100 operations were faster than this. |
 | **Status** | `completed` or `failed`. |

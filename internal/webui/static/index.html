@@ -715,6 +715,17 @@
         .tier-note ul { margin: 4px 0 0 18px; padding: 0; }
         .setting-preset { opacity: .6; }
         .setting-preset:hover, .setting-preset:focus-within { opacity: 1; }
+        .ms-legend-item { cursor: default; transition: opacity .12s; }
+        .ms-legend-item.is-dim { opacity: .3; }
+        .sweep-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 12px; margin: 10px 0 4px; }
+        .sweep-fig { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; min-width: 0; }
+        .sweep-fig-title { font-weight: 600; font-size: var(--fs-sm); color: var(--text-strong); }
+        .sweep-fig svg { width: 100%; height: auto; display: block; }
+        .sweep-fig svg text { font-family: inherit; font-size: 11px; fill: var(--text-secondary); }
+        .sweep-fig svg .sv-ink { fill: var(--text-strong); font-weight: 600; }
+        .sweep-fig svg .sv-warn { fill: var(--warn); font-weight: 600; }
+        .sweep-verdict { margin: 8px 0 0; padding: 8px 12px; border: 1px solid var(--warn-border); background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-md); font-size: var(--fs-sm); }
+        .sweep-verdict.is-ok { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
         .sweep-card { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); overflow-x: auto; }
         .sweep-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
         .sweep-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
@@ -6654,7 +6665,7 @@
         // until: the Time Machine second (null = live); zoom: [from, to] seconds.
         const msView = { op: 'all', hidden: new Set(), compare: 'p99', timeline: 'p99', until: null, zoom: null };
         // Compare Runs state, here so the live charts can reach it from the start.
-        const cmp = { runs: [], selected: new Set(), seeded: false, autoLive: '', preselect: '', cache: new Map(), pending: new Set(), liveId: '', host: '', metric: 'p99', charts: null, sig: '', wired: false, loaded: false };
+        const cmp = { runs: [], selected: new Set(), seeded: false, autoLive: '', preselect: '', cache: new Map(), pending: new Set(), liveId: '', host: '', metric: 'p99', charts: null, sig: '', wired: false, loaded: false, focus: -1, focusFrom: '' };
         const msDrag = { chart: null, from: null, to: null };
 
         function setChartDefaults() {
@@ -6704,6 +6715,9 @@
         function applyMultiServerStats(stats) {
             if (!stats) return;
             if (stats.dashboardId && !historicalView) cmp.liveId = String(stats.dashboardId);
+            // The sweep this run belongs to, while it runs: names the live run
+            // before it is stored.
+            if (!historicalView) cmp.liveSweep = stats.sweep && stats.sweep.active ? stats.sweep : null;
             if (Number(stats.totalIterations) > 0) msTotalIterations = Number(stats.totalIterations);
             if (Number(stats.sampleIntervalMs) > 0) msSampleMs = Number(stats.sampleIntervalMs);
             (Array.isArray(stats.chartHistory) ? stats.chartHistory : []).forEach(p => { msTopSeq = Math.max(msTopSeq, Number(p && p.seq || 0)); });
@@ -7468,13 +7482,23 @@
 
         // Runs that can be drawn: the running (or just finished) one first,
         // then the stored runs, newest first.
+        // Same shape as the server's sweepLevelLabel.
+        function sweepLevelLabelJS(base, workers) {
+            return `${String(base || 'Sweep').trim()} - ${Number(workers)} workers`;
+        }
         function cmpEntries() {
             const out = [];
             const live = historicalView ? [] : msServers.filter(s => s.points.length);
             const liveId = live.length ? (cmp.liveId || 'live') : '';
             if (liveId) {
                 const running = live.some(s => s.status === 'running' || s.status === 'preparing');
-                out.push({ id: liveId, live: true, running, label: running ? 'Running now' : 'This run', servers: live.map(s => s.single && cmp.host ? cmp.host : s.label) });
+                // A run of a sweep is named like the other runs of it ("Sweep ... - 32
+                // workers"), from its stored record or, before that exists, from the
+                // sweep that is running.
+                const stored = cmp.runs.find(r => r.id === liveId && r.sweep);
+                const sw = stored ? stored.sweep : (cmp.liveSweep && cmp.liveSweep.current_workers ? { id: cmp.liveSweep.id, label: cmp.liveSweep.label, workers: Number(cmp.liveSweep.current_workers) } : null);
+                const label = stored && stored.label ? stored.label : (sw ? sweepLevelLabelJS(sw.label, sw.workers) : (running ? 'Running now' : 'This run'));
+                out.push({ id: liveId, live: true, running, label, sweep: sw, servers: live.map(s => s.single && cmp.host ? cmp.host : s.label) });
             }
             cmp.runs.forEach(r => {
                 if (r.id === liveId || r.status === 'damaged' || r.status === 'unsupported') return;
@@ -7570,14 +7594,89 @@
             return out;
         }
 
+        // Direct labels at the right end of each line. Hovering one dims the
+        // other lines (the legend does the same).
+        const cmpLabelsPlugin = {
+            id: 'cmpLabels',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                const items = [];
+                chart.data.datasets.forEach((ds, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    if (meta.hidden || !ds.shortLabel) return;
+                    let el = null;
+                    for (let k = meta.data.length - 1; k >= 0; k--) {
+                        const d = ds.data[k];
+                        if (d && d.y !== null && d.y !== undefined) { el = meta.data[k]; break; }
+                    }
+                    if (el) items.push({ idx: i, y: el.y, x: chart.chartArea.right + 8, text: ds.shortLabel, color: ds.baseColor });
+                });
+                items.sort((a, b) => a.y - b.y);
+                const gap = 14;
+                for (let k = 1; k < items.length; k++) if (items[k].y - items[k - 1].y < gap) items[k].y = items[k - 1].y + gap;
+                chart._labelHits = [];
+                ctx.save();
+                ctx.font = '600 11px system-ui, sans-serif';
+                ctx.textBaseline = 'middle';
+                items.forEach(it => {
+                    const dim = cmp.focus >= 0 && cmp.focus !== it.idx;
+                    ctx.globalAlpha = dim ? 0.3 : 1;
+                    ctx.fillStyle = it.color;
+                    ctx.beginPath(); ctx.arc(it.x + 3, it.y, 3, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = '#172033';
+                    ctx.fillText(it.text, it.x + 10, it.y);
+                    const w = ctx.measureText(it.text).width + 12;
+                    chart._labelHits.push({ idx: it.idx, x: it.x - 2, y: it.y - 8, w, h: 16 });
+                });
+                ctx.restore();
+            }
+        };
+        const cmpDimColor = c => {
+            const m = /^#([0-9a-f]{6})$/i.exec(c);
+            if (!m) return c;
+            const n = parseInt(m[1], 16);
+            return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, 0.18)`;
+        };
+        // Dims every line but one (idx), or restores all (-1). from: 'label' or
+        // 'legend', so leaving the other control does not clear it.
+        function cmpSetFocus(idx, from) {
+            if (cmp.focus === idx) return;
+            cmp.focus = idx;
+            cmp.focusFrom = idx < 0 ? '' : (from || 'label');
+            if (cmp.charts) Object.values(cmp.charts).forEach(ch => {
+                ch.data.datasets.forEach((ds, i) => {
+                    const on = idx < 0 || idx === i;
+                    ds.borderColor = on ? ds.baseColor : cmpDimColor(ds.baseColor);
+                    ds.backgroundColor = ds.borderColor;
+                    ds.borderWidth = idx === i ? 3.5 : (ds.baseWidth || 2);
+                    ds.order = idx === i ? -1 : 0;
+                });
+                ch.update('none');
+            });
+            document.querySelectorAll('#cmpLegend .ms-legend-item').forEach(el => el.classList.toggle('is-dim', idx >= 0 && Number(el.dataset.idx) !== idx));
+        }
+
         function cmpChart(id, yTitle) {
             const el = document.getElementById(id);
             if (!el || typeof Chart === 'undefined') return null;
+            el.addEventListener('mousemove', ev => {
+                const ch = Chart.getChart(el);
+                if (!ch || !ch._labelHits) return;
+                const r = el.getBoundingClientRect();
+                const x = ev.clientX - r.left, y = ev.clientY - r.top;
+                const hit = ch._labelHits.find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+                el.style.cursor = hit ? 'pointer' : '';
+                if (hit) cmpSetFocus(hit.idx);
+                else if (cmp.focusFrom === 'label') cmpSetFocus(-1);
+            });
+            el.addEventListener('mouseleave', () => { if (cmp.focusFrom === 'label') cmpSetFocus(-1); });
             return new Chart(el, {
                 type: 'line',
+                plugins: [cmpLabelsPlugin],
                 data: { datasets: [] },
                 options: {
                     responsive: true, maintainAspectRatio: false, animation: false,
+                    layout: { padding: { right: 62 } },
                     interaction: { mode: 'nearest', axis: 'x', intersect: false },
                     elements: { point: { radius: 0, hoverRadius: 3 }, line: { borderWidth: 2, cubicInterpolationMode: 'monotone' } },
                     plugins: { legend: { display: false }, tooltip: { callbacks: { title: items => items.length ? `${formatTime(Number(items[0].parsed.x))} since the run started` : '' } } },
@@ -7659,6 +7758,101 @@
                 + `<th>Status</th></tr></thead><tbody>${body}</tbody></table>`;
         }
 
+        // Throughput and p95 per worker count, and where more workers stop
+        // helping (a count that adds less than 10% over the one before).
+        function cmpSweepPoints(runs) {
+            return runs.filter(r => r.sweep).sort((a, b) => a.sweep.workers - b.sweep.workers).map(r => {
+                const sec = Number(r.active_sec || r.duration_sec || 0);
+                const t = r.total_ops != null && sec > 0 ? Number(r.total_ops) / sec : null;
+                const p = r.p95_latency_ms != null && Number.isFinite(Number(r.p95_latency_ms)) ? Number(r.p95_latency_ms) : null;
+                return { w: Number(r.sweep.workers), t, p };
+            }).filter(x => x.t != null && Number.isFinite(x.t));
+        }
+        function cmpSweepKnee(pts) {
+            for (let i = 1; i < pts.length; i++) if (pts[i].t < pts[i - 1].t * 1.10) return i;
+            return -1;
+        }
+        const cmpFmt = (v, d = 0) => Number(v).toLocaleString(undefined, { maximumFractionDigits: d });
+        function cmpNiceMax(v, n = 4) {
+            const raw = v / n, mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+            const step = [1, 2, 2.5, 5, 10].map(f => f * mag).find(x => x >= raw) || raw;
+            return { step, max: step * n };
+        }
+        function cmpSweepVerdict(pts, knee) {
+            if (pts.length < 2) return '';
+            if (knee < 0) {
+                const g = Math.round((pts[pts.length - 1].t / pts[pts.length - 2].t - 1) * 100);
+                return `<p class="sweep-verdict is-ok" role="status"><strong>Still scaling.</strong> Throughput grew with every worker count tested (${g >= 0 ? '+' : ''}${g}% from ${pts[pts.length - 2].w} to ${pts[pts.length - 1].w} workers). Try higher counts to find where it levels off.</p>`;
+            }
+            const a = pts[knee - 1], b = pts[knee];
+            const g = Math.round((b.t / a.t - 1) * 100);
+            const change = g >= 0 ? `only ${g}% more throughput` : `${Math.abs(g)}% less throughput`;
+            const lat = a.p != null && b.p != null && b.p >= a.p * 1.2 ? `, while p95 latency rises ${(b.p / a.p).toFixed(1)}×` : '';
+            return `<p class="sweep-verdict" role="status"><strong>More workers stop helping after ${a.w}.</strong> Going from ${a.w} to ${b.w} workers gives ${change} (${cmpFmt(a.t)} to ${cmpFmt(b.t)} ops/s)${lat}. Beyond ${a.w} workers the extra workers mostly add waiting.</p>`;
+        }
+        function cmpSweepBars(pts, knee) {
+            const W = 520, H = 260, L = 50, R = 12, T = 34, B = 30;
+            const { step, max } = cmpNiceMax(Math.max(...pts.map(x => x.t)) * 1.05);
+            const y = v => H - B - v / max * (H - B - T);
+            const slot = (W - L - R) / pts.length, bw = Math.min(64, slot * 0.55);
+            let g = '';
+            for (let v = 0; v <= max + 1e-9; v += step) {
+                g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--border)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${cmpFmt(v)}</text>`;
+            }
+            pts.forEach((pt, i) => {
+                const cx = L + slot * (i + 0.5), top = y(pt.t), base = H - B, r = Math.min(4, bw / 2);
+                g += `<path d="M${cx - bw / 2} ${base}V${top + r}Q${cx - bw / 2} ${top} ${cx - bw / 2 + r} ${top}H${cx + bw / 2 - r}Q${cx + bw / 2} ${top} ${cx + bw / 2} ${top + r}V${base}Z" fill="#1486ff"/>`;
+                g += `<text x="${cx}" y="${top - (i ? 18 : 6)}" text-anchor="middle" class="sv-ink">${cmpFmt(pt.t)}</text>`;
+                if (i) {
+                    const gain = Math.round((pt.t / pts[i - 1].t - 1) * 100);
+                    g += `<text x="${cx}" y="${top - 5}" text-anchor="middle"${knee >= 0 && i >= knee ? ' class="sv-warn"' : ''}>${gain >= 0 ? '+' : '−'}${Math.abs(gain)}%</text>`;
+                }
+                g += `<text x="${cx}" y="${base + 16}" text-anchor="middle">${pt.w}</text>`;
+            });
+            g += `<text x="${(L + W - R) / 2}" y="${H - 2}" text-anchor="middle">Workers</text>`;
+            return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Throughput by worker count">${g}</svg>`;
+        }
+        function cmpSweepKneeChart(pts, knee) {
+            const W = 520, H = 330, L = 50, R = 24;
+            const xMax = Math.max(...pts.map(x => x.w)) * 1.12;
+            const x = v => L + v / xMax * (W - L - R);
+            const tn = cmpNiceMax(Math.max(...pts.map(q => q.t)) * 1.1, 3);
+            const withP = pts.filter(q => q.p != null);
+            const pn = cmpNiceMax(Math.max(1, ...withP.map(q => q.p)) * 1.1, 3);
+            const t1 = 36, b1 = 160, t2 = 205, b2 = 290;
+            const y1 = v => b1 - v / tn.max * (b1 - t1), y2 = v => b2 - v / pn.max * (b2 - t2);
+            let g = '';
+            if (knee > 0) {
+                const x0 = x(pts[knee - 1].w), x1 = x(pts[pts.length - 1].w) + 14;
+                g += `<rect x="${x0}" y="${t1 - 8}" width="${x1 - x0}" height="${b2 - t1 + 8}" fill="#f0b336" opacity=".16"/>`;
+                const mid = (x0 + x1) / 2, wide = x1 - x0 >= 150;
+                g += `<text x="${wide ? mid : x1}" y="${t1 - 14}" text-anchor="${wide ? 'middle' : 'end'}" class="sv-warn">More workers stop helping</text>`;
+            }
+            for (let v = 0; v <= tn.max + 1e-9; v += tn.step) g += `<line x1="${L}" x2="${W - R}" y1="${y1(v)}" y2="${y1(v)}" stroke="var(--border)"/><text x="${L - 8}" y="${y1(v) + 4}" text-anchor="end">${cmpFmt(v)}</text>`;
+            for (let v = 0; v <= pn.max + 1e-9; v += pn.step) g += `<line x1="${L}" x2="${W - R}" y1="${y2(v)}" y2="${y2(v)}" stroke="var(--border)"/><text x="${L - 8}" y="${y2(v) + 4}" text-anchor="end">${cmpFmt(v, 1)}</text>`;
+            g += `<text x="12" y="${(t1 + b1) / 2}" transform="rotate(-90 12 ${(t1 + b1) / 2})" text-anchor="middle">ops/s</text>`;
+            g += `<text x="12" y="${(t2 + b2) / 2}" transform="rotate(-90 12 ${(t2 + b2) / 2})" text-anchor="middle">p95 latency (ms)</text>`;
+            const line = (arr, f, color, dash) => arr.length < 2 ? '' : `<path d="${arr.map((q, i) => (i ? 'L' : 'M') + x(q.w).toFixed(1) + ' ' + f(q).toFixed(1)).join('')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+            g += line(pts, q => y1(q.t), '#1486ff') + line(withP, q => y2(q.p), '#ff7e1a', '7 4');
+            pts.forEach(q => {
+                g += `<circle cx="${x(q.w)}" cy="${y1(q.t)}" r="4.5" fill="#1486ff" stroke="#fff" stroke-width="2"/><text x="${x(q.w)}" y="${y1(q.t) - 10}" text-anchor="middle" class="sv-ink">${cmpFmt(q.t)}</text>`;
+                if (q.p != null) g += `<rect x="${x(q.w) - 4.5}" y="${y2(q.p) - 4.5}" width="9" height="9" rx="1.5" fill="#ff7e1a" stroke="#fff" stroke-width="2"/><text x="${x(q.w)}" y="${y2(q.p) - 10}" text-anchor="middle" class="sv-ink">${cmpFmt(q.p, 1)}</text>`;
+                g += `<text x="${x(q.w)}" y="${b2 + 16}" text-anchor="middle">${q.w}</text>`;
+            });
+            g += `<line x1="${L}" x2="${W - R}" y1="${b1}" y2="${b1}" stroke="var(--border-strong)"/><line x1="${L}" x2="${W - R}" y1="${b2}" y2="${b2}" stroke="var(--border-strong)"/>`;
+            g += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle">Workers</text>`;
+            return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Throughput and p95 latency by worker count">${g}</svg>`;
+        }
+        function cmpSweepFigures(runs) {
+            const pts = cmpSweepPoints(runs);
+            if (pts.length < 2) return '';
+            const knee = cmpSweepKnee(pts);
+            return `<div class="sweep-figs">`
+                + `<div class="sweep-fig"><div class="sweep-fig-title">Throughput by worker count</div>${cmpSweepBars(pts, knee)}</div>`
+                + `<div class="sweep-fig"><div class="sweep-fig-title">Throughput and p95 latency</div>${cmpSweepKneeChart(pts, knee)}</div></div>`
+                + cmpSweepVerdict(pts, knee);
+        }
+
         function cmpSweepsHtml() {
             const groups = new Map();
             cmp.runs.forEach(r => { if (r.sweep && r.sweep.id) { if (!groups.has(r.sweep.id)) groups.set(r.sweep.id, []); groups.get(r.sweep.id).push(r); } });
@@ -7666,8 +7860,7 @@
             return [...groups.entries()].slice(0, 3).map(([id, runs]) => {
                 const first = runs[0].sweep;
                 return `<div class="sweep-card"><div class="sweep-head"><strong>Sweep: ${escHtml(first.label || id)}</strong> <span class="history-sub">${runs.length} of ${Number(first.levels)} runs stored</span>`
-                    + ` <button type="button" class="btn btn-flat btn-small" data-sweep="${escHtml(id)}" title="Draw every run of this sweep on the charts below">Show on charts</button></div>${cmpSweepTable(runs)}`
-                    + `<p class="history-sub">Throughput that stops growing while latency keeps rising shows where more workers no longer help.</p></div>`;
+                    + ` <button type="button" class="btn btn-flat btn-small" data-sweep="${escHtml(id)}" title="Draw every run of this sweep on the charts below">Show on charts</button></div>${cmpSweepTable(runs)}${cmpSweepFigures(runs)}</div>`;
             }).join('');
         }
 
@@ -7709,14 +7902,28 @@
             const series = picked.map(x => {
                 const points = cmpPoints(x.entry, x.server);
                 if (points === null) loading = true;
-                const color = MS_COLORS[serverOrder.indexOf(x.server) % MS_COLORS.length];
-                const dash = CMP_DASH[runOrder.indexOf(x.entry.id) % CMP_DASH.length];
-                return { ...x, points: points || [], color, dash, name: `${x.entry.label} · ${x.server}` };
+                return { ...x, points: points || [], name: `${x.entry.label} · ${x.server}` };
             });
-            const lines = metric => series.map(s => ({
-                label: s.name, data: cmpLine(s.points, metric), borderColor: s.color, backgroundColor: s.color,
-                borderDash: s.dash, borderWidth: s.entry.live ? 3 : 2, spanGaps: false
-            }));
+            // Several runs: every line gets its own colour, and the dash follows the
+            // run, so two lines never look alike. One run: colour follows the server.
+            const manyRuns = runOrder.length > 1;
+            series.forEach((sr, i) => {
+                sr.color = MS_COLORS[(manyRuns ? i : serverOrder.indexOf(sr.server)) % MS_COLORS.length];
+                sr.dash = CMP_DASH[runOrder.indexOf(sr.entry.id) % CMP_DASH.length];
+                const w = sr.entry.sweep ? `${Number(sr.entry.sweep.workers)}w` : String(sr.entry.label).slice(0, 14);
+                sr.short = serverOrder.length > 1 ? `${w} ${cmpHost(sr.server).slice(0, 10)}` : w;
+            });
+            if (cmp.focus >= series.length) { cmp.focus = -1; cmp.focusFrom = ''; }
+            const lines = metric => series.map((s, i) => {
+                const on = cmp.focus < 0 || cmp.focus === i;
+                const col = on ? s.color : cmpDimColor(s.color);
+                const bw = s.entry.live ? 3 : 2;
+                return {
+                    label: s.name, shortLabel: s.short, baseColor: s.color, baseWidth: bw, data: cmpLine(s.points, metric),
+                    borderColor: col, backgroundColor: col, borderDash: s.dash, borderWidth: cmp.focus === i ? 3.5 : bw,
+                    order: cmp.focus === i ? -1 : 0, spanGaps: false
+                };
+            });
             const xMax = Math.max(1, Math.ceil(Math.max(0, ...series.map(s => s.points.length ? Number(s.points[s.points.length - 1].elapsedSec || 0) : 0))));
             const tail = cmp.metric;
             [['throughput', 'rates', 'ops/s'], ['latency', 'avg', 'ms (average)'], ['tail', tail, `${tail} latency (ms)`]].forEach(([k, metric, yTitle]) => {
@@ -7735,7 +7942,16 @@
             const hint = document.getElementById('cmpHint');
             if (hint) hint.textContent = loading ? 'Loading stored runs…' : (series.length ? '' : 'Tick at least one server above to draw it.');
             const legend = document.getElementById('cmpLegend');
-            if (legend) legend.innerHTML = series.map(s => `<span class="ms-legend-item"><span class="cmp-line" style="border-top-style:${s.dash.length ? 'dashed' : 'solid'};border-color:${s.color}" aria-hidden="true"></span>${escHtml(s.name)}${s.entry.running ? ' (running)' : ''}</span>`).join('');
+            if (legend && !legend.dataset.wired) {
+                legend.dataset.wired = '1';
+                const over = ev => { const it = ev.target.closest('.ms-legend-item'); if (it) cmpSetFocus(Number(it.dataset.idx), 'legend'); };
+                const out = ev => { if (ev.target.closest('.ms-legend-item') && cmp.focusFrom === 'legend') cmpSetFocus(-1); };
+                legend.addEventListener('mouseover', over);
+                legend.addEventListener('mouseout', out);
+                legend.addEventListener('focusin', over);
+                legend.addEventListener('focusout', out);
+            }
+            if (legend) legend.innerHTML = series.map((s, i) => `<span class="ms-legend-item${cmp.focus >= 0 && cmp.focus !== i ? ' is-dim' : ''}" data-idx="${i}" tabindex="0"><span class="cmp-line" style="border-top-style:${s.dash.length ? 'dashed' : 'solid'};border-color:${s.color}" aria-hidden="true"></span>${escHtml(s.name)}${s.entry.running ? ' (running)' : ''}</span>`).join('');
             const diff = document.getElementById('cmpDiff');
             if (diff) diff.textContent = cmpDifferences(runOrder.filter(id => !entries.find(e => e.id === id && e.live)));
             if (charts) requestAnimationFrame(() => Object.values(cmp.charts).forEach(c => c.resize()));

@@ -180,3 +180,82 @@ test('Deterministic traffic keeps the Sweep profile and the level note names wha
     assert.match(note.textContent, /Advanced settings are shown/);
     assert.deepEqual(errors, []);
 });
+
+test('the sweep card draws bars with gains and says where more workers stop helping', async () => {
+    const { w, doc, errors } = await page();
+    w.openLiveDashboard(60);
+    w.stopPolling();
+    w.showDashTab('compare');
+    await settle();
+    const figs = doc.querySelectorAll('#cmpSweeps .sweep-fig svg');
+    assert.equal(figs.length, 2, 'bars and the throughput + p95 chart');
+    const bars = figs[0].textContent;
+    assert.match(bars, /1,500/);
+    assert.match(bars, /\+93%/);
+    assert.match(bars, /\+3%/);
+    assert.doesNotMatch(bars, /first/i, 'the first bar shows only its value');
+    assert.match(figs[1].textContent, /More workers stop helping/);
+    assert.match(doc.querySelector('#cmpSweeps .sweep-verdict').textContent, /More workers stop helping after 8\..*8 to 16 workers gives only 3% more throughput.*p95 latency rises 3\.0×/);
+    assert.deepEqual(errors, []);
+});
+
+test('a sweep that keeps growing is reported as still scaling', async () => {
+    const runs = [sweepRun('r3', 16, 3, 5600, 5.5, 12), sweepRun('r2', 8, 2, 2900, 2.1, 4), sweepRun('r1', 4, 1, 1500, 1.2, 2)];
+    const { w, doc, errors } = await page(runs);
+    w.openLiveDashboard(60);
+    w.stopPolling();
+    w.showDashTab('compare');
+    await settle();
+    assert.match(doc.querySelector('#cmpSweeps .sweep-verdict').textContent, /Still scaling/);
+    assert.doesNotMatch(doc.querySelector('#cmpSweeps').textContent, /More workers stop helping/);
+    assert.deepEqual(errors, []);
+});
+
+test('runs on one server get different colours, labels at the line ends, and hover dims the others', async () => {
+    const { w, doc, errors } = await page();
+    w.openLiveDashboard(60);
+    w.stopPolling();
+    w.compareSweep('sweep-1');
+    await settle();
+    const ds = Array.from(w.eval('cmp').charts.throughput.data.datasets);
+    assert.equal(ds.length, 3);
+    assert.equal(new Set(ds.map(d => d.baseColor)).size, 3, 'no two runs share a colour');
+    assert.deepEqual(ds.map(d => d.shortLabel).sort(), ['16w', '4w', '8w']);
+    const items = [...doc.querySelectorAll('#cmpLegend .ms-legend-item')];
+    assert.equal(items.length, 3);
+    items[1].dispatchEvent(new w.MouseEvent('mouseover', { bubbles: true }));
+    let now = Array.from(w.eval('cmp').charts.throughput.data.datasets);
+    assert.equal(now[1].borderColor, now[1].baseColor);
+    assert.notEqual(now[0].borderColor, now[0].baseColor, 'the others are dimmed');
+    assert.ok(items[0].classList.contains('is-dim') && !items[1].classList.contains('is-dim'));
+    items[1].dispatchEvent(new w.MouseEvent('mouseout', { bubbles: true }));
+    now = Array.from(w.eval('cmp').charts.throughput.data.datasets);
+    assert.equal(now[0].borderColor, now[0].baseColor, 'leaving restores every line');
+    assert.ok(!items[0].classList.contains('is-dim'));
+    assert.deepEqual(errors, []);
+});
+
+test('the live run of a sweep is named like the other runs, not "This run"', async () => {
+    const { w, doc, errors } = await page();
+    const pts = Array.from({ length: 4 }, (_, i) => ({ seq: i + 1, elapsedSec: i * 2, rates: { total: 1000 + i }, avg: { total: 2 }, p99: { total: 5 }, p95: { total: 4 } }));
+    const stats = { isRunning: true, lifecyclePhase: 'running', executionElapsedSec: 8, duration: '60s', totalIterations: 1, chartHistory: pts, findOps: 1 };
+
+    // Stored already: its stored label and sweep tag are used.
+    w.applyLiveStats({ ...stats, dashboardId: 'r3', sweep: { id: 'sweep-1', label: 'mongo-8.0', active: true, current_workers: 16 } });
+    w.showDashTab('compare');
+    await settle();
+    let live = Array.from(w.eval('cmp').charts.throughput.data.datasets)[0];
+    assert.match(live.label, /^mongo-8\.0 - 16 workers · /);
+    assert.match(live.shortLabel, /^16w/);
+    assert.doesNotMatch(doc.querySelector('#cmpPicker .cmp-live legend').textContent, /This run|Running now/);
+
+    // Not stored yet: named from the running sweep.
+    const next = { ...stats, dashboardId: 'r9', sweep: { id: 'sweep-1', label: 'mongo-8.0', active: true, current_workers: 32 } };
+    w.applyLiveStats(next);
+    w.applyLiveStats(next);
+    await settle();
+    const entry = w.eval('cmpEntries()').find(e => e.live);
+    assert.equal(entry.label, 'mongo-8.0 - 32 workers');
+    assert.equal(entry.sweep.workers, 32);
+    assert.deepEqual(errors, []);
+});
