@@ -2682,11 +2682,11 @@
             <div class="mat-card ms-card" id="cmpPanel" style="display:none;">
                 <div class="ms-card-head"><div class="mat-card-title">Compare runs</div><span class="ms-sub" id="cmpSub"></span></div>
                 <div class="settings-help">Pick the servers of any runs to draw them on the same charts. Every line starts at the start of its run, so runs with the same settings line up; iterations sit side by side and a gap is a wait between iterations. If a workload is running, its lines keep growing against the finished runs.</div>
-                <div class="cmp-picker" id="cmpPicker" role="group" aria-label="Runs and servers to compare"></div>
                 <div class="cmp-actions">
-                    <button type="button" class="btn btn-flat btn-small" id="cmpLatestTwo">Latest two runs</button>
-                    <button type="button" class="btn btn-flat btn-small" id="cmpClear">Clear</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="cmpLatestTwo">Latest two runs</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="cmpClear">Clear</button>
                 </div>
+                <div class="cmp-picker" id="cmpPicker" role="group" aria-label="Runs and servers to compare"></div>
                 <div id="cmpSweeps"></div>
                 <p class="ms-hint" id="cmpHint" aria-live="polite"></p>
                 <p class="ms-legend" id="cmpLegend"></p>
@@ -6665,7 +6665,7 @@
         // until: the Time Machine second (null = live); zoom: [from, to] seconds.
         const msView = { op: 'all', hidden: new Set(), compare: 'p99', timeline: 'p99', until: null, zoom: null };
         // Compare Runs state, here so the live charts can reach it from the start.
-        const cmp = { runs: [], selected: new Set(), seeded: false, autoLive: '', preselect: '', cache: new Map(), pending: new Set(), liveId: '', host: '', metric: 'p99', charts: null, sig: '', wired: false, loaded: false, focus: -1, focusFrom: '' };
+        const cmp = { runs: [], selected: new Set(), seeded: false, autoLive: '', preselect: '', cache: new Map(), pending: new Set(), liveId: '', host: '', metric: 'p99', charts: null, sig: '', wired: false, loaded: false, focus: -1, focusFrom: '', cleared: false };
         const msDrag = { chart: null, from: null, to: null };
 
         function setChartDefaults() {
@@ -7704,11 +7704,23 @@
                 }
                 if (box.checked) cmp.selected.add(box.dataset.key); else cmp.selected.delete(box.dataset.key);
                 cmp.seeded = true;
+                cmp.cleared = false;
                 cmpRender();
             });
-            document.getElementById('cmpClear').addEventListener('click', () => { cmp.selected.clear(); cmp.seeded = true; cmpRender(); });
+            document.getElementById('cmpClear').addEventListener('click', () => {
+                cmp.selected.clear();
+                cmp.seeded = true;
+                cmp.cleared = true;
+                cmp.preselect = '';
+                cmp.preselectSweep = '';
+                cmp.metric = 'p99';
+                cmp.focus = -1;
+                cmp.focusFrom = '';
+                cmpRender();
+            });
             document.getElementById('cmpLatestTwo').addEventListener('click', () => {
                 cmp.selected.clear();
+                cmp.cleared = false;
                 cmpEntries().slice(0, 2).forEach(e => e.servers.forEach(sv => cmp.selected.add(cmpKey(e.id, sv))));
                 cmp.seeded = true;
                 cmpRender();
@@ -7854,6 +7866,7 @@
         }
 
         function cmpSweepsHtml() {
+            if (cmp.cleared) return '';
             const groups = new Map();
             cmp.runs.forEach(r => { if (r.sweep && r.sweep.id) { if (!groups.has(r.sweep.id)) groups.set(r.sweep.id, []); groups.get(r.sweep.id).push(r); } });
             if (!groups.size) return '';
@@ -7870,6 +7883,7 @@
             cmp.seeded = false;
             cmp.preselect = '';
             cmp.preselectSweep = id;
+            cmp.cleared = false;
             cmp.sig = '';
             showDashTab('compare');
             cmpLoadRuns();
@@ -7965,6 +7979,7 @@
             cmp.seeded = false;
             cmp.preselect = sweepId ? '' : id;
             cmp.preselectSweep = sweepId || '';
+            cmp.cleared = false;
             cmp.sig = '';
             showDashTab('compare');
         }

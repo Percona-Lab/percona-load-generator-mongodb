@@ -5,6 +5,15 @@ For each new release, add a new `## vX.Y.Z` section at the top. The release work
 
 ---
 
+## v7.2.1 - Compare Runs: Clear resets the whole tab
+
+**Fixed: Clear left graphs and settings behind**
+- **Clear** on the Compare Runs tab now resets everything on that tab: the selected lines, the tail latency percentile (back to p99), the hover highlight, and the sweep result cards with their charts. Before, it only emptied the line selection, so the sweep charts stayed on screen.
+- The sweep cards return when you tick a server, click **Latest two runs**, click **Show on charts**, or open a run from Completed Runs.
+
+**Changed: Latest two runs and Clear are buttons, at the top**
+- Both are now buttons instead of link-style text, and sit right under the Compare Runs description, above the run picker.
+
 ## v7.2.0 - Clearer comparison charts for sweeps and multi-run comparisons
 
 Compare Runs is easier to read when several runs are on the charts, and a concurrency sweep now shows how throughput grows with the number of workers.

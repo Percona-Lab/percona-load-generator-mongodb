@@ -98,8 +98,13 @@ test('Latest two runs and Clear', async () => {
     const { w, doc } = await page(RUNS, SNAPS);
     w.showDashTab('compare');
     await settle();
+    doc.querySelector('#cmpTailMetric [data-metric="p95"]').click();
+    assert.equal(cmpState(w).metric, 'p95');
     doc.getElementById('cmpClear').click();
     assert.deepEqual(lines(w), []);
+    assert.equal(cmpState(w).metric, 'p99', 'Clear resets the tail percentile');
+    assert.equal(doc.getElementById('cmpSweeps').innerHTML, '', 'Clear removes the sweep figures too');
+    assert.ok(doc.getElementById('cmpPanel').firstElementChild.nextElementSibling.nextElementSibling.querySelector('#cmpClear'), 'buttons sit right under the description');
     assert.match(doc.getElementById('cmpHint').textContent, /Tick at least one server/);
     doc.getElementById('cmpLatestTwo').click();
     await settle();
