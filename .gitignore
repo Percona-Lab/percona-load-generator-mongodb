@@ -48,3 +48,8 @@ GEMINI.md
 .windsurf/
 .windsurfrules
 .continue/
+ 
+tools/tutorial-video/node_modules/
+tutorials/*/build/
+tools/tutorial-video/.env.local
+.env.local

@@ -20,10 +20,6 @@ The **Compare Runs** tab draws runs and servers on the same charts. The solid li
 
 ![Compare Runs: a running workload drawn against a finished run](./images/compare_runs_live.png)
 
-2½-minute walkthrough: record a workload, replay it on three servers, compare them on the dashboard charts, and open the comparison report.
-
-https://github.com/user-attachments/assets/68e07543-2c99-492c-8f1e-e783c0521964
-
 ---
 
 ## Quick Start
